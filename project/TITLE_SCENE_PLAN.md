@@ -57,9 +57,9 @@
 1. TitleScene 用の `GameCamera` をどう作るか(`GameScene::Initialize` のカメラ生成部分を手本にする)
 2. 自機モデルの読み込み方と、`ModelInstance` を PlayerComponent 抜きで単体描画する方法(`PlayerComponent.cpp` の Initialize 付近と `Renderer::DrawModel`)。**本物の PlayerComponent は使わない**(GameScene 分割リファクタと衝突するため)。見た目だけ流用し、動きはタイトル専用スクリプト
 3. 板ポリのモデルを `Renderer::DrawModel` / `DrawEffectModel` で出す手順と、テクスチャ・OBJ の置き場所(`Application/resources/` 配下に `title/` を作る想定)。Object3d 系パイプラインは `alphaBlend=false` なので、フェードは `DrawEffectModel`(αブレンド)か Dissolve で行えるか確認する
-4. 新規ファイルを `DirectXGame.vcxproj` と `.filters` に追加するルール
+4. 新規ファイルを vcxproj と `.filters` に追加するルール → **調査済み(2026-09-30)**: ルートの `DirectXGame.vcxproj` は旧パスの残骸で sln から未使用。実プロジェクトは `Application/Application.vcxproj`(アプリ側)と `AbsoluteEngine/AbsoluteEngine.vcxproj`(エンジン側)。HLSL は vcxproj 未登録で `AbsoluteEngine/resources/shaders/` に置くだけ(xcopy で `resources/engine/shaders/` へ)。画像/OBJ は `Application/resources/` に置くだけ(`resources/app/` へコピー)
 5. 水面を「頂点シェーダーで変位」するには VS 側に時間を渡す経路が必要だが、現在の `PipelineDesc` の VS 用 CB は Transform のみ。→ **L0 は頂点変位なしの平面+ピクセルシェーダーで波の法線を計算する方式にする**(低空飛行では輪郭の凹凸はほぼ見えないため)。頂点変位は追加要件が出たときのみ
-6. ロゴモデルのフェードイン/点滅の方式(`DrawEffectModel` のαブレンドか Dissolve か)
+6. ロゴモデルのフェードイン/点滅の方式 → **解決**: `DrawEffectModel`(unlit・αブレンド・depthWrite=false)で `SetColor` のαを動かす。描画順はロゴを自機より後に描く
 
 ---
 
@@ -84,9 +84,9 @@ TitleScene (シーン制御: 入力・遷移・Draw順)
 |---|---|
 | 新規 | `AbsoluteEngine/resources/shaders/Sky.PS.hlsl`, `Sky.hlsli` |
 | 新規 | `AbsoluteEngine/resources/shaders/Water.VS.hlsl`, `Water.PS.hlsl`, `Water.hlsli` |
-| 新規 | `Application/title/TitleDirector.{h,cpp}`(置き場は既存構成に合わせて調整) |
+| 新規 | `Application/scene/title/TitleDirector.{h,cpp}`(Application.vcxproj に追加) |
 | 変更 | `UnifiedPipeline.{h,cpp}`(`MakeSkyDesc` / `MakeWaterDesc`), `Renderer.{h,cpp}`(パイプライン保持と `DrawSky` / `DrawWater`) |
-| 変更 | `TitleScene.{h,cpp}`, `DirectXGame.vcxproj(.filters)` |
+| 変更 | `TitleScene.{h,cpp}`, `Application/Application.vcxproj(.filters)`, エンジン側は `AbsoluteEngine/AbsoluteEngine.vcxproj(.filters)` |
 | 素材 | ロゴ画像 PNG(仮ロゴで可。後で差し替え) |
 
 ---
@@ -189,7 +189,7 @@ TitleScene (シーン制御: 入力・遷移・Draw順)
 
 - **ImGui 依存の UI を新規に作らない**(Release でも表示されること)。デバッグ用パラメータ調整の ImGui は `#ifdef USE_IMGUI` で括るのは可
 - シェーダーは HLSL の既存流儀(`float32_t` 系の型、`Fullscreen.hlsli` のようにヘッダー分離)に合わせる。**原本は `AbsoluteEngine/resources/shaders/`** に置く
-- 新規ファイルは `.vcxproj` / `.filters` に追加する
+- 新規 C++ ファイルは `Application.vcxproj` / `AbsoluteEngine.vcxproj` と各 `.filters` に追加する(ルートの `DirectXGame.vcxproj` は使われていない)
 - 未実装の空関数や「後で」コメントを残さない(先輩フィードバック観点)。段階ごとに使っていないコードは消す
 - 提出物(要素別コンテスト共通): **プログラム説明資料を exe とセットで提出**。§4 の `TITLE_SCENE_NOTES.md` の内容がそのまま説明資料の下書きになる
 - 締切 10/7(水)。**10/6 夜に凍結**: Release ビルド確認、動画撮影、提出物確認。10/7 は予備日
@@ -208,7 +208,7 @@ TitleScene (シーン制御: 入力・遷移・Draw順)
 ## 9. 別セクションへ貼る指示文(コピペ用)
 
 ```
-プロジェクト: C:\Users\haya2\source\repos\CG2\project
+プロジェクト: C:\Users\haya2\source\repos\CG2-title\project
 まず TITLE_SCENE_PLAN.md を全部読んでから始めてください。
 
 タスク: 要素別コンテストNo.1「タイトルシーン」の実装。計画書の §1 の段階はしご(L0→L1→L2→L3)に従い、L0 から順に進めてください。
