@@ -126,6 +126,10 @@ public:
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   void DrawSkybox(Skybox *skybox);
+  // 手続き生成の夕焼け空を全画面で描く(最奥)。sunDirection は太陽へ向かう向き
+  void DrawSky(const Vector3 &sunDirection);
+  // 水面を全画面パスで描く(空の直後・オブジェクトの前)。time は波のアニメーション用の秒
+  void DrawWater(const Vector3 &sunDirection, float time);
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha);
   // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
@@ -214,6 +218,8 @@ private:
   std::unique_ptr<UnifiedPipeline> skinnedPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> skinnedPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> skyboxPipeline_;
+  std::unique_ptr<UnifiedPipeline> skyPipeline_;
+  std::unique_ptr<UnifiedPipeline> waterPipeline_;
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -264,6 +270,24 @@ private:
   };
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;
+
+  struct alignas(16) SkyParam {
+    Matrix4x4 invViewProj;
+    Vector3 sunDirection;
+    float pad;
+  };
+  ComPtr<ID3D12Resource> skyParamCB_;
+  SkyParam* skyParamMapped_ = nullptr;
+
+  struct alignas(16) WaterParam {
+    Matrix4x4 invViewProj;
+    Vector3 cameraPosition;
+    float time;
+    Vector3 sunDirection;
+    float pad;
+  };
+  ComPtr<ID3D12Resource> waterParamCB_;
+  WaterParam* waterParamMapped_ = nullptr;
 
   struct alignas(16) RandomParam {
     float time;

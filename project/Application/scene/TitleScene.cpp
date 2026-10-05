@@ -22,14 +22,15 @@ constexpr float kDeltaTime = 1.0f / 60.0f;
 constexpr float kCameraFovY = 0.45f;
 constexpr float kCameraNear = 0.1f;
 constexpr float kCameraFar = 1000.0f;
-const Vector3 kCameraEye{0.0f, 0.0f, -10.0f};
-const Vector3 kCameraTarget{0.0f, 0.0f, 0.0f};
+// 水面(y=0)の少し上から、やや上向きに見る。地平線が画面の下寄りに来る
+const Vector3 kCameraEye{0.0f, 1.2f, -10.0f};
+const Vector3 kCameraTarget{0.0f, 1.8f, 0.0f};
 
 // ロゴ・PRESS START の配置(板ポリは横幅 2 が基準なので scale が半幅になる)
 constexpr float kLogoHalfWidth = 3.0f;
-constexpr float kLogoPosY = 1.4f;
+constexpr float kLogoPosY = 3.2f;
 constexpr float kStartHalfWidth = 1.5f;
-constexpr float kStartPosY = -1.8f;
+constexpr float kStartPosY = 0.3f;
 constexpr float kLogoFadeInSec = 2.0f;
 
 // PRESS START の明滅(ゆっくり。完全には消えない)
@@ -38,11 +39,14 @@ constexpr float kStartBlinkPeriodSec = 3.0f;
 constexpr float kStartBlinkMinAlpha = 0.25f;
 
 // 自機(仮モデル)
-constexpr float kPlayerPosY = -0.2f;
+constexpr float kPlayerPosY = 1.7f;
 constexpr float kPlayerPosZ = -4.0f;
 constexpr float kPlayerSpinSpeed = 1.0f;
 
-// 夕日のライト(光が進む向き。L0-2 の太陽方向と揃える)。タイトルにはライトオブジェクトが無いので直接設定する
+// 太陽の方向(太陽へ向かう向き)。空の描画で使う
+const Vector3 kSunDirection{0.35f, 0.10f, 1.0f};
+
+// 夕日のライト(光が進む向き)。タイトルにはライトオブジェクトが無いので直接設定する
 const Vector3 kSunLightDirection{-0.4f, -0.3f, 0.8f};
 const Vector3 kSunLightColor{1.0f, 0.7f, 0.45f};
 constexpr float kSunLightIntensity = 1.2f;
@@ -145,6 +149,10 @@ void TitleScene::Draw() {
   renderer->BeginRenderScene();
   renderer->SetCamera(*GetMainCamera());
   ApplyTitleLights(renderer);
+
+  // 空は最奥に描くので順番は自由だが、不透明物の前に描いて読みやすくする
+  renderer->DrawSky(Normalize(kSunDirection));
+  renderer->DrawWater(Normalize(kSunDirection), time_);
 
   renderer->DrawModel(&playerModel_);
   // 半透明(depthWrite なし)のロゴ類は不透明物の後に描く

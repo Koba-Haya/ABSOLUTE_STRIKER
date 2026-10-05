@@ -444,6 +444,32 @@ PipelineDesc UnifiedPipeline::MakeParticleDesc() {
 }
 
 // Skybox用パイプラインプリセット
+PipelineDesc UnifiedPipeline::MakeSkyDesc() {
+  PipelineDesc d{};
+  d.inputElements = {}; // 頂点バッファなし(SV_VertexID で全画面三角形を作る)
+  d.vsPath = L"resources/engine/shaders/Sky.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Sky.PS.hlsl";
+
+  d.usePSMaterial_b0 = true; // SkyParam
+  d.useVSTransform_b0 = false;
+  d.usePSTextureTable_t0 = false;
+
+  // MakeSkyboxDesc を踏襲: 深度は読むが書かない。VS が z=1 で出すので LESS_EQUAL で通る
+  d.enableDepth = true;
+  d.depthWrite = false;
+  d.depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+  d.cullMode = D3D12_CULL_MODE_NONE;
+  d.blendMode = BlendMode::Opaque;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeWaterDesc() {
+  // 空と同じ全画面パス(深度設定も同じ)で、ピクセルシェーダーだけ水面にする
+  PipelineDesc d = MakeSkyDesc();
+  d.psPath = L"resources/engine/shaders/Water.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -677,4 +703,4 @@ PipelineDesc UnifiedPipeline::MakeGaussianFilterDesc() {
   d.psPath = L"resources/engine/shaders/GaussianFilter.PS.hlsl";
   d.usePSMaterial_b0 = true;
   return d;
-}
+}

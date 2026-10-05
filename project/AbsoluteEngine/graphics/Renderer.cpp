@@ -80,6 +80,20 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                            includeHandler, desc));
   }
 
+  // Sky Pipeline
+  {
+    skyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(skyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                        UnifiedPipeline::MakeSkyDesc()));
+  }
+
+  // Water Pipeline
+  {
+    waterPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(waterPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                          UnifiedPipeline::MakeWaterDesc()));
+  }
+
   // Sprite Pipelines
   {
     PipelineDesc desc = UnifiedPipeline::MakeSpriteDesc();
@@ -284,6 +298,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (randomParamMapped_) {
       randomParamMapped_->time = 0.0f;
   }
+
+  skyParamCB_ = CreateUploadBuffer(align256(sizeof(SkyParam)));
+  skyParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&skyParamMapped_));
+
+  waterParamCB_ = CreateUploadBuffer(align256(sizeof(WaterParam)));
+  waterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&waterParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -691,6 +711,42 @@ void Renderer::DrawSkybox(Skybox *skybox) {
 
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawIndexedInstanced(skybox->GetIndexCount(), 1, 0, 0, 0);
+}
+
+void Renderer::DrawSky(const Vector3 &sunDirection) {
+  if (!skyPipeline_ || !skyParamMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // ピクセルの NDC 座標から視線方向を復元するための逆行列
+  skyParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
+  skyParamMapped_->sunDirection = sunDirection;
+
+  skyPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, skyParamCB_->GetGPUVirtualAddress());
+
+  // 頂点バッファなしで3頂点描画(大きな三角形1つで全画面を覆う)
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
+void Renderer::DrawWater(const Vector3 &sunDirection, float time) {
+  if (!waterPipeline_ || !waterParamMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 視線の復元用の逆行列と、水面との交点計算に使うカメラ位置(view の逆行列の平行移動成分)
+  const Matrix4x4 invView = Inverse(view_);
+  waterParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
+  waterParamMapped_->cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+  waterParamMapped_->time = time;
+  waterParamMapped_->sunDirection = sunDirection;
+
+  waterPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, waterParamCB_->GetGPUVirtualAddress());
+
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
 }
 
 void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode) {

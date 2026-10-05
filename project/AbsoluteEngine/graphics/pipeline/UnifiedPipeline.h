@@ -89,6 +89,10 @@ public:
   static PipelineDesc MakeEmitterAlphaDesc();
   static PipelineDesc MakeParticleDesc();
   static PipelineDesc MakeSkyboxDesc();
+  // 全画面の手続き生成の空(Sky.VS / Sky.PS)
+  static PipelineDesc MakeSkyDesc();
+  // 全画面パスで描く水面(Sky.VS / Water.PS)
+  static PipelineDesc MakeWaterDesc();
   static PipelineDesc MakePrimitiveDesc();
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
