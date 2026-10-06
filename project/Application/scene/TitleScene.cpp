@@ -18,42 +18,37 @@
 namespace {
 constexpr float kDeltaTime = 1.0f / 60.0f;
 
-// カメラ(固定。L0-4 で TitleDirector に置き換える)
-constexpr float kCameraFovY = 0.45f;
+// カメラの投影(位置・向き・画角は TitleDirector が決める)
 constexpr float kCameraNear = 0.1f;
 constexpr float kCameraFar = 1000.0f;
-// 水面(y=0)の少し上から、やや上向きに見る。地平線が画面の下寄りに来る
-const Vector3 kCameraEye{0.0f, 1.2f, -10.0f};
-const Vector3 kCameraTarget{0.0f, 1.8f, 0.0f};
 
-// ロゴ・PRESS START の配置(板ポリは横幅 2 が基準なので scale が半幅になる)
-constexpr float kLogoHalfWidth = 3.0f;
-constexpr float kLogoPosY = 3.2f;
-constexpr float kStartHalfWidth = 1.5f;
-constexpr float kStartPosY = 0.3f;
 constexpr float kLogoFadeInSec = 2.0f;
+
+// スタート演出(加速 → 白フラッシュ → ゲームへ)
+constexpr float kLaunchDurationSec = 1.6f;
+constexpr float kFlashStartRatio = 0.55f; // 演出のこの割合から白くなり始め、終わりで真っ白
 
 // PRESS START の明滅(ゆっくり。完全には消えない)
 constexpr float kTwoPi = 6.2831853f;
 constexpr float kStartBlinkPeriodSec = 3.0f;
 constexpr float kStartBlinkMinAlpha = 0.25f;
 
-// 自機(仮モデル)
-constexpr float kPlayerPosY = 1.7f;
-constexpr float kPlayerPosZ = -4.0f;
-constexpr float kPlayerSpinSpeed = 1.0f;
-
 // 太陽の方向(太陽へ向かう向き)。空の描画で使う
-const Vector3 kSunDirection{0.35f, 0.10f, 1.0f};
+const Vector3 kSunDirection{0.30f, 0.22f, 1.0f};
 
-// 夕日のライト(光が進む向き)。タイトルにはライトオブジェクトが無いので直接設定する
-const Vector3 kSunLightDirection{-0.4f, -0.3f, 0.8f};
-const Vector3 kSunLightColor{1.0f, 0.7f, 0.45f};
+// ライト(光が進む向き)。タイトルにはライトオブジェクトが無いので直接設定する
+// 主光: 昼の太陽(上から)。補助光: 機体の後ろ側が真っ黒にならないよう、後方から空色で当てる
+const Vector3 kSunLightDirection{-0.3f, -0.85f, -0.35f};
+const Vector3 kSunLightColor{1.0f, 0.95f, 0.85f};
 constexpr float kSunLightIntensity = 1.2f;
+const Vector3 kFillLightDirection{0.1f, -0.4f, 0.9f};
+const Vector3 kFillLightColor{0.65f, 0.78f, 1.0f};
+constexpr float kFillLightIntensity = 0.8f;
 
-constexpr const char* kPlayerPath = "resources/app/player/player.obj";
+constexpr const char* kPlayerPath = "resources/app/player/dragon/dragon.obj";
 constexpr const char* kLogoPath = "resources/app/title/logo.obj";
 constexpr const char* kStartPath = "resources/app/title/start.obj";
+constexpr const char* kFlashPath = "resources/app/title/flash.obj";
 
 bool InitModel(ModelInstance &instance, const char *path, int32_t lightingMode) {
   auto res = AbsoluteEngine::AssetManager::GetInstance()->Load<ModelResource>(path);
@@ -76,23 +71,40 @@ float TitleScene::CalcLogoAlpha(float time) {
   return (std::min)(time / kLogoFadeInSec, 1.0f);
 }
 
+float TitleScene::CalcFlashAlpha(float launchU) {
+  // kFlashStartRatio 〜 1 を 0〜1 に直し、smoothstep でなめらかに白くする
+  const float t = (std::min)((std::max)((launchU - kFlashStartRatio) / (1.0f - kFlashStartRatio), 0.0f), 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
+
+void TitleScene::RequestStart() {
+  if (startRequested_) return;
+  startRequested_ = true;
+  launchTime_ = 0.0f;
+}
+
 void TitleScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
   startRequested_ = false;
+  leaving_ = false;
+  launchTime_ = 0.0f;
+  flashAlpha_ = 0.0f;
   time_ = 0.0f;
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
   auto camera = std::make_shared<GameCamera>();
   camera->Initialize();
-  camera->SetPerspective(kCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kCameraNear, kCameraFar);
-  camera->SetEye(kCameraEye);
-  camera->SetTarget(kCameraTarget);
+  const TitleState initial = director_.Evaluate(0.0f);
+  camera->SetPerspective(initial.fovY, Renderer::GetInstance()->GetAspectRatio(), kCameraNear, kCameraFar);
+  camera->SetEye(initial.cameraEye);
+  camera->SetTarget(initial.cameraTarget);
   SetMainCamera(camera);
 
   InitModel(playerModel_, kPlayerPath, 1);
   // ロゴ類はライティングしない
   InitModel(logoModel_, kLogoPath, 0);
   InitModel(startModel_, kStartPath, 0);
+  InitModel(flashModel_, kFlashPath, 0);
 }
 
 void TitleScene::Finalize() {}
@@ -100,17 +112,36 @@ void TitleScene::Finalize() {}
 void TitleScene::Update() {
   time_ += kDeltaTime;
 
-  playerModel_.SetWorld(MakeAffineMatrix(Vector3{1.0f, 1.0f, 1.0f}, Vector3{0.0f, time_ * kPlayerSpinSpeed, 0.0f}, Vector3{0.0f, kPlayerPosY, kPlayerPosZ}));
+  if (startRequested_) {
+    launchTime_ += kDeltaTime;
+  }
+  const float launchU = startRequested_ ? (std::min)(launchTime_ / kLaunchDurationSec, 1.0f) : -1.0f;
+  flashAlpha_ = startRequested_ ? CalcFlashAlpha(launchU) : 0.0f;
+  // 演出が終わった(画面が真っ白になった)フレームで、一度だけゲームへ遷移する
+  if (launchU >= 1.0f && !leaving_) {
+    leaving_ = true;
+    RequestSceneChange(SceneId::Game);
+  }
 
-  logoModel_.SetWorld(MakeAffineMatrix(Vector3{kLogoHalfWidth, kLogoHalfWidth, 1.0f}, Vector3{0.0f, 0.0f, 0.0f}, Vector3{0.0f, kLogoPosY, 0.0f}));
+  const TitleState state = director_.Evaluate(time_, launchU);
+  GetMainCamera()->SetPerspective(state.fovY, Renderer::GetInstance()->GetAspectRatio(), kCameraNear, kCameraFar);
+  GetMainCamera()->SetEye(state.cameraEye);
+  GetMainCamera()->SetTarget(state.cameraTarget);
+
+  playerModel_.SetWorld(state.playerWorld);
+
+  logoModel_.SetWorld(state.logoWorld);
   logoModel_.SetColor({1.0f, 1.0f, 1.0f, CalcLogoAlpha(time_)});
 
-  startModel_.SetWorld(MakeAffineMatrix(Vector3{kStartHalfWidth, kStartHalfWidth, 1.0f}, Vector3{0.0f, 0.0f, 0.0f}, Vector3{0.0f, kStartPosY, 0.0f}));
+  startModel_.SetWorld(state.startWorld);
   startModel_.SetColor({1.0f, 1.0f, 1.0f, CalcBlinkAlpha(time_)});
+
+  flashModel_.SetWorld(state.flashWorld);
+  flashModel_.SetColor({1.0f, 1.0f, 1.0f, flashAlpha_});
 
   if (services_.input) {
     if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
-      RequestSceneChange(SceneId::Game);
+      RequestStart();
     }
   }
 
@@ -126,7 +157,7 @@ void TitleScene::Update() {
 
   ImGui::Spacing();
   if (ImGui::Button("Start", ImVec2(160, 40))) {
-    RequestSceneChange(SceneId::Game);
+    RequestStart();
   }
 
   ImGui::End();
@@ -139,7 +170,12 @@ void TitleScene::ApplyTitleLights(Renderer *renderer) {
   sun.direction = Normalize(kSunLightDirection);
   sun.intensity = kSunLightIntensity;
   sun.enabled = true;
-  renderer->SetDirectionalLights({sun}, true);
+  DirLight fill;
+  fill.color = kFillLightColor;
+  fill.direction = Normalize(kFillLightDirection);
+  fill.intensity = kFillLightIntensity;
+  fill.enabled = true;
+  renderer->SetDirectionalLights({sun, fill}, true);
   renderer->SetPointLights({}, true);
   renderer->SetSpotLights({}, true);
 }
@@ -155,9 +191,13 @@ void TitleScene::Draw() {
   renderer->DrawWater(Normalize(kSunDirection), time_);
 
   renderer->DrawModel(&playerModel_);
-  // 半透明(depthWrite なし)のロゴ類は不透明物の後に描く
+  // 半透明(depthWrite なし)のロゴ類は不透明物の後に描く。カメラのすぐ前に置いてあるので自機より常に手前
   renderer->DrawEffectModel(&logoModel_);
   renderer->DrawEffectModel(&startModel_);
+  // 白フラッシュは一番最後(一番手前)に描く
+  if (flashAlpha_ > 0.0f) {
+    renderer->DrawEffectModel(&flashModel_);
+  }
 
   renderer->EndRenderScene(Inverse(GetMainCamera()->GetProjectionMatrix()));
 }

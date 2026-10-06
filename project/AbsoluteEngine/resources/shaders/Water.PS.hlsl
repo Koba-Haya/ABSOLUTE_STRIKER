@@ -14,11 +14,11 @@ struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
 };
 
-static const float32_t3 kWaterDeepColor = float32_t3(0.01f, 0.06f, 0.09f); // 深い青緑(リニア)
+static const float32_t3 kWaterDeepColor = float32_t3(0.00f, 0.08f, 0.17f); // 深い青(リニア)
 static const float32_t kFresnelF0 = 0.02f;   // 真上から見たときの反射率(水は約 2%)
 static const float32_t kFogDensity = 0.012f; // 霞の濃さ(距離に対する指数)
 static const float32_t kGlitterPower = 256.0f;
-static const float32_t kGlitterIntensity = 3.0f;
+static const float32_t kGlitterIntensity = 2.0f;
 
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;

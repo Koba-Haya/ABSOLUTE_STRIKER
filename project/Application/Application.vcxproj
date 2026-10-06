@@ -199,6 +199,7 @@
     <ClCompile Include="scene\GameScene.cpp" />
     <ClCompile Include="scene\SceneFactory.cpp" />
     <ClCompile Include="scene\TitleScene.cpp" />
+    <ClCompile Include="scene\title\TitleDirector.cpp" />
     <ClCompile Include="..\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -228,6 +229,7 @@
     <ClInclude Include="scene\SceneFactory.h" />
     <ClInclude Include="scene\SceneIds.h" />
     <ClInclude Include="scene\TitleScene.h" />
+    <ClInclude Include="scene\title\TitleDirector.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AbsoluteEngine\AbsoluteEngine.vcxproj">

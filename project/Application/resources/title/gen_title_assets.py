@@ -57,3 +57,7 @@ make_text_png("PRESS START", 120, (1024, 256),
               (255, 255, 255), (255, 210, 150), (80, 30, 40), (255, 140, 60), "start")
 make_plane("logo", 2048 / 512, 1.0)
 make_plane("start", 1024 / 256, 1.0)
+
+# スタート時の白フラッシュ用: 真っ白な板(16:9)。テクスチャは 8x8 の白
+Image.new("RGBA", (8, 8), (255, 255, 255, 255)).save(os.path.join(OUT, "flash.png"))
+make_plane("flash", 16 / 9, 1.0)
