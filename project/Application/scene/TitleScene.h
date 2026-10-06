@@ -41,6 +41,9 @@ private:
   // スタート入力を受け付ける(演出中は無視する)
   void RequestStart();
 
+  // タイトルの演出を最初の状態へ戻す(スタート演出のあと、タイトルへ戻る仮設定で使う)
+  void RestartTitle();
+
   // 翼の先端から、白い蒸気のようなプルーム(軌跡)を出す。前フレームの先端位置との間を埋めて切れ目を作らない
   void EmitContrails(const Matrix4x4 &playerWorld);
 
@@ -48,6 +51,7 @@ private:
   bool leaving_ = false;          // ゲームへの遷移を要求済みか
   float launchTime_ = 0.0f;       // スタート演出の経過秒
   float flashAlpha_ = 0.0f;
+  float returnFadeTime_ = 0.0f;   // タイトルへ戻ってからの経過秒(白からのフェード用)
   float time_ = 0.0f;
   TitleDirector director_;
 

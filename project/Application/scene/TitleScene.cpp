@@ -29,6 +29,10 @@ constexpr float kCameraFar = 1000.0f;
 constexpr float kLogoFadeInSec = 2.0f;
 
 // スタート演出(加速 → 白フラッシュ → ゲームへ)
+// 【仮設定】展示でビルドを見せるため、true の間は演出のあとゲームへ行かずタイトルへ戻る(ゲームから戻る手段が
+// 今は「死ぬこと」しかないため)。ゲームへ遷移させたいときは false にする
+constexpr bool kReturnToTitleAfterLaunch = true;
+constexpr float kReturnFadeSec = 0.6f; // タイトルへ戻ったあと、白から元の画面へ戻る時間
 constexpr float kLaunchDurationSec = 1.6f;
 constexpr float kFlashStartRatio = 0.55f; // 演出のこの割合から白くなり始め、終わりで真っ白
 
@@ -158,12 +162,23 @@ void TitleScene::RequestStart() {
   launchTime_ = 0.0f;
 }
 
+void TitleScene::RestartTitle() {
+  // 画面が真っ白な瞬間に、演出の状態を最初へ戻す(自機の位置・水の波・プルームも最初から)
+  startRequested_ = false;
+  launchTime_ = 0.0f;
+  time_ = 0.0f;
+  contrailHasPrev_ = false;
+  ParticleManager::GetInstance()->ClearParticleGroup(kContrailGroup);
+  returnFadeTime_ = 0.0f; // ここから白がフェードアウトする
+}
+
 void TitleScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
   startRequested_ = false;
   leaving_ = false;
   launchTime_ = 0.0f;
   flashAlpha_ = 0.0f;
+  returnFadeTime_ = kReturnFadeSec; // 起動直後は白からのフェードはしない
   time_ = 0.0f;
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
@@ -245,12 +260,23 @@ void TitleScene::Update() {
   if (startRequested_) {
     launchTime_ += kDeltaTime;
   }
+  // 演出が終わった(画面が真っ白になった)フレームで、タイトルを最初へ戻す(仮設定)か、一度だけゲームへ遷移する
+  if (startRequested_ && launchTime_ >= kLaunchDurationSec) {
+    if (kReturnToTitleAfterLaunch) {
+      RestartTitle();
+    } else if (!leaving_) {
+      leaving_ = true;
+      RequestSceneChange(SceneId::Game);
+    }
+  }
+
   const float launchU = startRequested_ ? (std::min)(launchTime_ / kLaunchDurationSec, 1.0f) : -1.0f;
   flashAlpha_ = startRequested_ ? CalcFlashAlpha(launchU) : 0.0f;
-  // 演出が終わった(画面が真っ白になった)フレームで、一度だけゲームへ遷移する
-  if (launchU >= 1.0f && !leaving_) {
-    leaving_ = true;
-    RequestSceneChange(SceneId::Game);
+  // タイトルへ戻った直後は、白から元の画面へなめらかに戻す
+  if (!startRequested_ && returnFadeTime_ < kReturnFadeSec) {
+    returnFadeTime_ += kDeltaTime;
+    const float t = (std::min)(returnFadeTime_ / kReturnFadeSec, 1.0f);
+    flashAlpha_ = 1.0f - t * t * (3.0f - 2.0f * t);
   }
 
   const TitleState state = director_.Evaluate(time_, launchU);
