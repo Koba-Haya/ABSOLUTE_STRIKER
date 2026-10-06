@@ -1,6 +1,7 @@
 """タイトル用素材(ロゴ/PRESS START の PNG と板ポリ OBJ+MTL)を生成する。
 実行: python gen_title_assets.py  (このフォルダに出力される)"""
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
+import math
 import os
 
 OUT = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +58,37 @@ make_text_png("PRESS START", 120, (1024, 256),
               (255, 255, 255), (255, 210, 150), (80, 30, 40), (255, 140, 60), "start")
 make_plane("logo", 2048 / 512, 1.0)
 make_plane("start", 1024 / 256, 1.0)
+
+def make_puff_png(name, size=128):
+    """翼のプルーム用: 中心が濃く、縁へなめらかに消える白い粒(わずかに青み)"""
+    img = Image.new("RGBA", (size, size))
+    px = img.load()
+    c = (size - 1) / 2
+    for y in range(size):
+        for x in range(size):
+            r = math.hypot(x - c, y - c) / c
+            a = max(0.0, 1.0 - r)
+            a = a * a * (3.0 - 2.0 * a)  # smoothstep で縁をなめらかに
+            px[x, y] = (240, 247, 255, int(255 * a))
+    img.save(os.path.join(OUT, name + ".png"))
+
+
+def make_streak_png(name, w=32, h=256):
+    """気流の筋用: 横は中心が白く細い、縦(長さ方向)は両端へ消える"""
+    img = Image.new("RGBA", (w, h))
+    px = img.load()
+    for y in range(h):
+        along = math.sin(math.pi * (y + 0.5) / h) ** 1.5
+        for x in range(w):
+            u = (x + 0.5) / w - 0.5
+            across = math.exp(-((u / 0.16) ** 2))
+            px[x, y] = (255, 255, 255, int(255 * along * across))
+    img.save(os.path.join(OUT, name + ".png"))
+
+
+make_puff_png("puff")
+make_streak_png("streak")
+make_plane("streak", 1.0, 1.0)
 
 # スタート時の白フラッシュ用: 真っ白な板(16:9)。テクスチャは 8x8 の白
 Image.new("RGBA", (8, 8), (255, 255, 255, 255)).save(os.path.join(OUT, "flash.png"))

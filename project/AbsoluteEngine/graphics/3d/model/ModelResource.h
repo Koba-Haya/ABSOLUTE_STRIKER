@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
+
+#include "Vector.h"
 
 struct ModelData;
 struct SubMeshRange;
@@ -25,6 +28,9 @@ public:
   bool Initialize(const CreateInfo &ci);
 
   const ModelData* GetModelData() const;
+
+  // 全メッシュの頂点位置(モデル空間)を返す。モデルの大きさ・中心・端の位置を調べる用途(Assimp の型に依存しない)
+  std::vector<Vector3> GetVertexPositions() const;
 
   // Renderer が使用するアクセサ
   unsigned long long GetVBVAddress() const;

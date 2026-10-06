@@ -18,7 +18,6 @@ constexpr float kBaseHeight = 1.5f;     // 水面からの高さ
 constexpr float kBobAmplitude = 0.2f;   // 上下の揺れ
 constexpr float kBobPeriodSec = 4.3f;
 constexpr float kBankGain = 0.15f;      // 左右速度 1 あたりのバンク角(rad)
-const Vector3 kPlayerScale{1.0f, 1.0f, 1.0f}; // dragon.obj は頭から尾まで 2.8 に揃えて書き出してあり、機首が +Z(エンジン空間)
 constexpr int kRollShotIndex = 2;       // バレルロールするカット(③)
 constexpr float kRollStartRatio = 0.2f; // カット内でロールを始める割合
 constexpr float kRollEndRatio = 0.8f;
@@ -49,6 +48,26 @@ constexpr float kStartOffsetY = -1.4f;
 constexpr float kLogoSlideOut = 2.6f;
 constexpr float kStartSlideOut = 2.0f;
 constexpr float kLaunchSlideRatio = 0.4f;
+
+// 気流の筋: ワールドに固定され、自機を中心に x と z で繰り返す格子(自機の周りにだけ残る)。
+// 自機が進むと、後ろへ流れ去った筋は前方に現れ直す。周期の端では透明になるので、出現・消滅は目立たない
+constexpr float kStreakPeriodX = 12.0f;        // 自機の左右 ±6 の範囲
+constexpr float kStreakPeriodZ = 40.0f;        // 自機の前後の範囲(下の kStreakBehindPlayer だけ後ろ、残りが前)
+constexpr float kStreakBehindPlayer = 8.0f;
+constexpr float kStreakEdgeFade = 10.0f;       // 周期の端(前後)で消える距離
+constexpr float kStreakEdgeFadeX = 3.0f;       // 周期の端(左右)で消える距離
+constexpr float kStreakNearFadeStart = 1.0f;   // カメラにこれより近い筋は消す(画面を横切る白い棒を避ける)
+constexpr float kStreakNearFadeEnd = 4.0f;
+constexpr float kStreakMinHeight = 0.5f;       // 水面からの高さ(自機の高さ 1.5 の上下)
+constexpr float kStreakMaxHeight = 4.0f;
+constexpr int kNoStreakShotIndex = 0;          // 筋を出さないカット(①ローアングル)
+constexpr float kStreakMinHalfLength = 2.5f;   // 板の半分の長さ(進行方向)
+constexpr float kStreakMaxHalfLength = 6.0f;
+constexpr float kStreakMinHalfWidth = 0.05f;
+constexpr float kStreakMaxHalfWidth = 0.10f;
+constexpr float kStreakMinAlpha = 0.25f;
+constexpr float kStreakMaxAlpha = 0.6f;
+constexpr float kLaunchStreakStretch = 3.0f;   // スタート演出で筋が伸びる最大倍率
 
 // 白フラッシュの板(横幅 2 基準・16:9)。カメラの目の前に置き、どの画角でも画面全体を覆うよう大きめにする
 constexpr float kFlashDistance = 1.0f;
@@ -81,6 +100,60 @@ Matrix4x4 MakeBasisMatrix(const Vector3 &right, const Vector3 &up, const Vector3
   m.m[2][0] = forward.x;  m.m[2][1] = forward.y;  m.m[2][2] = forward.z;
   m.m[3][0] = position.x; m.m[3][1] = position.y; m.m[3][2] = position.z;
   return m;
+}
+
+// 整数ハッシュで 0〜1 の値を作る(筋ごとの位置・長さなどのばらつき用。状態を持たない)
+float Hash01(uint32_t index, uint32_t salt) {
+  uint32_t h = index * 374761393u + salt * 668265263u;
+  h = (h ^ (h >> 13u)) * 1274126177u;
+  h ^= h >> 16u;
+  return static_cast<float>(h) * (1.0f / 4294967295.0f);
+}
+
+float Lerp1(float a, float b, float t) { return a + (b - a) * t; }
+float PositiveMod(float a, float period) {
+  const float m = std::fmod(a, period);
+  return m < 0.0f ? m + period : m;
+}
+
+// 気流の筋を計算する。playerPos: 自機の位置(筋はこの周りに置く)、launchU: スタート演出の進行(0〜1、通常は 0)、
+// gain: 筋の濃さの倍率(0 で出さない)
+void FillStreaks(TitleState &state, const Vector3 &playerPos, float launchU, float gain) {
+  const Vector3 eye = state.cameraEye;
+  const Vector3 flowAxis{0.0f, 0.0f, 1.0f}; // 筋の長さ方向 = 自機の進行方向
+  const float stretch = 1.0f + (kLaunchStreakStretch - 1.0f) * launchU;
+  const float boost = 1.0f + 0.5f * launchU;
+
+  for (int i = 0; i < kTitleStreakCount; ++i) {
+    const uint32_t id = static_cast<uint32_t>(i);
+    const float y = Lerp1(kStreakMinHeight, kStreakMaxHeight, Hash01(id, 2));
+    // ワールド固定の格子のうち、自機に最も近い周期の位置を使う(x は左右 ±6、z は後ろ 8 〜 前 32)
+    const float xInPeriod = PositiveMod(Hash01(id, 1) * kStreakPeriodX - playerPos.x + kStreakPeriodX * 0.5f, kStreakPeriodX);
+    const float zInPeriod = PositiveMod(Hash01(id, 3) * kStreakPeriodZ - playerPos.z + kStreakBehindPlayer, kStreakPeriodZ);
+    const Vector3 pos{playerPos.x - kStreakPeriodX * 0.5f + xInPeriod, y, playerPos.z - kStreakBehindPlayer + zInPeriod};
+
+    const float halfLength = Lerp1(kStreakMinHalfLength, kStreakMaxHalfLength, Hash01(id, 4)) * stretch;
+    const float halfWidth = Lerp1(kStreakMinHalfWidth, kStreakMaxHalfWidth, Hash01(id, 5));
+    float alpha = Lerp1(kStreakMinAlpha, kStreakMaxAlpha, Hash01(id, 6)) * boost * gain;
+
+    // 周期の端(出現・消滅)と、カメラに近すぎる所で消す
+    const float edgeZ = (std::min)(Smooth01(Clamp01(zInPeriod / kStreakEdgeFade)),
+                                   Smooth01(Clamp01((kStreakPeriodZ - zInPeriod) / kStreakEdgeFade)));
+    const float edgeX = (std::min)(Smooth01(Clamp01(xInPeriod / kStreakEdgeFadeX)),
+                                   Smooth01(Clamp01((kStreakPeriodX - xInPeriod) / kStreakEdgeFadeX)));
+    const float edge = edgeZ * edgeX;
+    const Vector3 toCamera = Minus(eye, pos);
+    const float distance = Length(toCamera);
+    const float nearFade = Smooth01(Clamp01((distance - kStreakNearFadeStart) / (kStreakNearFadeEnd - kStreakNearFadeStart)));
+    alpha *= edge * nearFade;
+
+    // 筋の板は、長さ方向(Z)を保ったままカメラへ向ける(軸まわりのビルボード)
+    Vector3 right = Cross(flowAxis, toCamera);
+    right = Length(right) > 1e-4f ? Normalize(right) : Vector3{1.0f, 0.0f, 0.0f};
+    const Vector3 normal = Cross(right, flowAxis);
+    state.streakWorld[i] = MakeBasisMatrix(Times(right, halfWidth), Times(flowAxis, halfLength), normal, pos);
+    state.streakAlpha[i] = Clamp01(alpha);
+  }
 }
 
 struct CameraShot {
@@ -147,7 +220,9 @@ TitleState TitleDirector::Evaluate(float time, float launchProgress) const {
   }
   // 行ベクトル規約なので左から順に適用: 機首軸(Z)まわりのロール → 進行方向(Y)
   const Matrix4x4 rotation = Multiply(MakeRotateZMatrix(bank + roll), MakeRotateYMatrix(heading));
-  state.playerWorld = Multiply(Multiply(MakeScaleMatrix(kPlayerScale), rotation), MakeTranslateMatrix(playerPos));
+  // 中心を原点へ → 拡大 → 回転(ロール・進行方向) → 位置。モデルの原点が足元などにあっても、中心まわりに回る
+  const Matrix4x4 centering = MakeTranslateMatrix({-playerCenter_.x, -playerCenter_.y, -playerCenter_.z});
+  state.playerWorld = Multiply(Multiply(Multiply(centering, MakeScaleMatrix({playerScale_, playerScale_, playerScale_})), rotation), MakeTranslateMatrix(playerPos));
 
   // --- カメラ ---
   CameraShot cam;
@@ -181,5 +256,9 @@ TitleState TitleDirector::Evaluate(float time, float launchProgress) const {
   state.logoWorld = MakeBasisMatrix(Times(right, kLogoHalfWidth * overlayScale), Times(up, kLogoHalfWidth * overlayScale), forward, Plus(overlayCenter, Times(up, logoOffsetY * overlayScale)));
   state.startWorld = MakeBasisMatrix(Times(right, kStartHalfWidth * overlayScale), Times(up, kStartHalfWidth * overlayScale), forward, Plus(overlayCenter, Times(up, startOffsetY * overlayScale)));
   state.flashWorld = MakeBasisMatrix(Times(right, kFlashHalfWidth), Times(up, kFlashHalfWidth), forward, Plus(state.cameraEye, Times(forward, kFlashDistance)));
+
+  // --- 気流の筋 ---
+  const float streakGain = (!launching && shot == kNoStreakShotIndex) ? 0.0f : 1.0f;
+  FillStreaks(state, playerPos, launching ? launchU : 0.0f, streakGain);
   return state;
 }

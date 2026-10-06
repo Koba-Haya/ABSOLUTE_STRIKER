@@ -130,8 +130,10 @@ public:
   void DrawSky(const Vector3 &sunDirection);
   // 水面を全画面パスで描く(空の直後・オブジェクトの前)。time は波のアニメーション用の秒
   void DrawWater(const Vector3 &sunDirection, float time);
+  // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
   void DrawParticles(ParticleManager *pm,
-                     BlendMode blendMode = BlendMode::Alpha);
+                     BlendMode blendMode = BlendMode::Alpha,
+                     bool depthTest = false);
   // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
   void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha);
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
@@ -228,6 +230,7 @@ private:
   std::unique_ptr<UnifiedPipeline> spritePipelineScreen_;
 
   std::unique_ptr<UnifiedPipeline> particlePipelineAlpha_;
+  std::unique_ptr<UnifiedPipeline> particlePipelineAlphaDepth_; // 深度テストあり版
   std::unique_ptr<UnifiedPipeline> particlePipelineAdd_;
   std::unique_ptr<UnifiedPipeline> particlePipelineSub_;
   std::unique_ptr<UnifiedPipeline> particlePipelineMul_;

@@ -12,8 +12,12 @@
 #endif
 
 #include "SceneIds.h"
+#include "ParticleManager.h"
+#include "ModelResource.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <vector>
 
 namespace {
 constexpr float kDeltaTime = 1.0f / 60.0f;
@@ -36,19 +40,90 @@ constexpr float kStartBlinkMinAlpha = 0.25f;
 // 太陽の方向(太陽へ向かう向き)。空の描画で使う
 const Vector3 kSunDirection{0.30f, 0.22f, 1.0f};
 
-// ライト(光が進む向き)。タイトルにはライトオブジェクトが無いので直接設定する
-// 主光: 昼の太陽(上から)。補助光: 機体の後ろ側が真っ黒にならないよう、後方から空色で当てる
-const Vector3 kSunLightDirection{-0.3f, -0.85f, -0.35f};
-const Vector3 kSunLightColor{1.0f, 0.95f, 0.85f};
-constexpr float kSunLightIntensity = 1.2f;
-const Vector3 kFillLightDirection{0.1f, -0.4f, 0.9f};
-const Vector3 kFillLightColor{0.65f, 0.78f, 1.0f};
-constexpr float kFillLightIntensity = 0.8f;
+// ライティングモード(0 = ライトの影響を受けず、テクスチャの色をそのまま出す)。
+// タイトルにはライトオブジェクトが無く、ライトを足すと白いテクスチャが飛んだり、影側が真っ黒になったりするため、
+// 自機もロゴ類と同じく 0 にする
+constexpr int32_t kUnlitMode = 0;
 
 constexpr const char* kPlayerPath = "resources/app/player/dragon/dragon.obj";
 constexpr const char* kLogoPath = "resources/app/title/logo.obj";
 constexpr const char* kStartPath = "resources/app/title/start.obj";
 constexpr const char* kFlashPath = "resources/app/title/flash.obj";
+constexpr const char* kStreakPath = "resources/app/title/streak.obj";
+
+// 翼のプルーム(パーティクル)
+constexpr const char* kContrailGroup = "contrail";
+constexpr const char* kContrailTexture = "resources/app/title/puff.png";
+constexpr uint32_t kContrailMaxParticles = 4096;
+// 発生点: 自機モデルの右翼の先端 3 か所(左翼は中心を挟んで反転)。位置はモデルの頂点から自動で求める(FitPlayerModel)。
+// 下は先端ごとの粒の大きさ・濃さの倍率(一番外側の先端が最も強い)
+constexpr float kContrailTipWeights[kContrailTipCount] = {1.0f, 0.6f, 0.5f};
+
+// 自機の大きさ: 翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)。モデルを差し替えても大きさが揃う
+constexpr float kPlayerWingspan = 3.7f;
+// 翼の頂点とみなす範囲: 中心から x 方向の最大幅のこの割合より外側
+// (0.6 だと内側の後ろ脚のフィンの先まで入ってしまうので、翼の外側 20% に絞る)
+constexpr float kWingRegionRatio = 0.8f;
+
+struct PlayerModelFit {
+  Vector3 center{0.0f, 0.0f, 0.0f};
+  float scale = 1.0f;
+  std::array<Vector3, kContrailTipCount> rightWingTips{};
+};
+
+float DistanceBetween(const Vector3 &a, const Vector3 &b) {
+  return Length({a.x - b.x, a.y - b.y, a.z - b.z});
+}
+
+// モデルの頂点から、大きさ(翼幅を kPlayerWingspan に)、中心(バウンディングボックスの中心)、右翼の先端を求める。
+// 先端は、翼の領域(中心から x 方向に外側 20%)の頂点から、「一番外側 → それから一番遠い点 → 両方から遠い点」の順に選ぶ
+PlayerModelFit FitPlayerModel(const std::vector<Vector3> &positions) {
+  PlayerModelFit fit;
+  if (positions.empty()) return fit;
+
+  Vector3 lo = positions[0], hi = positions[0];
+  for (const Vector3 &p : positions) {
+    lo = {(std::min)(lo.x, p.x), (std::min)(lo.y, p.y), (std::min)(lo.z, p.z)};
+    hi = {(std::max)(hi.x, p.x), (std::max)(hi.y, p.y), (std::max)(hi.z, p.z)};
+  }
+  fit.center = {(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f};
+  const float wingspan = hi.x - lo.x;
+  fit.scale = wingspan > 1e-4f ? kPlayerWingspan / wingspan : 1.0f;
+
+  const float wingStartX = fit.center.x + (hi.x - fit.center.x) * kWingRegionRatio;
+  std::vector<Vector3> wing;
+  for (const Vector3 &p : positions) {
+    if (p.x >= wingStartX) wing.push_back(p);
+  }
+  if (wing.empty()) return fit;
+
+  // 1 本目: 一番外側(x 最大)
+  fit.rightWingTips[0] = *std::max_element(wing.begin(), wing.end(), [](const Vector3 &a, const Vector3 &b) { return a.x < b.x; });
+  // 2 本目以降: すでに選んだ先端のどれからも遠い点
+  for (int k = 1; k < kContrailTipCount; ++k) {
+    float bestDistance = -1.0f;
+    for (const Vector3 &p : wing) {
+      float nearest = 1e30f;
+      for (int j = 0; j < k; ++j) {
+        nearest = (std::min)(nearest, DistanceBetween(p, fit.rightWingTips[j]));
+      }
+      if (nearest > bestDistance) {
+        bestDistance = nearest;
+        fit.rightWingTips[k] = p;
+      }
+    }
+  }
+  return fit;
+}
+constexpr float kContrailSpacing = 0.25f;      // 粒を置く間隔(ワールドの距離)
+constexpr int kContrailMaxPerFramePerPoint = 4; // 加速中でも粒が増えすぎないための上限
+constexpr float kContrailLifetimeSec = 1.6f;
+constexpr float kContrailStartScale = 0.10f;
+constexpr float kContrailEndScale = 0.65f;
+constexpr float kContrailAlpha = 0.55f;
+constexpr float kContrailSideDrift = 0.20f;    // 外側へゆっくり広がる速さ
+constexpr float kContrailRise = 0.06f;
+constexpr float kContrailJitter = 0.05f;       // 粒の位置・速度のばらつき
 
 bool InitModel(ModelInstance &instance, const char *path, int32_t lightingMode) {
   auto res = AbsoluteEngine::AssetManager::GetInstance()->Load<ModelResource>(path);
@@ -100,14 +175,69 @@ void TitleScene::Initialize(const SceneServices &services) {
   camera->SetTarget(initial.cameraTarget);
   SetMainCamera(camera);
 
-  InitModel(playerModel_, kPlayerPath, 1);
-  // ロゴ類はライティングしない
-  InitModel(logoModel_, kLogoPath, 0);
-  InitModel(startModel_, kStartPath, 0);
-  InitModel(flashModel_, kFlashPath, 0);
+  InitModel(playerModel_, kPlayerPath, kUnlitMode);
+  // 自機モデルの大きさ・中心・翼の先端を、頂点から求める(モデルを差し替えても合う)
+  if (auto *playerResource = playerModel_.GetResource()) {
+    const PlayerModelFit fit = FitPlayerModel(playerResource->GetVertexPositions());
+    director_.SetPlayerModelFit(fit.center, fit.scale);
+    modelCenter_ = fit.center;
+    wingTips_ = fit.rightWingTips;
+  }
+  InitModel(logoModel_, kLogoPath, kUnlitMode);
+  InitModel(startModel_, kStartPath, kUnlitMode);
+  InitModel(flashModel_, kFlashPath, kUnlitMode);
+  for (auto &streak : streakModels_) {
+    InitModel(streak, kStreakPath, kUnlitMode);
+  }
+
+  // 翼のプルーム。同名のグループが残っていれば、ParticleManager がリセットして再利用する
+  ParticleManager::GetInstance()->CreateParticleGroup(kContrailGroup, kContrailTexture, kContrailMaxParticles);
+  contrailHasPrev_ = false;
 }
 
-void TitleScene::Finalize() {}
+void TitleScene::Finalize() {
+  // プルームの粒がゲームシーンへ持ち越されないようにする
+  ParticleManager::GetInstance()->ClearParticleGroup(kContrailGroup);
+}
+
+void TitleScene::EmitContrails(const Matrix4x4 &playerWorld) {
+  auto *particles = ParticleManager::GetInstance();
+  // 粒ごとの小さなばらつきを作る(疑似乱数。-1〜1)
+  auto random = [this]() {
+    contrailSeed_ = contrailSeed_ * 1664525u + 1013904223u;
+    return static_cast<float>(contrailSeed_ >> 8) * (2.0f / 16777216.0f) - 1.0f;
+  };
+
+  int index = 0;
+  for (const float side : {1.0f, -1.0f}) {
+    for (int k = 0; k < kContrailTipCount; ++k) {
+      // 右翼の先端を、モデルの中心を挟んで x 方向に反転すると左翼の先端
+      const Vector3 &right = wingTips_[k];
+      const Vector3 local{side > 0.0f ? right.x : 2.0f * modelCenter_.x - right.x, right.y, right.z};
+      const Vector3 tip = TransformPoint(local, playerWorld);
+      const Vector3 prev = contrailHasPrev_ ? contrailPrevTip_[index] : tip;
+
+      // 前フレームの先端位置から今の位置まで、一定間隔で粒を置く(速く動いても軌跡が切れない)
+      const float distance = Length({tip.x - prev.x, tip.y - prev.y, tip.z - prev.z});
+      const int count = (std::min)((std::max)(static_cast<int>(std::ceil(distance / kContrailSpacing)), 1), kContrailMaxPerFramePerPoint);
+      for (int k = 1; k <= count; ++k) {
+        const float t = static_cast<float>(k) / static_cast<float>(count);
+        const Vector3 position{prev.x + (tip.x - prev.x) * t + random() * kContrailJitter,
+                               prev.y + (tip.y - prev.y) * t + random() * kContrailJitter,
+                               prev.z + (tip.z - prev.z) * t + random() * kContrailJitter};
+        const Vector3 velocity{side * kContrailSideDrift + random() * kContrailJitter, kContrailRise + random() * kContrailJitter, random() * kContrailJitter};
+        const float w = kContrailTipWeights[k];
+        const Vector3 startScale{kContrailStartScale * w, kContrailStartScale * w, kContrailStartScale * w};
+        const Vector3 endScale{kContrailEndScale * w, kContrailEndScale * w, kContrailEndScale * w};
+        particles->Emit(kContrailGroup, position, velocity, startScale, Vector3{0.0f, 0.0f, 0.0f}, kContrailLifetimeSec,
+                        Vector4{1.0f, 1.0f, 1.0f, kContrailAlpha * w}, &endScale);
+      }
+      contrailPrevTip_[index] = tip;
+      ++index;
+    }
+  }
+  contrailHasPrev_ = true;
+}
 
 void TitleScene::Update() {
   time_ += kDeltaTime;
@@ -139,6 +269,13 @@ void TitleScene::Update() {
   flashModel_.SetWorld(state.flashWorld);
   flashModel_.SetColor({1.0f, 1.0f, 1.0f, flashAlpha_});
 
+  for (int i = 0; i < kTitleStreakCount; ++i) {
+    streakModels_[i].SetWorld(state.streakWorld[i]);
+    streakModels_[i].SetColor({1.0f, 1.0f, 1.0f, state.streakAlpha[i]});
+  }
+
+  EmitContrails(state.playerWorld);
+
   if (services_.input) {
     if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
       RequestStart();
@@ -164,33 +301,28 @@ void TitleScene::Update() {
 #endif
 }
 
-void TitleScene::ApplyTitleLights(Renderer *renderer) {
-  DirLight sun;
-  sun.color = kSunLightColor;
-  sun.direction = Normalize(kSunLightDirection);
-  sun.intensity = kSunLightIntensity;
-  sun.enabled = true;
-  DirLight fill;
-  fill.color = kFillLightColor;
-  fill.direction = Normalize(kFillLightDirection);
-  fill.intensity = kFillLightIntensity;
-  fill.enabled = true;
-  renderer->SetDirectionalLights({sun, fill}, true);
-  renderer->SetPointLights({}, true);
-  renderer->SetSpotLights({}, true);
-}
-
 void TitleScene::Draw() {
   auto* renderer = Renderer::GetInstance();
   renderer->BeginRenderScene();
   renderer->SetCamera(*GetMainCamera());
-  ApplyTitleLights(renderer);
 
   // 空は最奥に描くので順番は自由だが、不透明物の前に描いて読みやすくする
   renderer->DrawSky(Normalize(kSunDirection));
   renderer->DrawWater(Normalize(kSunDirection), time_);
 
   renderer->DrawModel(&playerModel_);
+
+  // 翼のプルーム: 粒の行列は今フレームのカメラで作りたいので、SetCamera の後にここで更新する。
+  // 深度テストあり(書き込みなし)で、自機の後ろに回った粒は自機に隠れる
+  auto *particles = ParticleManager::GetInstance();
+  particles->Update(kDeltaTime);
+  particles->Draw(BlendMode::Alpha, true);
+
+  // 気流の筋(深度テストあり。自機より後ろの筋は自機に隠れる)
+  for (auto &streak : streakModels_) {
+    renderer->DrawEffectModel(&streak);
+  }
+
   // 半透明(depthWrite なし)のロゴ類は不透明物の後に描く。カメラのすぐ前に置いてあるので自機より常に手前
   renderer->DrawEffectModel(&logoModel_);
   renderer->DrawEffectModel(&startModel_);

@@ -32,6 +32,9 @@ struct Particle {
     float lifetime = 1.0f;
     float age = 0.0f;
     Vector4 color{ 1,1,1,1 };
+    // 寿命の間に transform.scale から endScale へ線形に変える(changesScale が true のときだけ)
+    Vector3 endScale{ 1,1,1 };
+    bool changesScale = false;
 };
 
 // GPUへ送るインスタンシングデータ
@@ -69,14 +72,18 @@ public:
     bool CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances);
 
     // パーティクルをグループに発生させる（Emitterから呼ぶ想定）
+    // endScale を渡すと、寿命の間に scale から endScale へ大きさを変える(煙が広がるなど)。省略時は一定
     void Emit(const std::string& name, const Vector3& position, const Vector3& velocity,
-        const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color);
+        const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color,
+        const Vector3* endScale = nullptr);
 
     // Update: 粒子更新 + インスタンスデータ書き込み
     void Update(float deltaTime);
 
     // Draw: グループごとに DrawIndexedInstanced
-    void Draw(BlendMode blendMode = BlendMode::Alpha);
+    // depthTest: true なら深度テストあり(書き込みなし)で描く。他の 3D オブジェクトとの前後関係が正しく出る。
+    //            Alpha ブレンドのみ対応(他のブレンドでは無視される)。既定の false は従来どおり深度を見ない
+    void Draw(BlendMode blendMode = BlendMode::Alpha, bool depthTest = false);
 
     // Called by Renderer
     void DrawInternal(ID3D12GraphicsCommandList* cmdList);

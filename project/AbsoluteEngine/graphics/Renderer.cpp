@@ -126,6 +126,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
     particlePipelineAlpha_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(particlePipelineAlpha_->Initialize(device, utils, compiler,
                                                   includeHandler, desc));
+    {
+      // 深度テストあり(書き込みなし)の Alpha。他の 3D オブジェクトの後ろに回る粒を正しく隠すため
+      PipelineDesc depthDesc = desc;
+      depthDesc.enableDepth = true;
+      depthDesc.depthWrite = false;
+      depthDesc.depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+      particlePipelineAlphaDepth_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(particlePipelineAlphaDepth_->Initialize(device, utils, compiler,
+                                                         includeHandler, depthDesc));
+    }
     desc.blendMode = BlendMode::Add;
     particlePipelineAdd_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(particlePipelineAdd_->Initialize(device, utils, compiler,
@@ -749,11 +759,13 @@ void Renderer::DrawWater(const Vector3 &sunDirection, float time) {
   cmdList->DrawInstanced(3, 1, 0, 0);
 }
 
-void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode) {
+void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest) {
   if (!pm)
     return;
   auto *cmdList = dx_->GetCommandList();
-  UnifiedPipeline *pipeline = GetParticlePipeline_(blendMode);
+  UnifiedPipeline *pipeline = (depthTest && blendMode == BlendMode::Alpha)
+                                  ? particlePipelineAlphaDepth_.get()
+                                  : GetParticlePipeline_(blendMode);
   pipeline->SetPipelineState(cmdList);
   pm->DrawInternal(cmdList);
 }
