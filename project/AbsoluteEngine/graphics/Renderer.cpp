@@ -723,14 +723,17 @@ void Renderer::DrawSkybox(Skybox *skybox) {
   cmdList->DrawIndexedInstanced(skybox->GetIndexCount(), 1, 0, 0, 0);
 }
 
-void Renderer::DrawSky(const Vector3 &sunDirection) {
+void Renderer::DrawSky(const Vector3 &sunDirection, float time, const Vector3 &worldOffset) {
   if (!skyPipeline_ || !skyParamMapped_)
     return;
   auto *cmdList = dx_->GetCommandList();
 
   // ピクセルの NDC 座標から視線方向を復元するための逆行列
+  const Matrix4x4 invView = Inverse(view_);
   skyParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
   skyParamMapped_->sunDirection = sunDirection;
+  skyParamMapped_->time = time;
+  skyParamMapped_->cameraPosition = {invView.m[3][0] + worldOffset.x, invView.m[3][1] + worldOffset.y, invView.m[3][2] + worldOffset.z};
 
   skyPipeline_->SetPipelineState(cmdList);
   cmdList->SetGraphicsRootConstantBufferView(0, skyParamCB_->GetGPUVirtualAddress());
@@ -740,7 +743,7 @@ void Renderer::DrawSky(const Vector3 &sunDirection) {
   cmdList->DrawInstanced(3, 1, 0, 0);
 }
 
-void Renderer::DrawWater(const Vector3 &sunDirection, float time) {
+void Renderer::DrawWater(const Vector3 &sunDirection, float time, const Vector3 &worldOffset) {
   if (!waterPipeline_ || !waterParamMapped_)
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -748,7 +751,7 @@ void Renderer::DrawWater(const Vector3 &sunDirection, float time) {
   // 視線の復元用の逆行列と、水面との交点計算に使うカメラ位置(view の逆行列の平行移動成分)
   const Matrix4x4 invView = Inverse(view_);
   waterParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
-  waterParamMapped_->cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+  waterParamMapped_->cameraPosition = {invView.m[3][0] + worldOffset.x, invView.m[3][1] + worldOffset.y, invView.m[3][2] + worldOffset.z};
   waterParamMapped_->time = time;
   waterParamMapped_->sunDirection = sunDirection;
 

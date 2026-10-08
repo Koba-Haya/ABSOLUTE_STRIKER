@@ -98,6 +98,9 @@ public:
 	// グループ内の全粒子をクリア
     void ClearParticleGroup(const std::string& name);
 
+    // グループ内の全粒子を delta だけ平行移動する(描画用のワールド座標を巻き戻したとき、残っている粒子を合わせる)
+    void TranslateParticleGroup(const std::string& name, const Vector3& delta);
+
 private:
     ParticleManager() = default;
     ParticleManager(const ParticleManager&) = delete;

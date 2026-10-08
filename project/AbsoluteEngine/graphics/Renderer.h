@@ -126,10 +126,14 @@ public:
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   void DrawSkybox(Skybox *skybox);
-  // 手続き生成の夕焼け空を全画面で描く(最奥)。sunDirection は太陽へ向かう向き
-  void DrawSky(const Vector3 &sunDirection);
+  // 手続き生成の空(グラデーション・太陽・雲)を全画面で描く(最奥)。sunDirection は太陽へ向かう向き、
+  // time は雲が風で流れるアニメーション用の秒。雲の位置はカメラ位置から求める。
+  // worldOffset: カメラ位置に足す「ワールドの原点のずれ」。描画用の座標を小さく保つために巻き戻している場合、
+  // 巻き戻した分を渡すと、雲の模様が巻き戻しをまたいで連続する(巻き戻していなければ {0,0,0})
+  void DrawSky(const Vector3 &sunDirection, float time, const Vector3 &worldOffset = {0.0f, 0.0f, 0.0f});
   // 水面を全画面パスで描く(空の直後・オブジェクトの前)。time は波のアニメーション用の秒
-  void DrawWater(const Vector3 &sunDirection, float time);
+  // worldOffset は DrawSky と同じ(波の模様が巻き戻しをまたいで連続する)
+  void DrawWater(const Vector3 &sunDirection, float time, const Vector3 &worldOffset = {0.0f, 0.0f, 0.0f});
   // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha,
@@ -277,6 +281,8 @@ private:
   struct alignas(16) SkyParam {
     Matrix4x4 invViewProj;
     Vector3 sunDirection;
+    float time;
+    Vector3 cameraPosition;
     float pad;
   };
   ComPtr<ID3D12Resource> skyParamCB_;

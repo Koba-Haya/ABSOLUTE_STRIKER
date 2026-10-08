@@ -11,6 +11,8 @@ constexpr float kShotDurationSec = 6.0f;
 constexpr int kShotCount = 4;
 
 // 自機の動き
+// 描画用のワールド座標を巻き戻す距離(unit)。気流の筋の格子の周期(40)の整数倍にして、巻き戻しても筋の位置が合うようにする
+constexpr double kWorldWrapZ = 2400.0;
 constexpr float kFlightSpeed = 24.0f;   // 前進速度(unit/s)
 constexpr float kWeaveAmplitude = 3.0f; // 左右の振れ幅
 constexpr float kWeavePeriodSec = 6.0f;
@@ -23,7 +25,7 @@ constexpr float kRollStartRatio = 0.2f; // カット内でロールを始める�
 constexpr float kRollEndRatio = 0.8f;
 
 // スタート演出: 自機が u^2 で加速して前へ飛び去り、カメラは自機の動きの一部だけ付いていく(引き)。画角も広がる
-constexpr float kLaunchDistance = 70.0f;       // 演出中に自機が余分に進む距離
+constexpr float kLaunchDistance = 100.0f;      // 演出中に自機が余分に進む距離
 constexpr float kLaunchCameraFollow = 0.35f;   // カメラが余分な移動のうち付いていく割合(残りは引きになる)
 const Vector3 kLaunchCameraOffsetStart{0.0f, 1.2f, -9.0f};
 const Vector3 kLaunchCameraOffsetEnd{0.0f, 2.4f, -18.0f};
@@ -47,7 +49,7 @@ constexpr float kStartOffsetY = -1.4f;
 // 画面の上端・下端は基準距離で約 ±2.3、ロゴの半高さ約 0.75、PRESS START の半高さ約 0.38 なので、画面外へ出る量にしてある
 constexpr float kLogoSlideOut = 2.6f;
 constexpr float kStartSlideOut = 2.0f;
-constexpr float kLaunchSlideRatio = 0.4f;
+constexpr float kLaunchSlideRatio = 0.27f;
 
 // 気流の筋: ワールドに固定され、自機を中心に x と z で繰り返す格子(自機の周りにだけ残る)。
 // 自機が進むと、後ろへ流れ去った筋は前方に現れ直す。周期の端では透明になるので、出現・消滅は目立たない
@@ -79,17 +81,23 @@ Vector3 Times(const Vector3 &v, float s) { return {v.x * s, v.y * s, v.z * s}; }
 float Smooth01(float u) { return u * u * (3.0f - 2.0f * u); }
 float Clamp01(float v) { return (std::min)((std::max)(v, 0.0f), 1.0f); }
 
-// 自機の位置。時間の連続な式なので、ループの継ぎ目でも飛ばない
-Vector3 PlayerPosition(float time) {
-  const float weave = kWeaveAmplitude * std::sin(kTwoPi * time / kWeavePeriodSec);
-  const float bob = kBobAmplitude * std::sin(kTwoPi * time / kBobPeriodSec);
-  return {weave, kBaseHeight + bob, kFlightSpeed * time};
+// 位相(0〜1)。時間が大きくなっても精度が落ちないよう、double のまま周期で割った余りを取る
+float PhaseOf(double time, float periodSec) {
+  return static_cast<float>(std::fmod(time, static_cast<double>(periodSec)) / periodSec);
+}
+
+// 自機の位置。時間の連続な式なので、ループの継ぎ目でも飛ばない。
+// z は、描画用に巻き戻した座標(絶対位置 − zOrigin)。zOrigin は kWorldWrapZ の整数倍
+Vector3 PlayerPosition(double time, double zOrigin) {
+  const float weave = kWeaveAmplitude * std::sin(kTwoPi * PhaseOf(time, kWeavePeriodSec));
+  const float bob = kBobAmplitude * std::sin(kTwoPi * PhaseOf(time, kBobPeriodSec));
+  return {weave, kBaseHeight + bob, static_cast<float>(kFlightSpeed * time - zOrigin)};
 }
 
 // 自機の左右方向の速度(位置の微分)
-float PlayerLateralVelocity(float time) {
+float PlayerLateralVelocity(double time) {
   const float omega = kTwoPi / kWeavePeriodSec;
-  return kWeaveAmplitude * omega * std::cos(omega * time);
+  return kWeaveAmplitude * omega * std::cos(kTwoPi * PhaseOf(time, kWeavePeriodSec));
 }
 
 // 行を (右, 上, 前, 位置) として並べた行列。モデルの x→右, y→上, z→前 に対応する
@@ -192,24 +200,28 @@ CameraShot EvaluateShot(int shot, const Vector3 &playerNow, const Vector3 &playe
 }
 } // namespace
 
-TitleState TitleDirector::Evaluate(float time, float launchProgress) const {
+TitleState TitleDirector::Evaluate(double time, float launchProgress) const {
   const bool launching = launchProgress >= 0.0f;
   const float launchU = Clamp01(launchProgress);
   // 加速: 進行度の 2 乗で距離が伸びる(はじめはゆっくり、だんだん速くなる)
   const float launchBoost = launching ? launchU * launchU * kLaunchDistance : 0.0f;
 
-  const float loopSec = kShotDurationSec * kShotCount;
-  const float loopTime = std::fmod(time, loopSec);
+  const double loopSec = static_cast<double>(kShotDurationSec) * kShotCount;
+  const float loopTime = static_cast<float>(std::fmod(time, loopSec));
   const int shot = static_cast<int>(loopTime / kShotDurationSec);
   const float timeInShot = loopTime - shot * kShotDurationSec;
   const float u = timeInShot / kShotDurationSec;
   // 自機は時間の連続な式なので、ループさせず絶対時間のまま使う(継ぎ目で飛ばない)
-  const float shotStartTime = time - timeInShot;
+  const double shotStartTime = time - timeInShot;
+  // 描画用の座標は kWorldWrapZ ごとに巻き戻して小さく保つ(float の精度が荒れて、カメラや自機がガクガクするのを防ぐ)。
+  // 巻き戻した分は worldOffset として、ワールドの位置に依存する模様(水面の波・雲)へ渡す
+  const double zOrigin = std::floor(kFlightSpeed * time / kWorldWrapZ) * kWorldWrapZ;
 
   TitleState state{};
+  state.worldOffset = {0.0f, 0.0f, static_cast<float>(zOrigin)};
 
   // --- 自機 ---
-  Vector3 playerPos = PlayerPosition(time);
+  Vector3 playerPos = PlayerPosition(time, zOrigin);
   playerPos.z += launchBoost;
   const float vx = PlayerLateralVelocity(time);
   const float heading = std::atan2(vx, kFlightSpeed); // 進行方向(+Z から左右へ振れる角)
@@ -230,12 +242,12 @@ TitleState TitleDirector::Evaluate(float time, float launchProgress) const {
   if (launching) {
     // スタート演出のカメラ: 自機の余分な移動の一部しか追わないので、自機が離れていく。後ろへ引いて少し上がる
     const float e = Smooth01(launchU);
-    Vector3 follow = PlayerPosition(time);
+    Vector3 follow = PlayerPosition(time, zOrigin);
     follow.z += launchBoost * kLaunchCameraFollow;
     cam = {Plus(follow, Lerp(kLaunchCameraOffsetStart, kLaunchCameraOffsetEnd, e)), playerPos};
     state.fovY += kLaunchFovGain * e;
   } else {
-    cam = EvaluateShot(shot, playerPos, PlayerPosition(shotStartTime), u);
+    cam = EvaluateShot(shot, playerPos, PlayerPosition(shotStartTime, zOrigin), u);
   }
   state.cameraEye = cam.eye;
   state.cameraEye.y = (std::max)(state.cameraEye.y, kMinCameraHeight);
@@ -260,5 +272,6 @@ TitleState TitleDirector::Evaluate(float time, float launchProgress) const {
   // --- 気流の筋 ---
   const float streakGain = (!launching && shot == kNoStreakShotIndex) ? 0.0f : 1.0f;
   FillStreaks(state, playerPos, launching ? launchU : 0.0f, streakGain);
+
   return state;
 }

@@ -5,6 +5,8 @@
 cbuffer SkyParam : register(b0) {
     row_major float4x4 gInvViewProj;
     float32_t3 gSunDirection;
+    float32_t gTime;
+    float32_t3 gCameraPosition;
     float32_t pad;
 };
 
@@ -23,6 +25,6 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t4 farPos = mul(float32_t4(ndc, 1.0f, 1.0f), gInvViewProj);
     float32_t3 dir = normalize(farPos.xyz / farPos.w - nearPos.xyz / nearPos.w);
 
-    output.color = float32_t4(SkyColor(dir, normalize(gSunDirection)), 1.0f);
+    output.color = float32_t4(SkyColor(dir, normalize(gSunDirection), gCameraPosition, gTime), 1.0f);
     return output;
 }

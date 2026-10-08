@@ -149,6 +149,18 @@ void ParticleManager::ClearParticleGroup(const std::string& name) {
     g.activeInstanceCount = 0;
 }
 
+void ParticleManager::TranslateParticleGroup(const std::string& name, const Vector3& delta) {
+    auto it = groups_.find(name);
+    if (it == groups_.end()) {
+        return;
+    }
+    for (Particle& p : it->second.particles) {
+        p.transform.translate.x += delta.x;
+        p.transform.translate.y += delta.y;
+        p.transform.translate.z += delta.z;
+    }
+}
+
 void ParticleManager::Emit(const std::string& name, const Vector3& position, const Vector3& velocity,
     const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color,
     const Vector3* endScale) {

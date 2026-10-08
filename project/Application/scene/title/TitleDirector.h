@@ -14,6 +14,9 @@ struct TitleState {
   Matrix4x4 startWorld;
   Matrix4x4 flashWorld; // カメラの目の前を覆う板(スタート時の白フラッシュ用)
   float fovY;
+  // 描画用のワールド座標を巻き戻した分(z)。座標が際限なく大きくなると float の精度が荒れてカメラや自機がガクガクするので、
+  // 一定距離ごとに巻き戻して小さく保っている。ワールドの位置に依存する模様(水面の波・雲)には、この分を足して渡す
+  Vector3 worldOffset;
   // 気流の筋。ワールドに固定された細長い板で、自機が進むと後ろへ流れ去る(各筋のワールド行列とアルファ)
   std::array<Matrix4x4, kTitleStreakCount> streakWorld;
   std::array<float, kTitleStreakCount> streakAlpha;
@@ -34,7 +37,8 @@ public:
   }
 
   // launchProgress: スタート入力後の進行(0〜1)。負なら通常のループ演出
-  TitleState Evaluate(float time, float launchProgress = -1.0f) const;
+  // time は double(長時間表示しても、時間の刻みの精度が落ちないように)
+  TitleState Evaluate(double time, float launchProgress = -1.0f) const;
 
 private:
   Vector3 playerCenter_{0.0f, 0.0f, 0.0f};

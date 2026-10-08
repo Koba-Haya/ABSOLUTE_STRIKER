@@ -19,6 +19,7 @@ static const float32_t kFresnelF0 = 0.02f;   // 真上から見たときの反�
 static const float32_t kFogDensity = 0.012f; // 霞の濃さ(距離に対する指数)
 static const float32_t kGlitterPower = 256.0f;
 static const float32_t kGlitterIntensity = 2.0f;
+static const float32_t kReflectionNormalBlend = 0.35f; // 空の反射に使う法線の揺れの割合(0 で完全に平ら、1 で波のまま)
 
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
@@ -47,7 +48,15 @@ PixelShaderOutput main(VertexShaderOutput input) {
     // 反射方向の空の色。水面より下を向く反射は空として無意味なので上向きに折り返す
     float32_t3 reflectDir = reflect(dir, normal);
     reflectDir.y = abs(reflectDir.y);
-    float32_t3 reflection = SkyColor(reflectDir, sunDir);
+
+    // 空(雲)の映り込みは、波の細かい揺れで形が崩れて雲だと分からなくなるので、法線を平らに近づけた方向で調べる。
+    // 太陽のきらめきには、波の法線そのままの反射方向を使う
+    float32_t3 smoothNormal = normalize(lerp(float32_t3(0.0f, 1.0f, 0.0f), normal, kReflectionNormalBlend));
+    float32_t3 skyReflectDir = reflect(dir, smoothNormal);
+    skyReflectDir.y = abs(skyReflectDir.y);
+    // 雲も映す: 反射の出発点は水面上の交点
+    float32_t3 hitPosition = float32_t3(hitXZ.x, kWaterHeight, hitXZ.y);
+    float32_t3 reflection = SkyColor(skyReflectDir, sunDir, hitPosition, gTime);
 
     // 太陽の照り返し(波の揺れできらめく)
     float32_t glitter = pow(saturate(dot(reflectDir, sunDir)), kGlitterPower);
@@ -58,7 +67,7 @@ PixelShaderOutput main(VertexShaderOutput input) {
     // 遠方は地平線の空の色へ霞でなじませる(地平線で空と連続する)
     float32_t3 horizonDir = normalize(float32_t3(dir.x, 0.0f, dir.z));
     float32_t fog = 1.0f - exp(-t * kFogDensity);
-    color = lerp(color, SkyColor(horizonDir, sunDir), fog);
+    color = lerp(color, SkyBackground(horizonDir, sunDir), fog);
 
     output.color = float32_t4(color, 1.0f);
     return output;

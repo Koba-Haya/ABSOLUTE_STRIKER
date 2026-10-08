@@ -20,7 +20,10 @@
 #include <vector>
 
 namespace {
-constexpr float kDeltaTime = 1.0f / 60.0f;
+constexpr double kDeltaTime = 1.0 / 60.0;                 // time_ 用(double)
+constexpr float kDeltaTimeF = static_cast<float>(kDeltaTime); // float のメンバや関数へ渡す用
+// シェーダーへ渡す時間(波・雲の流れ)は、float の精度が落ちないよう、この秒数で巻き戻す(1 時間に 1 回、模様が少し変わる)
+constexpr double kShaderTimeWrapSec = 3600.0;
 
 // カメラの投影(位置・向き・画角は TitleDirector が決める)
 constexpr float kCameraNear = 0.1f;
@@ -33,8 +36,8 @@ constexpr float kLogoFadeInSec = 2.0f;
 // 今は「死ぬこと」しかないため)。ゲームへ遷移させたいときは false にする
 constexpr bool kReturnToTitleAfterLaunch = true;
 constexpr float kReturnFadeSec = 0.6f; // タイトルへ戻ったあと、白から元の画面へ戻る時間
-constexpr float kLaunchDurationSec = 1.6f;
-constexpr float kFlashStartRatio = 0.55f; // 演出のこの割合から白くなり始め、終わりで真っ白
+constexpr float kLaunchDurationSec = 2.4f;
+constexpr float kFlashStartRatio = 0.65f; // 演出のこの割合から白くなり始め、終わりで真っ白
 
 // PRESS START の明滅(ゆっくり。完全には消えない)
 constexpr float kTwoPi = 6.2831853f;
@@ -166,7 +169,8 @@ void TitleScene::RestartTitle() {
   // 画面が真っ白な瞬間に、演出の状態を最初へ戻す(自機の位置・水の波・プルームも最初から)
   startRequested_ = false;
   launchTime_ = 0.0f;
-  time_ = 0.0f;
+  time_ = 0.0;
+  lastWorldOffsetZ_ = 0.0f;
   contrailHasPrev_ = false;
   ParticleManager::GetInstance()->ClearParticleGroup(kContrailGroup);
   returnFadeTime_ = 0.0f; // ここから白がフェードアウトする
@@ -179,7 +183,8 @@ void TitleScene::Initialize(const SceneServices &services) {
   launchTime_ = 0.0f;
   flashAlpha_ = 0.0f;
   returnFadeTime_ = kReturnFadeSec; // 起動直後は白からのフェードはしない
-  time_ = 0.0f;
+  time_ = 0.0;
+  lastWorldOffsetZ_ = 0.0f;
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
 
   auto camera = std::make_shared<GameCamera>();
@@ -258,7 +263,7 @@ void TitleScene::Update() {
   time_ += kDeltaTime;
 
   if (startRequested_) {
-    launchTime_ += kDeltaTime;
+    launchTime_ += kDeltaTimeF;
   }
   // 演出が終わった(画面が真っ白になった)フレームで、タイトルを最初へ戻す(仮設定)か、一度だけゲームへ遷移する
   if (startRequested_ && launchTime_ >= kLaunchDurationSec) {
@@ -274,12 +279,24 @@ void TitleScene::Update() {
   flashAlpha_ = startRequested_ ? CalcFlashAlpha(launchU) : 0.0f;
   // タイトルへ戻った直後は、白から元の画面へなめらかに戻す
   if (!startRequested_ && returnFadeTime_ < kReturnFadeSec) {
-    returnFadeTime_ += kDeltaTime;
+    returnFadeTime_ += kDeltaTimeF;
     const float t = (std::min)(returnFadeTime_ / kReturnFadeSec, 1.0f);
     flashAlpha_ = 1.0f - t * t * (3.0f - 2.0f * t);
   }
 
   const TitleState state = director_.Evaluate(time_, launchU);
+
+  // 描画用のワールド座標が巻き戻されたら(自機が一定距離進むたび)、残っているプルームの粒と、前フレームの先端位置も
+  // 同じだけずらして合わせる(そうしないと、巻き戻しの瞬間に軌跡が飛ぶ)
+  if (state.worldOffset.z != lastWorldOffsetZ_) {
+    const float shiftZ = lastWorldOffsetZ_ - state.worldOffset.z;
+    ParticleManager::GetInstance()->TranslateParticleGroup(kContrailGroup, Vector3{0.0f, 0.0f, shiftZ});
+    for (Vector3 &tip : contrailPrevTip_) {
+      tip.z += shiftZ;
+    }
+    lastWorldOffsetZ_ = state.worldOffset.z;
+  }
+  worldOffset_ = state.worldOffset;
   GetMainCamera()->SetPerspective(state.fovY, Renderer::GetInstance()->GetAspectRatio(), kCameraNear, kCameraFar);
   GetMainCamera()->SetEye(state.cameraEye);
   GetMainCamera()->SetTarget(state.cameraTarget);
@@ -287,10 +304,10 @@ void TitleScene::Update() {
   playerModel_.SetWorld(state.playerWorld);
 
   logoModel_.SetWorld(state.logoWorld);
-  logoModel_.SetColor({1.0f, 1.0f, 1.0f, CalcLogoAlpha(time_)});
+  logoModel_.SetColor({1.0f, 1.0f, 1.0f, CalcLogoAlpha(static_cast<float>(time_))});
 
   startModel_.SetWorld(state.startWorld);
-  startModel_.SetColor({1.0f, 1.0f, 1.0f, CalcBlinkAlpha(time_)});
+  startModel_.SetColor({1.0f, 1.0f, 1.0f, CalcBlinkAlpha(static_cast<float>(std::fmod(time_, static_cast<double>(kStartBlinkPeriodSec))))});
 
   flashModel_.SetWorld(state.flashWorld);
   flashModel_.SetColor({1.0f, 1.0f, 1.0f, flashAlpha_});
@@ -333,15 +350,16 @@ void TitleScene::Draw() {
   renderer->SetCamera(*GetMainCamera());
 
   // 空は最奥に描くので順番は自由だが、不透明物の前に描いて読みやすくする
-  renderer->DrawSky(Normalize(kSunDirection));
-  renderer->DrawWater(Normalize(kSunDirection), time_);
+  const float shaderTime = static_cast<float>(std::fmod(time_, kShaderTimeWrapSec));
+  renderer->DrawSky(Normalize(kSunDirection), shaderTime, worldOffset_);
+  renderer->DrawWater(Normalize(kSunDirection), shaderTime, worldOffset_);
 
   renderer->DrawModel(&playerModel_);
 
   // 翼のプルーム: 粒の行列は今フレームのカメラで作りたいので、SetCamera の後にここで更新する。
   // 深度テストあり(書き込みなし)で、自機の後ろに回った粒は自機に隠れる
   auto *particles = ParticleManager::GetInstance();
-  particles->Update(kDeltaTime);
+  particles->Update(kDeltaTimeF);
   particles->Draw(BlendMode::Alpha, true);
 
   // 気流の筋(深度テストあり。自機より後ろの筋は自機に隠れる)
