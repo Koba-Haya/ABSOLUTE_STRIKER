@@ -219,6 +219,7 @@ TitleState TitleDirector::Evaluate(double time, float launchProgress) const {
 
   TitleState state{};
   state.worldOffset = {0.0f, 0.0f, static_cast<float>(zOrigin)};
+  state.worldWrapLength = static_cast<float>(kWorldWrapZ);
 
   // --- 自機 ---
   Vector3 playerPos = PlayerPosition(time, zOrigin);

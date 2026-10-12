@@ -47,6 +47,9 @@ struct PipelineDesc {
   bool enableDepth = true;
   bool alphaBlend = false;
   D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
+  // true: 反時計回りを表面とする(既定は時計回りが表面)。鏡映(y を反転)して描くと三角形の巻き順が逆になるので、
+  // 鏡像を描くパイプラインだけ true にして、表裏の判定(カリング)を元に戻す
+  bool frontCounterClockwise = false;
   D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
   BlendMode blendMode = BlendMode::Opaque;
 

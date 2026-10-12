@@ -54,7 +54,8 @@ private:
   float returnFadeTime_ = 0.0f;   // タイトルへ戻ってからの経過秒(白からのフェード用)
   double time_ = 0.0;             // double: 長時間表示しても、時間の刻み(1/60 秒)の精度が落ちないように
   float lastWorldOffsetZ_ = 0.0f; // 前フレームの、描画用ワールド座標の巻き戻し量(巻き戻しの検出用)
-  Vector3 worldOffset_{0.0f, 0.0f, 0.0f}; // 空・水面のシェーダーへ渡す、巻き戻した分(模様を連続させる)
+  float worldWrapLength_ = 0.0f;  // 巻き戻し 1 回分の長さ(水面の波の位相を厳密に求めるため)
+  Vector3 worldOffset_{0.0f, 0.0f, 0.0f};// 空・水面のシェーダーへ渡す、巻き戻した分(模様を連続させる)
   TitleDirector director_;
 
   // タイトル専用の見た目(本物の PlayerComponent は使わない)

@@ -7,8 +7,15 @@ cbuffer WaterParam : register(b0) {
     float32_t3 gCameraPosition;
     float32_t gTime;
     float32_t3 gSunDirection;
-    float32_t pad;
+    float32_t gWrapLength;          // 描画用の座標を巻き戻す 1 回分の長さ(z)。巻き戻していなければ 0
+    float32_t3 gLocalCameraPosition; // 巻き戻し後の(小さい)カメラ位置。gCameraPosition = これ + 巻き戻した分
+    float32_t gWrapCount;           // 巻き戻した回数
 };
+
+// t0: 平面反射のテクスチャ(水面より上の物体を、水面を軸に上下反転して本編と同じカメラで描いたもの)。
+// 物体の無い所は rgba = 0。物体の所は α = 1(縁だけ中間の値)
+Texture2D<float32_t4> gReflection : register(t0);
+SamplerState gSampler : register(s0);
 
 struct PixelShaderOutput {
     float32_t4 color : SV_TARGET0;
@@ -20,6 +27,7 @@ static const float32_t kFogDensity = 0.012f; // 霞の濃さ(距離に対する�
 static const float32_t kGlitterPower = 256.0f;
 static const float32_t kGlitterIntensity = 2.0f;
 static const float32_t kReflectionNormalBlend = 0.35f; // 空の反射に使う法線の揺れの割合(0 で完全に平ら、1 で波のまま)
+static const float32_t kReflectionDistortion = 0.03f;  // 物体の映り込みを波の法線でゆらす量(画面の UV 単位。0 で歪みなし)
 
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
@@ -38,7 +46,8 @@ PixelShaderOutput main(VertexShaderOutput input) {
     float32_t t = (gCameraPosition.y - kWaterHeight) / -dir.y;
     float32_t2 hitXZ = gCameraPosition.xz + dir.xz * t;
 
-    float32_t3 normal = WaterNormal(hitXZ, t, gTime);
+    float32_t2 localHitXZ = gLocalCameraPosition.xz + dir.xz * t;
+    float32_t3 normal = WaterNormal(hitXZ, localHitXZ, gWrapLength, gWrapCount, t, gTime);
     float32_t3 viewDir = -dir;
 
     // フレネル(Schlick): 視線が浅いほど反射が強い
@@ -57,6 +66,13 @@ PixelShaderOutput main(VertexShaderOutput input) {
     // 雲も映す: 反射の出発点は水面上の交点
     float32_t3 hitPosition = float32_t3(hitXZ.x, kWaterHeight, hitXZ.y);
     float32_t3 reflection = SkyColor(skyReflectDir, sunDir, hitPosition, gTime);
+
+    // 物体(自機など)の映り込み: 反射テクスチャは本編と同じ画面座標で対応するので、同じ UV を波の法線で少しずらして読む。
+    // 色は α を掛けた状態で保存されている(背景が 0 で塗られているため)ので、空の反射は (1 - α) だけ残して足す。
+    // 物体の無い所は α = 0 なので、これまでの空だけの見た目と同じになる
+    float32_t2 reflectionUV = input.texcoord + normal.xz * kReflectionDistortion;
+    float32_t4 objectReflection = gReflection.Sample(gSampler, reflectionUV);
+    reflection = objectReflection.rgb + reflection * (1.0f - objectReflection.a);
 
     // 太陽の照り返し(波の揺れできらめく)
     float32_t glitter = pow(saturate(dot(reflectDir, sunDir)), kGlitterPower);

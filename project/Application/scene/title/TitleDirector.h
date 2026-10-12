@@ -17,6 +17,7 @@ struct TitleState {
   // 描画用のワールド座標を巻き戻した分(z)。座標が際限なく大きくなると float の精度が荒れてカメラや自機がガクガクするので、
   // 一定距離ごとに巻き戻して小さく保っている。ワールドの位置に依存する模様(水面の波・雲)には、この分を足して渡す
   Vector3 worldOffset;
+  float worldWrapLength; // 巻き戻し 1 回分の長さ(worldOffset.z はこの整数倍)
   // 気流の筋。ワールドに固定された細長い板で、自機が進むと後ろへ流れ去る(各筋のワールド行列とアルファ)
   std::array<Matrix4x4, kTitleStreakCount> streakWorld;
   std::array<float, kTitleStreakCount> streakAlpha;

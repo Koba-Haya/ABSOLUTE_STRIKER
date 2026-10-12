@@ -20,10 +20,14 @@
 #include <vector>
 
 namespace {
+// 本編の描画先と平面反射の描画先の大きさ(同じにしないと、反射が画面座標とずれる)
+constexpr uint32_t kSceneWidth = 1280;
+constexpr uint32_t kSceneHeight = 720;
+// 水面の高さ(ワールド y)。Water.hlsli の kWaterHeight と同じ値にすること
+constexpr float kWaterSurfaceHeight = 0.0f;
+
 constexpr double kDeltaTime = 1.0 / 60.0;                 // time_ 用(double)
 constexpr float kDeltaTimeF = static_cast<float>(kDeltaTime); // float のメンバや関数へ渡す用
-// シェーダーへ渡す時間(波・雲の流れ)は、float の精度が落ちないよう、この秒数で巻き戻す(1 時間に 1 回、模様が少し変わる)
-constexpr double kShaderTimeWrapSec = 3600.0;
 
 // カメラの投影(位置・向き・画角は TitleDirector が決める)
 constexpr float kCameraNear = 0.1f;
@@ -185,7 +189,8 @@ void TitleScene::Initialize(const SceneServices &services) {
   returnFadeTime_ = kReturnFadeSec; // 起動直後は白からのフェードはしない
   time_ = 0.0;
   lastWorldOffsetZ_ = 0.0f;
-  Renderer::GetInstance()->InitializePostProcess(1280, 720);
+  Renderer::GetInstance()->InitializePostProcess(kSceneWidth, kSceneHeight);
+  Renderer::GetInstance()->InitializePlanarReflection(kSceneWidth, kSceneHeight);
 
   auto camera = std::make_shared<GameCamera>();
   camera->Initialize();
@@ -297,6 +302,7 @@ void TitleScene::Update() {
     lastWorldOffsetZ_ = state.worldOffset.z;
   }
   worldOffset_ = state.worldOffset;
+  worldWrapLength_ = state.worldWrapLength;
   GetMainCamera()->SetPerspective(state.fovY, Renderer::GetInstance()->GetAspectRatio(), kCameraNear, kCameraFar);
   GetMainCamera()->SetEye(state.cameraEye);
   GetMainCamera()->SetTarget(state.cameraTarget);
@@ -346,13 +352,20 @@ void TitleScene::Update() {
 
 void TitleScene::Draw() {
   auto* renderer = Renderer::GetInstance();
-  renderer->BeginRenderScene();
   renderer->SetCamera(*GetMainCamera());
 
+  // 水面に映る物体を、本編の描画より先に反射用の描画先へ描く(自機だけ。ロゴ類・プルーム・気流は映さない)
+  renderer->BeginReflectionPass(kWaterSurfaceHeight);
+  renderer->DrawModel(&playerModel_);
+  renderer->EndReflectionPass();
+
+  renderer->BeginRenderScene();
+
   // 空は最奥に描くので順番は自由だが、不透明物の前に描いて読みやすくする
-  const float shaderTime = static_cast<float>(std::fmod(time_, kShaderTimeWrapSec));
+  // 時間は巻き戻さずそのまま渡す(巻き戻すと、その瞬間に波と雲がワープする。float の精度は 10 時間でも位相誤差 0.01rad 未満)
+  const float shaderTime = static_cast<float>(time_);
   renderer->DrawSky(Normalize(kSunDirection), shaderTime, worldOffset_);
-  renderer->DrawWater(Normalize(kSunDirection), shaderTime, worldOffset_);
+  renderer->DrawWater(Normalize(kSunDirection), shaderTime, worldOffset_, worldWrapLength_);
 
   renderer->DrawModel(&playerModel_);
 

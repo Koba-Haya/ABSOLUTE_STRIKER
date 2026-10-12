@@ -290,6 +290,7 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   // --- Raster / Blend / Depth ---
   D3D12_RASTERIZER_DESC rast{};
   rast.CullMode = desc.cullMode;
+  rast.FrontCounterClockwise = desc.frontCounterClockwise ? TRUE : FALSE;
   rast.FillMode = desc.fillMode;
 
   D3D12_BLEND_DESC blend = MakeBlendDesc(desc);
@@ -467,6 +468,7 @@ PipelineDesc UnifiedPipeline::MakeWaterDesc() {
   // 空と同じ全画面パス(深度設定も同じ)で、ピクセルシェーダーだけ水面にする
   PipelineDesc d = MakeSkyDesc();
   d.psPath = L"resources/engine/shaders/Water.PS.hlsl";
+  d.usePSTextureTable_t0 = true; // t0: 平面反射のテクスチャ(ルートパラメータは b0 の次の 1 番)
   return d;
 }
 

@@ -38,13 +38,17 @@ static const float32_t kNoiseScrollSpeed = 0.05f;   // ノイズがゆっくり�
 //   (1) sin に入れる位置を、低周波ノイズでずらす(縞がうねる)
 //   (2) 場所ごとに波の強さを変える(穏やかな所と荒れた所)
 //   (3) 細かいさざ波(fbm の勾配)を足す
+// xz: 水面上の点のワールド座標(ノイズ用)。
+// localXZ: 同じ点の、巻き戻し後の小さい座標(xz = localXZ + 巻き戻し量)。sin の位相はこちらで計算し、
+//   巻き戻し量が作る位相は wrapLength / wrapCount から厳密に足す(大きな座標を float に載せると sin の位相が荒れるため)
+// wrapLength: 描画用の座標を巻き戻す 1 回分の長さ(z 方向)、wrapCount: 巻き戻した回数(0 なら巻き戻しなし)
 // distance: カメラから水面上の点までの距離。遠いほど法線の揺れを弱め、ちらつき(エイリアシング)を抑える
-float32_t3 WaterNormal(float32_t2 xz, float32_t distance, float32_t time) {
+float32_t3 WaterNormal(float32_t2 xz, float32_t2 localXZ, float32_t wrapLength, float32_t wrapCount, float32_t distance, float32_t time) {
     // (1) 位置の歪み
     float32_t2 drift = float32_t2(time * kNoiseScrollSpeed, time * kNoiseScrollSpeed * 0.7f);
     float32_t2 warp = float32_t2(ValueNoise(xz * kWarpScale + drift),
                                  ValueNoise(xz * kWarpScale + float32_t2(7.3f, 3.1f) - drift)) - 0.5f;
-    float32_t2 p = xz + warp * kWarpStrength;
+    float32_t2 p = localXZ + warp * kWarpStrength;
 
     // (2) 振幅のムラ
     float32_t amplitudeScale = lerp(kAmplitudeMin, kAmplitudeMax, ValueNoise(xz * kAmplitudeNoiseScale + drift * 0.4f));
@@ -52,7 +56,10 @@ float32_t3 WaterNormal(float32_t2 xz, float32_t distance, float32_t time) {
     float32_t2 gradient = float32_t2(0.0f, 0.0f);
     for (uint32_t i = 0; i < kWaveCount; ++i) {
         Wave w = kWaves[i];
-        float32_t phase = dot(w.direction, p) * w.frequency + time * w.speed;
+        // 巻き戻し 1 回分の位相(周期数)の小数部だけを取り、回数を掛けて再び小数部を取る(整数周期分は見た目に影響しない)
+        float32_t cyclesPerWrap = w.frequency * w.direction.y * wrapLength * (1.0f / 6.2831853f);
+        float32_t wrapPhase = 6.2831853f * frac(frac(cyclesPerWrap) * wrapCount);
+        float32_t phase = dot(w.direction, p) * w.frequency + time * w.speed + wrapPhase;
         // d/dp [A sin(k d·p + ωt)] = A k cos(...) d
         gradient += w.direction * (w.amplitude * w.frequency * cos(phase));
     }
