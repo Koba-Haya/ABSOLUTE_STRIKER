@@ -44,7 +44,7 @@
                 {
                     "environmentCoefficient": 0.0,
                     "modelPath": "resources/player/player.obj",
-                    "texturePath": "resources/player/player.png",
+                    "texturePath": "",
                     "type": "ModelComponent"
                 },
                 {

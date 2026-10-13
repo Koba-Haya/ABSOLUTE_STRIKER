@@ -158,44 +158,8 @@
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/multiMaterial/multiMaterial.obj",
+                    "modelPath": "resources/app/player/dragon/dragon.obj",
                     "texturePath": "",
-                    "type": "ModelComponent"
-                }
-            ],
-            "name": "MultiMaterialDecoration",
-            "tag": "Untagged",
-            "transform": {
-                "rotate": {
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0
-                },
-                "scale": {
-                    "x": 2.0,
-                    "y": 2.0,
-                    "z": 2.0
-                },
-                "translate": {
-                    "x": 8.0,
-                    "y": 1.0,
-                    "z": 5.0
-                }
-            }
-        },
-        {
-            "children": [],
-            "components": [
-                {
-                    "color": {
-                        "w": 1.0,
-                        "x": 1.0,
-                        "y": 1.0,
-                        "z": 1.0
-                    },
-                    "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/human/walk.gltf",
-                    "texturePath": "resources/player/player.png",
                     "type": "ModelComponent"
                 },
                 {

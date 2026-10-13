@@ -195,6 +195,9 @@
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
+    <ClCompile Include="scene\GameIntroDirector.cpp" />
+    <ClCompile Include="scene\ResultBackdrop.cpp" />
+    <ClCompile Include="scene\ResultBanner.cpp" />
     <ClCompile Include="scene\HitEffectSpawner.cpp" />
     <ClCompile Include="scene\PostEffectDirector.cpp" />
     <ClCompile Include="scene\ScoreTracker.cpp" />
@@ -205,6 +208,7 @@
     <ClCompile Include="scene\GameOverScene.cpp" />
     <ClCompile Include="scene\GameScene.cpp" />
     <ClCompile Include="scene\SceneFactory.cpp" />
+    <ClCompile Include="scene\SceneTransitionTable.cpp" />
     <ClCompile Include="scene\TitleScene.cpp" />
     <ClCompile Include="scene\title\TitleDirector.cpp" />
     <ClCompile Include="..\main.cpp" />
@@ -232,6 +236,9 @@
     <ClInclude Include="actor\Player\PlayerInput.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
+    <ClInclude Include="scene\GameIntroDirector.h" />
+    <ClInclude Include="scene\ResultBackdrop.h" />
+    <ClInclude Include="scene\ResultBanner.h" />
     <ClInclude Include="scene\HitEffectSpawner.h" />
     <ClInclude Include="scene\PostEffectDirector.h" />
     <ClInclude Include="scene\ScoreTracker.h" />
@@ -242,7 +249,9 @@
     <ClInclude Include="scene\GameOverScene.h" />
     <ClInclude Include="scene\GameScene.h" />
     <ClInclude Include="scene\SceneFactory.h" />
+    <ClInclude Include="scene\SceneTransitionTable.h" />
     <ClInclude Include="scene\SceneIds.h" />
+    <ClInclude Include="scene\ExhibitionMode.h" />
     <ClInclude Include="scene\TitleScene.h" />
     <ClInclude Include="scene\title\TitleDirector.h" />
   </ItemGroup>

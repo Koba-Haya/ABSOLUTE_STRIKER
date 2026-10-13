@@ -9,6 +9,7 @@
 #include "graphics/texture/DepthTexture.h"
 #include "graphics/texture/PlanarReflection.h"
 #include "graphics/CloudSeaSettings.h"
+#include "graphics/TransitionStyle.h"
 
 #include "LightTypes.h"
 #include "Matrix.h"
@@ -195,6 +196,14 @@ public:
   
   PostProcessMode GetPostProcessMode() const { return postProcessMode_; }
   void SetPostProcessMode(PostProcessMode mode) { postProcessMode_ = mode; }
+
+  // --- 画面遷移の覆い ---
+  // ポストエフェクトのあと(画面へ出す直前)に、覆い具合 cover(0 = 透明、1 = 完全に覆う)で style の効果をかける。
+  // 毎フレーム、シーンの Draw の前に呼ぶ。cover が 0 以下のフレームは何もしない
+  // time: 遷移を始めてからの経過(秒)。覆い具合と違い、晴れる間も増え続ける(雲の流れ、水滴の流れに使う)
+  // duration: 遷移全体の長さ(秒)。雲を抜ける遷移が、time / duration で層をどこまで昇ったかを決める
+  void SetTransition(const TransitionStyle &style, float cover, float time, float duration);
+  void ClearTransition() { transitionCover_ = 0.0f; }
   D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessTextureSrv() const {
       if (postProcessTexture_) return postProcessTexture_->GetSrvGpuHandle();
       return {};
@@ -245,6 +254,7 @@ private:
   std::unique_ptr<UnifiedPipeline> skyPipeline_;
   std::unique_ptr<UnifiedPipeline> waterPipeline_;
   std::unique_ptr<UnifiedPipeline> cloudSeaPipeline_;
+  std::unique_ptr<UnifiedPipeline> transitionPipeline_;
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -348,6 +358,36 @@ private:
   static void SplitCloudSeaCell(const Vector3 &cameraPosition, double cellsPerUnit, CloudSeaCellOrigin &out);
   ComPtr<ID3D12Resource> cloudSeaParamCB_;
   CloudSeaParam* cloudSeaParamMapped_ = nullptr;
+
+  // Transition.PS.hlsl の cbuffer TransitionParam と同じ並び(16 バイト区切り)にすること
+  struct alignas(16) TransitionParam {
+    Matrix4x4 invViewProj;
+    Matrix4x4 viewProj;
+    float cameraPosition[3];
+    float slabBottom;
+    float sunDirection[3];
+    float slabTop;
+    float color[3];
+    float cover;
+    float kind;
+    float softness;
+    float noiseScale;
+    float blurStrength;
+    float center[2];
+    float aspect;
+    float time;
+    float duration;
+    float padding[3];
+  };
+  ComPtr<ID3D12Resource> transitionParamCB_;
+  TransitionParam* transitionParamMapped_ = nullptr;
+  TransitionStyle transitionStyle_{};
+  float transitionCover_ = 0.0f;
+  float transitionTime_ = 0.0f;
+  float transitionDuration_ = 1.0f;
+
+  // 画面遷移の覆いを、ポストエフェクト後のテクスチャ(postProcessTexture_)へ上書きでかける
+  void ApplyTransitionPass_();
 
   struct alignas(16) WaterParam {
     Matrix4x4 invViewProj;

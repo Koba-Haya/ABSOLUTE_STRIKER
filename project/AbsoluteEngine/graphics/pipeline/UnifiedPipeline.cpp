@@ -700,6 +700,15 @@ PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeTransitionDesc() {
+  // ポストエフェクトと同じ全画面コピーの形(b0 = パラメータ、t0 = 画面のテクスチャ)で、ピクセルシェーダーだけ遷移用にする
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Transition.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.usePSEnvironmentMap_t1 = true; // t1: シーンの深度(雲を抜ける遷移で、自機の手前の雲だけをかぶせる)
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeBoxFilterDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/BoxFilter.PS.hlsl";

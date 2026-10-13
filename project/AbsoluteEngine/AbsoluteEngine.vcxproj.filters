@@ -204,6 +204,7 @@
     <ClCompile Include="scene\BaseScene.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\SceneTransition.cpp" />
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -401,6 +402,8 @@
     <ClInclude Include="scene\ISceneFactory.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
+    <ClInclude Include="scene\SceneTransition.h" />
+    <ClInclude Include="graphics\TransitionStyle.h" />
     <ClInclude Include="scene\SceneManager.h">
       <Filter>engine\scene</Filter>
     </ClInclude>

@@ -33,6 +33,9 @@
     <ClCompile Include="scene\SceneFactory.cpp">
       <Filter>application\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\SceneTransitionTable.cpp">
+      <Filter>application\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\TitleScene.cpp">
       <Filter>application\scene</Filter>
     </ClCompile>
@@ -60,6 +63,9 @@
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
+    <ClCompile Include="scene\GameIntroDirector.cpp" />
+    <ClCompile Include="scene\ResultBackdrop.cpp" />
+    <ClCompile Include="scene\ResultBanner.cpp" />
     <ClCompile Include="scene\HitEffectSpawner.cpp" />
     <ClCompile Include="scene\PostEffectDirector.cpp" />
     <ClCompile Include="scene\ScoreTracker.cpp" />
@@ -73,7 +79,9 @@
     </ClInclude>
     <ClInclude Include="scene\GameScene.h" />
     <ClInclude Include="scene\SceneFactory.h" />
+    <ClInclude Include="scene\SceneTransitionTable.h" />
     <ClInclude Include="scene\SceneIds.h" />
+    <ClInclude Include="scene\ExhibitionMode.h" />
     <ClInclude Include="scene\TitleScene.h" />
     <ClInclude Include="scene\title\TitleDirector.h" />
     <ClInclude Include="camera\RailCameraComponent.h" />
@@ -98,6 +106,9 @@
     <ClInclude Include="actor\Player\PlayerInput.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
+    <ClInclude Include="scene\GameIntroDirector.h" />
+    <ClInclude Include="scene\ResultBackdrop.h" />
+    <ClInclude Include="scene\ResultBanner.h" />
     <ClInclude Include="scene\HitEffectSpawner.h" />
     <ClInclude Include="scene\PostEffectDirector.h" />
     <ClInclude Include="scene\ScoreTracker.h" />

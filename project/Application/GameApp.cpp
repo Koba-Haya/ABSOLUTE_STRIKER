@@ -7,6 +7,7 @@
 #include "SceneFactory.h"
 #include "SceneIds.h"
 #include "SceneManager.h"
+#include "SceneTransitionTable.h"
 
 #ifndef APPLICATION_ROOT_DIR
 // Application.vcxprojでビルドしなかった場合のフォールバック（本来は常にプロジェクトの
@@ -41,6 +42,8 @@ void GameApp::Initialize() {
   Renderer::GetInstance()->Initialize(&GetDX());
   sceneManager_->Initialize(services);
   sceneManager_->SetFactory(std::make_unique<SceneFactory>());
+  // シーンの組み合わせごとの画面遷移の表(アプリ側が持つ)
+  sceneManager_->SetTransitionResolver(&SceneTransitionTable::Resolve);
   sceneManager_->Start(SceneId::Title);
 }
 
@@ -136,17 +139,58 @@ void GameApp::Update() {
 
   // --- デバッグメニュー ---
   ImGui::Begin("DebugMenu");
+  // オフにすると、遷移の表を使わず即座に切り替わる(開発の速度を落とさないため)
+  static bool useTransition = true;
+  ImGui::Checkbox("Use Transition", &useTransition);
+  auto goTo = [this](const std::string &sceneId) {
+    if (useTransition) {
+      sceneManager_->RequestChange(sceneId);
+    } else {
+      sceneManager_->RequestChangeImmediate(sceneId);
+    }
+  };
   if (ImGui::Button("Go to TitleScene")) {
-    sceneManager_->RequestChange(SceneId::Title);
+    goTo(SceneId::Title);
   }
   ImGui::SameLine();
   if (ImGui::Button("Go to GameScene")) {
-    sceneManager_->RequestChange(SceneId::Game);
+    goTo(SceneId::Game);
   }
   ImGui::SameLine();
   if (ImGui::Button("Go to DevScene")) {
-    sceneManager_->RequestChange(SceneId::Dev);
+    goTo(SceneId::Dev);
   }
+
+  // 遷移の種類ごとの見た目の確認用: 今のシーンを、指定した種類の遷移(白)で読み込み直す
+  ImGui::SeparatorText("Transition Test (reload current scene)");
+  auto testTransition = [this](TransitionKind kind) {
+    TransitionSpec spec;
+    spec.style.kind = kind;
+    sceneManager_->RequestChange(sceneManager_->GetCurrentSceneId(), spec);
+  };
+  if (ImGui::Button("Fade")) {
+    testTransition(TransitionKind::Fade);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Noise Wipe")) {
+    testTransition(TransitionKind::NoiseWipe);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Zoom Blur")) {
+    testTransition(TransitionKind::ZoomBlur);
+  }
+  if (ImGui::Button("Ripple")) {
+    testTransition(TransitionKind::Ripple);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Droplets")) {
+    testTransition(TransitionKind::Droplets);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Cloud Dive")) {
+    testTransition(TransitionKind::CloudDive);
+  }
+  ImGui::Text("Transition: %s", sceneManager_->IsTransitioning() ? "active" : "idle");
   ImGui::End();
 
   if (sceneManager_) {

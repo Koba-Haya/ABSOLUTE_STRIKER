@@ -100,6 +100,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                           UnifiedPipeline::MakeWaterDesc()));
   }
 
+  // Transition Pipeline(画面遷移の最終パス)
+  {
+    transitionPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(transitionPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                               UnifiedPipeline::MakeTransitionDesc()));
+  }
+
   // CloudSea Pipeline
   {
     cloudSeaPipeline_ = std::make_unique<UnifiedPipeline>();
@@ -330,6 +337,9 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   cloudSeaParamCB_ = CreateUploadBuffer(align256(sizeof(CloudSeaParam)));
   cloudSeaParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&cloudSeaParamMapped_));
+
+  transitionParamCB_ = CreateUploadBuffer(align256(sizeof(TransitionParam)));
+  transitionParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&transitionParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -965,12 +975,78 @@ void Renderer::EndRenderScene(const Matrix4x4& projInverse) {
         }
     }
 
+    // 画面遷移の覆い(ポストエフェクトのあと。Debug のビューポートにも、Release の画面にも反映される)
+    ApplyTransitionPass_();
+
 #ifndef USE_IMGUI
     if (postProcessTexture_) {
         dx_->ResetRenderTarget();
         DrawFullscreen(postProcessTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
     }
 #endif
+}
+
+void Renderer::SetTransition(const TransitionStyle &style, float cover, float time, float duration) {
+    transitionStyle_ = style;
+    transitionCover_ = cover;
+    transitionTime_ = time;
+    transitionDuration_ = duration;
+}
+
+void Renderer::ApplyTransitionPass_() {
+    if (transitionCover_ <= 0.0f || !transitionPipeline_ || !transitionParamMapped_ || !postProcessTexture_ || !gaussianTempTexture_) {
+        return;
+    }
+
+    // パラメータ
+    TransitionParam *param = transitionParamMapped_;
+    // 描画したシーンのカメラ(最後に SetCamera された行列)。世界の視線の復元・深度から位置への変換・太陽の画面位置に使う
+    const Matrix4x4 invView = Inverse(view_);
+    const Matrix4x4 viewProj = Multiply(view_, proj_);
+    param->invViewProj = Inverse(viewProj);
+    param->viewProj = viewProj;
+    param->cameraPosition[0] = invView.m[3][0];
+    param->cameraPosition[1] = invView.m[3][1];
+    param->cameraPosition[2] = invView.m[3][2];
+    param->slabBottom = transitionStyle_.slabBottom;
+    param->slabTop = transitionStyle_.slabTop;
+    const Vector3 sunDirection = Normalize(transitionStyle_.sunDirection);
+    param->sunDirection[0] = sunDirection.x;
+    param->sunDirection[1] = sunDirection.y;
+    param->sunDirection[2] = sunDirection.z;
+    param->color[0] = transitionStyle_.color.x;
+    param->color[1] = transitionStyle_.color.y;
+    param->color[2] = transitionStyle_.color.z;
+    param->cover = (std::min)(transitionCover_, 1.0f);
+    param->kind = static_cast<float>(static_cast<int32_t>(transitionStyle_.kind));
+    param->softness = transitionStyle_.softness;
+    param->noiseScale = transitionStyle_.noiseScale;
+    param->blurStrength = transitionStyle_.blurStrength;
+    param->center[0] = transitionStyle_.center.x;
+    param->center[1] = transitionStyle_.center.y;
+    param->aspect = GetAspectRatio();
+    param->time = transitionTime_;
+    param->duration = transitionDuration_;
+
+    // パス1: postProcessTexture_ を読み、遷移の効果をかけて一時のテクスチャへ描く
+    auto *cmdList = dx_->GetCommandList();
+    dx_->SetRenderTarget(gaussianTempTexture_.get());
+    ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+    cmdList->SetDescriptorHeaps(1, heaps);
+    transitionPipeline_->SetPipelineState(cmdList);
+    cmdList->SetGraphicsRootConstantBufferView(0, transitionParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, postProcessTexture_->GetSrvGpuHandle());
+    if (depthTexture_) {
+        cmdList->SetGraphicsRootDescriptorTable(2, depthTexture_->GetSrvGpuHandle()); // t1: シーンの深度
+    }
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->DrawInstanced(3, 1, 0, 0);
+    dx_->FinishRendering(gaussianTempTexture_.get());
+
+    // パス2: 結果を postProcessTexture_ へ戻す(以降の処理は、これまで通り postProcessTexture_ を読む)
+    dx_->SetRenderTarget(postProcessTexture_.get());
+    DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
+    dx_->FinishRendering(postProcessTexture_.get());
 }
 
 void Renderer::RenderPrimitives() {

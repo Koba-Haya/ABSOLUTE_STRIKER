@@ -3,14 +3,24 @@
 #include "Transform.h"
 #include "DissolveComponent.h"
 #include "../../resources/AssetManager.h"
+#include "../graphics/3d/model/ModelResource.h"
+#include "Method.h"
+#include <algorithm>
+#include <vector>
 
 namespace AbsoluteEngine {
+
+namespace {
+constexpr float kMinFitWidth = 1e-4f; // これより幅が小さいモデルは、拡大率を求めない(0 割りを避ける)
+} // namespace
 
 void ModelComponent::LoadModel(const std::string& path) {
     auto res = AssetManager::GetInstance()->Load<ModelResource>(path);
     if (!res) return;
 
     modelPath_ = path;
+    fitCenter_ = {0.0f, 0.0f, 0.0f};
+    fitScale_ = 1.0f;
     // 既存のmodelInstance_をここで即座に破棄しない。読み込み直後にLoadModel()が
     // 連続で呼ばれるケース（例：シーンJSONでロードされたモデルを起動直後に別モデルへ
     // 強制差し替えする処理）では、直前のモデルのテクスチャアップロードコマンドがまだ
@@ -30,6 +40,25 @@ void ModelComponent::LoadModel(const std::string& path) {
     if (!texturePath_.empty()) {
         LoadTexture(texturePath_);
     }
+}
+
+void ModelComponent::FitToWingspan(float wingspan) {
+    if (!modelInstance_) return;
+    const ModelResource* resource = modelInstance_->GetResource();
+    if (!resource) return;
+    const std::vector<Vector3>& positions = resource->GetVertexPositions();
+    if (positions.empty()) return;
+
+    // バウンディングボックスの最小・最大
+    Vector3 lo = positions[0];
+    Vector3 hi = positions[0];
+    for (const Vector3& p : positions) {
+        lo = {(std::min)(lo.x, p.x), (std::min)(lo.y, p.y), (std::min)(lo.z, p.z)};
+        hi = {(std::max)(hi.x, p.x), (std::max)(hi.y, p.y), (std::max)(hi.z, p.z)};
+    }
+    fitCenter_ = {(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f};
+    const float width = hi.x - lo.x;
+    fitScale_ = width > kMinFitWidth ? wingspan / width : 1.0f;
 }
 
 void ModelComponent::LoadTexture(const std::string& path) {
@@ -56,7 +85,10 @@ void ModelComponent::Update(float deltaTime) {
 void ModelComponent::Draw() {
     if (modelInstance_ && owner_) {
         const Transform& transform = owner_->GetTransform();
-        Matrix4x4 world = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
+        // 行ベクトル規約なので左から順に適用: 中心を原点へ → 補正の拡大 → Transform(拡大・回転・位置)
+        const Matrix4x4 fit = Multiply(MakeTranslateMatrix({-fitCenter_.x, -fitCenter_.y, -fitCenter_.z}),
+                                       MakeScaleMatrix({fitScale_, fitScale_, fitScale_}));
+        Matrix4x4 world = Multiply(fit, MakeAffineMatrix(transform.scale, transform.rotate, transform.translate));
         
         modelInstance_->SetWorld(world);
 

@@ -73,9 +73,19 @@ private:
   void SpawnBoss_();
   // プレイヤー死亡 / ボス撃破でシーン遷移を要求する
   void CheckGameEnd_();
+  // 展示: 覆いが晴れたらすぐ、クリア / ゲームオーバーを交互に要求する(操作は受け付けない)
+  void UpdateExhibitionFlow_(float deltaTime);
+  // 開発用: プレイせずに、タイトル -> ゲーム -> クリア / ゲームオーバー -> タイトルの流れを確認するためのショートカット
+  void CheckDebugFlowShortcut_();
   void UpdateHud_();
-  // ロックオンON/OFFに合わせてプレイヤーの歩行アニメーションをクロスフェードする
-  void UpdatePlayerAnimation_(bool isLockingMode);
+  // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
+  // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する
+  void BeginIntro_();
+  // 覆いが晴れる進み具合に合わせて、カメラと自機を進行方向の後ろから進め、画角を落ち着かせる。
+  // レール進行・敵・当たり判定は更新しない(晴れ終わるまで、ゲームの進行度は動かない)
+  void UpdateIntro_(float deltaTime);
+  // イントロを終える。カメラと自機を、基準の位置と画角へ正確に戻す
+  void FinishIntro_();
 
   // --- Draw の各段階 ---
   void DrawDebugRail_(Renderer* renderer) const;
@@ -84,7 +94,9 @@ private:
   std::unique_ptr<AbsoluteEngine::EditorCamera> debugCamera_;
 
   bool isDebugCamera_ = false;
-  bool showDebugRail_ = true;
+  bool showDebugRail_ = false;
+  bool showDebugGrid_ = false; // 地面のグリッド線(デバッグ用)
+  float exhibitionHoldTimer_ = 0.0f; // 展示: 通常の更新に入ってからの経過(秒)
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
   bool mouseCaptureSuspended_ = false; // Escで一時的にマウスの閉じ込めを解除している間 true
 
@@ -97,12 +109,6 @@ private:
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;
 
-  // プレイヤー用スキニングモデル（歩行アニメーション）
-  std::shared_ptr<Animation> playerWalkAnim_;
-  // ロックオン中に切り替える別アニメーション（Animation補間の実演用）
-  std::shared_ptr<Animation> playerSneakWalkAnim_;
-  bool wasLockingMode_ = false;
-
   // ディゾルブのマスクテクスチャ
   std::shared_ptr<TextureResource> texNoise0_;
 
@@ -111,6 +117,14 @@ private:
   ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
 
   float time_ = 0.0f;
+
+  // イントロの状態
+  bool introActive_ = false;
+  Vector3 introBaseEye_{0.0f, 0.0f, 0.0f};    // 助走の基準(スタート位置)のカメラの位置
+  Vector3 introBaseTarget_{0.0f, 0.0f, 1.0f}; // 同じく注視点
+  Vector3 introBasePlayerPosition_{0.0f, 0.0f, 0.0f};
+  Vector3 introBasePlayerRotation_{0.0f, 0.0f, 0.0f}; // 助走の基準の、自機の向き(昇りの機首上げの前の値)
+  float introRailSpeed_ = 0.0f;               // 助走の速さに使う、レールの進む速さ
 
   GamePhase phase_ = GamePhase::InProgress;
 

@@ -12,6 +12,7 @@
 #endif
 
 #include "SceneIds.h"
+#include "ExhibitionMode.h"
 #include "ParticleManager.h"
 #include "ModelResource.h"
 #include <algorithm>
@@ -40,8 +41,11 @@ constexpr float kLogoFadeInSec = 2.0f;
 // 今は「死ぬこと」しかないため)。ゲームへ遷移させたいときは false にする
 constexpr bool kReturnToTitleAfterLaunch = false;
 constexpr float kReturnFadeSec = 0.6f; // タイトルへ戻ったあと、白から元の画面へ戻る時間
-constexpr float kLaunchDurationSec = 2.4f;
-constexpr float kFlashStartRatio = 0.65f; // 演出のこの割合から白くなり始め、終わりで真っ白
+constexpr float kLaunchDurationSec = TitleDirector::kLaunchDurationSec;
+constexpr float kFlashStartRatio = 0.65f; // 演出のこの割合から白くなり始め、終わりで真っ白(タイトルへ戻る仮設定のときだけ使う)
+// ゲームへ行くときは、スタート演出のこの割合で切り替えを要求する。画面を覆う演出(雲突入)は
+// 画面遷移の層が行い、スタート演出はその間も続く(白フラッシュはゲームへ行かない仮設定のときだけ)
+constexpr float kSceneChangeRequestRatio = 0.25f;
 
 // PRESS START の明滅(ゆっくり。完全には消えない)
 constexpr float kTwoPi = 6.2831853f;
@@ -270,18 +274,22 @@ void TitleScene::Update() {
   if (startRequested_) {
     launchTime_ += kDeltaTimeF;
   }
-  // 演出が終わった(画面が真っ白になった)フレームで、タイトルを最初へ戻す(仮設定)か、一度だけゲームへ遷移する
-  if (startRequested_ && launchTime_ >= kLaunchDurationSec) {
+  if (startRequested_) {
     if (kReturnToTitleAfterLaunch) {
-      RestartTitle();
-    } else if (!leaving_) {
+      // 演出が終わった(画面が真っ白になった)フレームで、タイトルを最初へ戻す(仮設定)
+      if (launchTime_ >= kLaunchDurationSec) {
+        RestartTitle();
+      }
+    } else if (!leaving_ && launchTime_ >= kLaunchDurationSec * kSceneChangeRequestRatio) {
+      // 演出の途中で一度だけ、ゲームへの切り替えを要求する。以降の覆い(雲突入)は画面遷移の層が行う
       leaving_ = true;
       RequestSceneChange(SceneId::Game);
     }
   }
 
   const float launchU = startRequested_ ? (std::min)(launchTime_ / kLaunchDurationSec, 1.0f) : -1.0f;
-  flashAlpha_ = startRequested_ ? CalcFlashAlpha(launchU) : 0.0f;
+  // 白フラッシュは、ゲームへ行かず最初へ戻す仮設定のときだけ(ゲームへ行くときは、画面遷移の雲突入が覆う)
+  flashAlpha_ = (startRequested_ && kReturnToTitleAfterLaunch) ? CalcFlashAlpha(launchU) : 0.0f;
   // タイトルへ戻った直後は、白から元の画面へなめらかに戻す
   if (!startRequested_ && returnFadeTime_ < kReturnFadeSec) {
     returnFadeTime_ += kDeltaTimeF;
@@ -325,7 +333,12 @@ void TitleScene::Update() {
 
   EmitContrails(state.playerWorld);
 
-  if (services_.input) {
+  if (ExhibitionMode::kEnabled) {
+    // 展示: 操作を受け付けず、一定時間たったら自動でスタート演出を始める
+    if (!startRequested_ && time_ >= ExhibitionMode::kTitleWaitSec) {
+      RequestStart();
+    }
+  } else if (services_.input) {
     if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
       RequestStart();
     }
