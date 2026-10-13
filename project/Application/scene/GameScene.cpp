@@ -442,6 +442,12 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 }
 
 void GameScene::UpdateMouseCapture_() {
+  // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
+  if (ExhibitionMode::kEnabled) {
+      MouseCapture::Apply(false);
+      return;
+  }
+
   // Development では ImGui のエディタを操作する必要があるため、Escでいつでも解除/再開できる
   if (services_.input && services_.input->TriggerKey(DIK_ESCAPE)) {
       mouseCaptureSuspended_ = !mouseCaptureSuspended_;
@@ -627,7 +633,7 @@ void GameScene::Update() {
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (services_.input && services_.input->TriggerKey(DIK_B)) {
+      if (!ExhibitionMode::kEnabled && services_.input && services_.input->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 

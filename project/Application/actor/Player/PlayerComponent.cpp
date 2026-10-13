@@ -1,4 +1,5 @@
 #include "PlayerComponent.h"
+#include "../../scene/ExhibitionMode.h"
 #include "Input.h"
 #include "GameCamera.h"
 #include <algorithm>
@@ -95,7 +96,8 @@ void PlayerComponent::Update(float deltaTime) {
   const bool isPlaying = scene->GetPlayMode() == PlayMode::Play;
 
   // マウスはPlayモードでカーソルを閉じ込めている間だけ照準に使う
-  const PlayerInputState in = PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
+  // 展示中は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
+  const PlayerInputState in = ExhibitionMode::kEnabled ? PlayerInputState{} : PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
 
   MoveCursor_(in, deltaTime);
 
