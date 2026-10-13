@@ -2,8 +2,7 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
-#include "AbsoluteEngine/scene/ColliderComponent.h"
-#include "../Bullet/BulletComponent.h"
+#include "../Bullet/BulletFactory.h"
 #include "../Player/PlayerComponent.h"
 #include "GameCamera.h"
 #include <cmath>
@@ -138,26 +137,12 @@ void SpawnBossBullet(const Vector3& spawnPos, const Vector3& vel) {
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return;
 
-    auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("BossBullet");
-    bulletObj->SetTag("EnemyBullet");
-
-    auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-    bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-    bulletModelComp->SetColor({1.0f, 0.2f, 0.6f, 1.0f}); // ボス弾は他の敵弾と区別できるよう色を変える
-    bulletObj->AddComponent(std::move(bulletModelComp));
-
-    auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-    colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-    colliderComp->radius = 0.5f;
-    bulletObj->AddComponent(std::move(colliderComp));
-
-    bulletObj->GetTransform().translate = spawnPos;
-
-    auto bulletComp = std::make_unique<BulletComponent>();
-    bulletComp->Initialize(vel);
-    bulletObj->AddComponent(std::move(bulletComp));
-
-    scene->AddRootObject(bulletObj);
+    BulletSpec spec;
+    spec.name     = "BossBullet";
+    spec.position = spawnPos;
+    spec.velocity = vel;
+    spec.color    = Vector4{ 1.0f, 0.2f, 0.6f, 1.0f }; // ボス弾は他の敵弾と区別できるよう色を変える
+    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
 }
 } // namespace
 

@@ -53,6 +53,12 @@
     <ClCompile Include="actor\Enemy\RamAttackComponent.cpp" />
     <ClCompile Include="hud\GameHUD.cpp" />
     <ClCompile Include="actor\Player\LockOnSystem.cpp" />
+    <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
+    <ClCompile Include="actor\Player\PlayerInput.cpp" />
+    <ClCompile Include="actor\Player\ReticleAim.cpp" />
+    <ClCompile Include="scene\HitEffectSpawner.cpp" />
+    <ClCompile Include="scene\PostEffectDirector.cpp" />
+    <ClCompile Include="scene\ScoreTracker.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GameApp.h">
@@ -82,5 +88,12 @@
     <ClInclude Include="actor\Enemy\RamAttackComponent.h" />
     <ClInclude Include="hud\GameHUD.h" />
     <ClInclude Include="actor\Player\LockOnSystem.h" />
+    <ClInclude Include="ScreenSize.h" />
+    <ClInclude Include="actor\Bullet\BulletFactory.h" />
+    <ClInclude Include="actor\Player\PlayerInput.h" />
+    <ClInclude Include="actor\Player\ReticleAim.h" />
+    <ClInclude Include="scene\HitEffectSpawner.h" />
+    <ClInclude Include="scene\PostEffectDirector.h" />
+    <ClInclude Include="scene\ScoreTracker.h" />
   </ItemGroup>
 </Project>
