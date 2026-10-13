@@ -89,6 +89,10 @@ private:
   bool mouseCaptureSuspended_ = false; // Escで一時的にマウスの閉じ込めを解除している間 true
 
   Skybox skybox_;
+  // 背景の雲海の見た目(ImGui で調整できる)。useCloudSea_ が false のときは従来のスカイボックスを描く(比較用)。
+  // skybox_ は、雲海のときも環境マップ(反射)として使い続ける
+  CloudSeaSettings cloudSea_;
+  bool useCloudSea_ = true;
 
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;

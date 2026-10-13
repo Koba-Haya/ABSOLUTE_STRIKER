@@ -8,6 +8,7 @@
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
 #include "graphics/texture/PlanarReflection.h"
+#include "graphics/CloudSeaSettings.h"
 
 #include "LightTypes.h"
 #include "Matrix.h"
@@ -137,6 +138,10 @@ public:
   // worldWrapLength: 巻き戻し 1 回分の長さ(z)。worldOffset.z はその整数倍で渡す。波の位相はこの 2 つから厳密に求める
   // (大きな座標を float に載せると sin の位相が荒れるため)。巻き戻していなければ 0
   void DrawWater(const Vector3 &sunDirection, float time, const Vector3 &worldOffset = {0.0f, 0.0f, 0.0f}, float worldWrapLength = 0.0f);
+  // 雲海(空と、自機の下に広がる雲の海)を全画面パスで描く(最奥。スカイボックスの代わり)。
+  // カメラは SetCamera で渡したものを使う。雲の模様の位置はカメラ位置から求める(ワールドに固定され、自機が進むと後ろへ流れる)。
+  // 座標が大きくなっても模様が崩れないよう、カメラ位置は「整数のマス番号 + 小数」に分けてシェーダーへ渡す
+  void DrawCloudSea(const CloudSeaSettings &settings);
   // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha,
@@ -239,6 +244,7 @@ private:
   std::unique_ptr<UnifiedPipeline> skyboxPipeline_;
   std::unique_ptr<UnifiedPipeline> skyPipeline_;
   std::unique_ptr<UnifiedPipeline> waterPipeline_;
+  std::unique_ptr<UnifiedPipeline> cloudSeaPipeline_;
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -300,6 +306,48 @@ private:
   };
   ComPtr<ID3D12Resource> skyParamCB_;
   SkyParam* skyParamMapped_ = nullptr;
+
+  // CloudSea.hlsli の cbuffer CloudSeaParam と同じ並び(16 バイト区切り)にすること
+  // ノイズの層ごとに、カメラ位置を「整数のマス番号 + マス内の小数」に分けた値を持つ(倍率が層ごとに違うため)
+  struct CloudSeaCellOrigin {
+    int32_t cell[2];
+    float frac[2];
+  };
+  struct alignas(16) CloudSeaParam {
+    Matrix4x4 invViewProj;
+    Vector3 cameraPosition;
+    float seaHeight;
+    Vector3 sunDirection;
+    float thickness;
+    CloudSeaCellOrigin base;   // 主ノイズ
+    CloudSeaCellOrigin lowA;   // 大きなうねり 1 層目
+    CloudSeaCellOrigin lowB;   // 大きなうねり 2 層目
+    CloudSeaCellOrigin floor;  // 切れ間から見える下の雲層
+    float bump;
+    float scale;
+    float threshold;
+    float softness;
+    float density;
+    float fog;
+    float steps;
+    float jitter;
+    float swellHeight;
+    float swellBlend;
+    float billow;
+    float shadowStrength;
+    float shadowLength;
+    float gapDarkness;
+    float aerial;
+    float contrast;
+    float lowRatioA;
+    float lowRatioB;
+    float floorRatio;
+    float padding;
+  };
+  // カメラ位置にノイズ空間の倍率を掛け、整数のマス番号と小数に分ける(double で計算し、座標が大きくなっても精度を保つ)
+  static void SplitCloudSeaCell(const Vector3 &cameraPosition, double cellsPerUnit, CloudSeaCellOrigin &out);
+  ComPtr<ID3D12Resource> cloudSeaParamCB_;
+  CloudSeaParam* cloudSeaParamMapped_ = nullptr;
 
   struct alignas(16) WaterParam {
     Matrix4x4 invViewProj;

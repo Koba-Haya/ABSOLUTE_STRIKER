@@ -32,6 +32,7 @@
 #include "../actor/Enemy/RamAttackComponent.h"
 #include "../actor/Player/PlayerInput.h"
 #include "../ScreenSize.h"
+#include "CloudSeaDebugUi.h"
 #include "SceneIds.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -634,7 +635,12 @@ void GameScene::Draw() {
   ApplyEditorLightsToRenderer(renderer);
 
   // オブジェクトの描画
-  skybox_.Draw();
+  // 背景: 手続き生成の雲海。比較用に、従来のスカイボックスへ切り替えられる
+  if (useCloudSea_) {
+      renderer->DrawCloudSea(cloudSea_);
+  } else {
+      skybox_.Draw();
+  }
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : rootObjects_) {
@@ -708,6 +714,12 @@ void GameScene::DrawEditorUI() {
     ImGui::Begin("GameScene Controls##LeftPanel");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Cloud Sea")) {
+        ImGui::Checkbox("Use Cloud Sea (off = Skybox)", &useCloudSea_);
+        CloudSeaDebugUi::Draw(cloudSea_);
+        ImGui::Separator();
+    }
     
     int hp = 0;
     int maxHp = 0;

@@ -100,6 +100,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                           UnifiedPipeline::MakeWaterDesc()));
   }
 
+  // CloudSea Pipeline
+  {
+    cloudSeaPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(cloudSeaPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                             UnifiedPipeline::MakeCloudSeaDesc()));
+  }
+
   // Sprite Pipelines
   {
     PipelineDesc desc = UnifiedPipeline::MakeSpriteDesc();
@@ -320,6 +327,9 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   waterParamCB_ = CreateUploadBuffer(align256(sizeof(WaterParam)));
   waterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&waterParamMapped_));
+
+  cloudSeaParamCB_ = CreateUploadBuffer(align256(sizeof(CloudSeaParam)));
+  cloudSeaParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&cloudSeaParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -785,6 +795,75 @@ void Renderer::DrawWater(const Vector3 &sunDirection, float time, const Vector3 
   cmdList->SetDescriptorHeaps(1, heaps);
   cmdList->SetGraphicsRootDescriptorTable(1, planarReflection_->GetSrvGpuHandle());
 
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
+namespace {
+// 雲海のノイズの層ごとの倍率(主ノイズ gScale に対する比)。シェーダー側へは定数バッファで渡すので、値はここだけで決める
+constexpr float kCloudSeaLowRatioA = 0.18f;   // 大きなうねり 1 層目
+constexpr float kCloudSeaLowRatioB = 0.37f;   // 大きなうねり 2 層目
+constexpr float kCloudSeaFloorRatio = 0.8f;   // 切れ間から見える下の雲層
+} // namespace
+
+// カメラ位置(xz)にノイズ空間の倍率 cellsPerUnit を掛け、整数のマス番号と小数に分ける(double で計算する)
+void Renderer::SplitCloudSeaCell(const Vector3 &cameraPosition, double cellsPerUnit, CloudSeaCellOrigin &out) {
+  const double cellX = static_cast<double>(cameraPosition.x) * cellsPerUnit;
+  const double cellZ = static_cast<double>(cameraPosition.z) * cellsPerUnit;
+  const double floorX = std::floor(cellX);
+  const double floorZ = std::floor(cellZ);
+  out.cell[0] = static_cast<int32_t>(floorX);
+  out.cell[1] = static_cast<int32_t>(floorZ);
+  out.frac[0] = static_cast<float>(cellX - floorX);
+  out.frac[1] = static_cast<float>(cellZ - floorZ);
+}
+
+void Renderer::DrawCloudSea(const CloudSeaSettings &settings) {
+  if (!cloudSeaPipeline_ || !cloudSeaParamMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  const Matrix4x4 invView = Inverse(view_);
+  const Vector3 cameraPosition{invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+  CloudSeaParam *param = cloudSeaParamMapped_;
+  param->invViewProj = Inverse(Multiply(view_, proj_));
+  param->cameraPosition = cameraPosition;
+  param->seaHeight = settings.seaHeight;
+  param->sunDirection = Normalize(settings.SunDirection());
+  param->thickness = settings.thickness;
+  param->bump = settings.bump;
+  param->scale = settings.scale;
+  param->threshold = settings.threshold;
+  param->softness = settings.softness;
+  param->density = settings.density;
+  param->fog = settings.fog;
+  param->steps = static_cast<float>(settings.steps);
+  param->jitter = settings.jitter ? 1.0f : 0.0f;
+  param->swellHeight = settings.swellHeight;
+  param->swellBlend = settings.swellBlend;
+  param->billow = settings.billow;
+  param->shadowStrength = settings.shadowStrength;
+  param->shadowLength = settings.shadowLength;
+  param->gapDarkness = settings.gapDarkness;
+  param->aerial = settings.aerial;
+  param->contrast = settings.contrast;
+  param->lowRatioA = kCloudSeaLowRatioA;
+  param->lowRatioB = kCloudSeaLowRatioB;
+  param->floorRatio = kCloudSeaFloorRatio;
+
+  // 雲の模様の位置(ノイズ空間 = ワールド座標 * 倍率)を、double で整数部と小数部に分ける。
+  // シェーダーは視線上の点をカメラからの相対位置だけで計算するので、ワールド座標が大きくなっても精度が落ちない
+  const double scale = static_cast<double>(settings.scale);
+  SplitCloudSeaCell(cameraPosition, scale, param->base);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaLowRatioA, param->lowA);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaLowRatioB, param->lowB);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaFloorRatio, param->floor);
+
+  cloudSeaPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, cloudSeaParamCB_->GetGPUVirtualAddress());
+
+  // 頂点バッファなしで3頂点描画(大きな三角形1つで全画面を覆う)
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawInstanced(3, 1, 0, 0);
 }

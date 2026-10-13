@@ -472,6 +472,13 @@ PipelineDesc UnifiedPipeline::MakeWaterDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeCloudSeaDesc() {
+  // 空と同じ全画面パス(深度設定も同じ)で、ピクセルシェーダーだけ雲海にする。b0 は CloudSeaParam
+  PipelineDesc d = MakeSkyDesc();
+  d.psPath = L"resources/engine/shaders/CloudSea.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   PipelineDesc d{};
   d.inputElements = {

@@ -419,6 +419,7 @@
     <ClInclude Include="Type\Vector.h">
       <Filter>engine\Type</Filter>
     </ClInclude>
+    <ClInclude Include="graphics\CloudSeaSettings.h" />
     <ClInclude Include="graphics\texture\PlanarReflection.h" />
     <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="editor\EditorCamera.h" />

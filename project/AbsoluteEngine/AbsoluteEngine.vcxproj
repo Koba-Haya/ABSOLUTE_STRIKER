@@ -235,6 +235,7 @@
     <ClInclude Include="graphics\resources\ResourceObject.h" />
     <ClInclude Include="graphics\shader\ShaderCompiler.h" />
     <ClInclude Include="graphics\shader\ShaderCompilerUtils.h" />
+    <ClInclude Include="graphics\CloudSeaSettings.h" />
     <ClInclude Include="graphics\texture\PlanarReflection.h" />
     <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="graphics\texture\TextureManager.h" />

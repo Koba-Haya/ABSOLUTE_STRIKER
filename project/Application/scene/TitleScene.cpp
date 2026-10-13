@@ -38,7 +38,7 @@ constexpr float kLogoFadeInSec = 2.0f;
 // スタート演出(加速 → 白フラッシュ → ゲームへ)
 // 【仮設定】展示でビルドを見せるため、true の間は演出のあとゲームへ行かずタイトルへ戻る(ゲームから戻る手段が
 // 今は「死ぬこと」しかないため)。ゲームへ遷移させたいときは false にする
-constexpr bool kReturnToTitleAfterLaunch = true;
+constexpr bool kReturnToTitleAfterLaunch = false;
 constexpr float kReturnFadeSec = 0.6f; // タイトルへ戻ったあと、白から元の画面へ戻る時間
 constexpr float kLaunchDurationSec = 2.4f;
 constexpr float kFlashStartRatio = 0.65f; // 演出のこの割合から白くなり始め、終わりで真っ白

@@ -96,6 +96,7 @@ public:
   static PipelineDesc MakeSkyDesc();
   // 全画面パスで描く水面(Sky.VS / Water.PS)
   static PipelineDesc MakeWaterDesc();
+  static PipelineDesc MakeCloudSeaDesc();
   static PipelineDesc MakePrimitiveDesc();
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
