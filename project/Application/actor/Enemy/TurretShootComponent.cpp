@@ -1,9 +1,7 @@
 #include "TurretShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
-#include "AbsoluteEngine/scene/ModelComponent.h"
-#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../../actor/Bullet/BulletComponent.h"
+#include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"
 #include <cmath>
@@ -105,26 +103,9 @@ void TurretShootComponent::FireOneBullet(const Vector3& dir) {
     auto scene = BaseScene::GetActiveScene();
     if (!scene || !owner_) return;
 
-    const Vector3 spawnPos = owner_->GetTransform().translate;
-    const Vector3 vel = { dir.x * 20.0f, dir.y * 20.0f, dir.z * 20.0f };
-
-    auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-    bulletObj->SetTag("EnemyBullet");
-
-    auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-    bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-    bulletObj->AddComponent(std::move(bulletModelComp));
-
-    auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-    colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-    colliderComp->radius = 0.5f;
-    bulletObj->AddComponent(std::move(colliderComp));
-
-    bulletObj->GetTransform().translate = spawnPos;
-
-    auto bulletComp = std::make_unique<BulletComponent>();
-    bulletComp->Initialize(vel);
-    bulletObj->AddComponent(std::move(bulletComp));
-
-    scene->AddRootObject(bulletObj);
+    constexpr float kBulletSpeed = 20.0f;
+    BulletSpec spec;
+    spec.position = owner_->GetTransform().translate;
+    spec.velocity = { dir.x * kBulletSpeed, dir.y * kBulletSpeed, dir.z * kBulletSpeed };
+    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
 }

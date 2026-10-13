@@ -13,7 +13,6 @@
 #include "GameObject.h"
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>  // rand()
 #include "Logger.h"
 
 #ifdef USE_IMGUI
@@ -31,6 +30,8 @@
 #include "../actor/Enemy/TurretShootComponent.h"
 #include "../actor/Enemy/ChargeOnApproachComponent.h"
 #include "../actor/Enemy/RamAttackComponent.h"
+#include "../actor/Player/PlayerInput.h"
+#include "../ScreenSize.h"
 #include "SceneIds.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -38,39 +39,21 @@
 #include "AnimationManager.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
-#include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "graphics/particle/EffectManager.h"
-#include "graphics/particle/RingEffect.h"
 #include "component/ExplosionLightComponent.h"
-
-namespace {
-// スコア関連の定数（内部カウンタのみ。表示はImGuiデバッグ表示で仮置き。本番UI化は別タスク）
-constexpr int kScorePerKill = 100;             // 1体撃破ごとの基礎点（編隊メンバーも同様に加算される）
-constexpr int kFormationBonusMultiplier = 2;   // 編隊を画面内で全滅させた場合の倍率
-} // namespace
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
 
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
-  // リソースのロード
-  resPlayer_ = am->Load<ModelResource>("resources/app/player/player.obj");
-  resBullet_ = am->Load<ModelResource>("resources/app/bullet/bullet.obj");
-  resEnemy_  = am->Load<ModelResource>("resources/app/cube/cube.obj"); // 敵モデル
-  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
+  hitEffects_.Initialize();
 
-  // ヒットエフェクト用テクスチャのロード
-  texRing_   = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
+  // ディゾルブのマスクテクスチャのロード
   texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
   // ディゾルブのマスクテクスチャをレンダラーにセット
   if (texNoise0_) {
       Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
-  }
-
-  if (!resBullet_) {
-      // 万一 bullet.obj が読み込めない場合は、確実に存在する enemy (cube.obj) を仮割り当てする
-      resBullet_ = resEnemy_;
   }
 
   skybox_.Initialize("resources/app/dds/dds.dds");
@@ -134,13 +117,7 @@ void GameScene::Initialize(const SceneServices &services) {
   GetMainCamera()->Update(*services_.input);
 
   // プレイヤーを探す（ロードされたデータにあるか）
-  playerObj_.reset();
-  for (const auto& obj : rootObjects_) {
-      if (obj && (obj->GetName() == "Player" || obj->GetName() == "player")) {
-          playerObj_ = obj;
-          break;
-      }
-  }
+  playerObj_ = FindPlayerObject_();
 
   // プレイヤーがいなければ生成
   if (!playerObj_) {
@@ -294,12 +271,6 @@ void GameScene::Initialize(const SceneServices &services) {
   // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
   LoadTimeline();
 
-  // -----------------------------------------------------------------------
-  // SpawnManagerの初期化：デモ用スポーンイベントを登録する
-  // -----------------------------------------------------------------------
-  spawnTimer_ = 0.0f;
-  //InitSpawnEvents_();
-
 #ifndef USE_IMGUI
   // ImGuiが無いビルド（Release）ではPlayボタンを押す手段が無いため、
   // タイトルからゲームシーンに来た時点で自動的にPlayモードへ入る。
@@ -309,39 +280,8 @@ void GameScene::Initialize(const SceneServices &services) {
 #endif
 }
 
-// -----------------------------------------------------------------------
-// InitSpawnEvents_
-// 発表デモ用のウェーブデータをハードコードで定義する。
-// 将来的にはJSON/タイムラインエディタから読み込む形に置き換える。
-// -----------------------------------------------------------------------
-//void GameScene::InitSpawnEvents_() {
-//  spawnEvents_.clear();
-//
-//  // フォーマット: { triggerTime(秒), prefabId, position(X,Y,Z) }
-//  // カメラのレールが前進するにつれて、前方に敵が出現する構成
-//
-//  // --- 第1波：ゲーム開始直後（3秒後）に正面へ3体出現 ---
-//  spawnEvents_.push_back({ 3.0f,  "Enemy", { -6.0f, 0.0f,  60.0f } });
-//  spawnEvents_.push_back({ 3.0f,  "Enemy", {  0.0f, 2.0f,  65.0f } });
-//  spawnEvents_.push_back({ 3.0f,  "Enemy", {  6.0f, 0.0f,  60.0f } });
-//
-//  // --- 第2波：6秒後に斜め配置で2体出現（上下に散らして見栄えを出す） ---
-//  spawnEvents_.push_back({ 6.0f,  "Enemy", { -8.0f,  3.0f, 90.0f } });
-//  spawnEvents_.push_back({ 6.0f,  "Enemy", {  8.0f, -3.0f, 90.0f } });
-//
-//  // --- 第3波：10秒後に前方中央に密集した4体 ---
-//  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f,  2.0f, 120.0f } });
-//  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f,  2.0f, 120.0f } });
-//  spawnEvents_.push_back({ 10.0f, "Enemy", { -4.0f, -2.0f, 125.0f } });
-//  spawnEvents_.push_back({ 10.0f, "Enemy", {  4.0f, -2.0f, 125.0f } });
-//
-//  // --- 第4波：14秒後の最終波（大きく散らして迫力を演出） ---
-//  spawnEvents_.push_back({ 14.0f, "Enemy", { -12.0f,  0.0f, 150.0f } });
-//  spawnEvents_.push_back({ 14.0f, "Enemy", {   0.0f,  5.0f, 155.0f } });
-//  spawnEvents_.push_back({ 14.0f, "Enemy", {  12.0f,  0.0f, 150.0f } });
-//}
-
 void GameScene::Finalize() {
+  MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
 }
 
 // -----------------------------------------------------------------------
@@ -375,9 +315,8 @@ void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
 
 // -----------------------------------------------------------------------
 // RegisterEnemyCallbacks
-// EnemyComponent::onDestroyed の登録を1箇所に集約したもの。
-// 以前は Initialize / AddRootObject / Update(SpawnManager) の3箇所に
-// 全く同じ内容のラムダが重複していた。
+// EnemyComponent::onDestroyed の登録を1箇所に集約したもの
+// （Initialize でのロード済みオブジェクト・AddRootObject 経由・タイムライン生成の全てで共通）。
 // FormationMemberComponent を持つ場合は編隊トラッキングの初期カウントも行う。
 // -----------------------------------------------------------------------
 void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
@@ -397,271 +336,207 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
     // あえてGameObjectそのものは持たない。
     FormationMemberComponent* formationComp = obj->GetComponent<FormationMemberComponent>();
     if (formationComp) {
-        ++formationRemaining_[formationComp->GetFormationId()];
-        ++formationTotal_[formationComp->GetFormationId()];
+        scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
     }
 
     enemyComp->onDestroyed = [this, formationComp](const Vector3& hitPos) {
-        // 1. ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
-        SpawnHitEffect(hitPos);
+        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+        hitEffects_.Spawn(*this, hitPos);
 
-        // 2. カメラシェイク開始
-        cameraShakeDuration_  = 0.3f;
-        cameraShakeTimer_     = 0.0f;
-        cameraShakeIntensity_ = 0.2f;
+        // カメラシェイク・画面歪み（RadialBlur の中心は敵のスクリーン座標）
+        postEffects_.OnEnemyDestroyed(WorldToScreenUv_(hitPos));
 
-        // 3. 画面歪み（RadialBlur）開始
-        hitDistortionDuration_  = 0.25f;
-        hitDistortionTimer_     = 0.0f;
-        hitDistortionIntensity_ = 0.06f;
-
-        // 4. RadialBlur の中心を敵のスクリーン座標に設定
-        auto* cam = isDebugCamera_
-            ? static_cast<Camera*>(debugCamera_.get())
-            : static_cast<Camera*>(GetMainCamera());
-        if (cam) {
-            Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
-            Vector3 sp = TransformPoint(hitPos, vp);
-            radialBlurCenter_ = { sp.x * 0.5f + 0.5f, -sp.y * 0.5f + 0.5f };
+        // スコア加算。キルストリークに到達したら演出を発火
+        if (scoreTracker_.OnEnemyKilled()) {
+            postEffects_.OnKillStreak();
         }
 
-        // 5. キルストリーク演出（Random）：5体撃破ごとに発火
-        ++killCount_;
-        if (killCount_ % 5 == 0) {
-            killStreakGlitchTimer_ = 0.0f;
-            killStreakGlitchDuration_ = 0.4f;
-        }
-
-        // 6. スコア加算（内部カウンタのみ。表示はImGuiデバッグ表示で仮置き）
-        // 編隊メンバーかどうかに関わらず、1体倒すごとに基礎点を加算する。
-        // 編隊全滅時のボーナスはOnFormationCleared側でこれとは別に上乗せする。
-        score_ += kScorePerKill;
-
-        // 7. 編隊トラッキング：編隊メンバーなら残数を減らし、0になったら全滅ボーナスを発火
-        if (formationComp) {
-            HandleFormationMemberDestroyed(formationComp->GetFormationId(), hitPos);
+        // 編隊トラッキング：編隊が全滅したら強化版の撃破エフェクト
+        // （通常撃破時のEmitBurst(pos, 20)より大幅増量）
+        if (formationComp && scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId()) > 0) {
+            GPUParticleManager::GetInstance()->EmitBurst(hitPos, 60, 0.6f);
         }
     };
 }
 
-// -----------------------------------------------------------------------
-// HandleFormationMemberDestroyed / OnFormationCleared
-// 編隊（FormationSpawnEvent）の全滅ボーナス判定。
-// -----------------------------------------------------------------------
-void GameScene::HandleFormationMemberDestroyed(int formationId, const Vector3& pos) {
-    auto it = formationRemaining_.find(formationId);
-    if (it == formationRemaining_.end()) return;
-
-    --it->second;
-    if (it->second <= 0) {
-        const auto totalIt = formationTotal_.find(formationId);
-        const int total = (totalIt != formationTotal_.end()) ? totalIt->second : 0;
-
-        formationRemaining_.erase(it);
-        formationTotal_.erase(formationId);
-
-        OnFormationCleared(pos, total);
-    }
+std::shared_ptr<AbsoluteEngine::GameObject> GameScene::FindPlayerObject_() const {
+  for (const auto& obj : rootObjects_) {
+      if (!obj) continue;
+      if (obj->GetName() == "Player" || obj->GetName() == "player" || obj->GetComponent<PlayerComponent>()) {
+          return obj;
+      }
+  }
+  return nullptr;
 }
 
-void GameScene::OnFormationCleared(const Vector3& pos, int memberCount) {
-    // 編隊メンバーは撃破のたびに既にkScorePerKillずつ加算済みなので、
-    // ここでは「倍率を適用した場合との差分」だけを追加ボーナスとして上乗せする。
-    // （合計は memberCount * kScorePerKill * kFormationBonusMultiplier になる）
-    score_ += kScorePerKill * memberCount * (kFormationBonusMultiplier - 1);
-
-    // 強化版の撃破エフェクト（通常撃破時のEmitBurst(pos, 20)より大幅増量）
-    GPUParticleManager::GetInstance()->EmitBurst(pos, 60, 0.6f);
+Camera* GameScene::GetGameplayCamera_() const {
+  return isDebugCamera_
+      ? static_cast<Camera*>(debugCamera_.get())
+      : static_cast<Camera*>(GetMainCamera());
 }
 
-// -----------------------------------------------------------------------
-// zEffect
-// DevScene の実装を GameScene に移植。
-// パーティクル + RingEffect + ExplosionLight の3段構えのエフェクト。
-// -----------------------------------------------------------------------
-void GameScene::SpawnHitEffect(const Vector3 &pos) {
-  // 1. 爆発パーティクル（explosion グループ）を散布
-  for (int i = 0; i < 30; ++i) {
-      float rX = ((rand() % 200) / 100.0f) - 1.0f;
-      float rY = ((rand() % 200) / 100.0f) - 1.0f;
-      float rZ = ((rand() % 200) / 100.0f) - 1.0f;
-      Vector3 vel = { rX * 1.5f, rY * 1.5f, rZ * 1.5f };
-      ParticleManager::GetInstance()->Emit(
-          "explosion", pos, vel,
-          Vector3{ 1.5f, 1.5f, 1.5f }, Vector3{ 0, 0, 0 }, 0.7f, Vector4{ 1, 1, 1, 1 });
+Vector2 GameScene::WorldToScreenUv_(const Vector3& worldPos) const {
+  Camera* cam = GetGameplayCamera_();
+  if (!cam) return { 0.5f, 0.5f };
+
+  const Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
+  const Vector3 ndc = TransformPoint(worldPos, vp);
+  return { ndc.x * 0.5f + 0.5f, -ndc.y * 0.5f + 0.5f };
+}
+
+void GameScene::UpdatePostEffects_(float deltaTime) {
+  PostEffectDirector::FrameState state;
+  state.isBossPhase = phase_ == GamePhase::Boss;
+  if (playerObj_) {
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          state.hasPlayer     = true;
+          state.isLockingMode = pComp->lockon_.IsLockingMode();
+          state.playerHp      = pComp->GetHp();
+      }
+  }
+  postEffects_.Update(deltaTime, time_, state);
+}
+
+void GameScene::UpdateMouseCapture_() {
+  // Development では ImGui のエディタを操作する必要があるため、Escでいつでも解除/再開できる
+  if (services_.input && services_.input->TriggerKey(DIK_ESCAPE)) {
+      mouseCaptureSuspended_ = !mouseCaptureSuspended_;
   }
 
-  // 1.5. GPU Particle（加点要素）: 敵撃破のたびに並列化されたEmit CSでバーストを発生させる
-  GPUParticleManager::GetInstance()->EmitBurst(pos, 20);
+  const bool isInGame = playMode_ == PlayMode::Play && !isDebugCamera_
+                     && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss);
+  MouseCapture::Apply(isInGame && !mouseCaptureSuspended_);
+}
 
-  // 2. リングエフェクト
-  if (texRing_) {
-      EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(texRing_, pos));
+void GameScene::RemoveExpiredObjects_() {
+  // プレイヤーより十分後方に離れた敵を削除する。
+  // 【バグ修正】敵は撃破以外で消える手段が無く、自機が通り過ぎた後もずっと
+  // 生き残ってカメラ視錐台に入り続け、タレット等が背後から撃ち続けていた。
+  constexpr float kEnemyDespawnBehindDistance = 15.0f;
+  const Vector3 playerPos = playerObj_ ? playerObj_->GetTransform().translate : Vector3{ 0.0f, 0.0f, 0.0f };
+  const Vector3 forward   = GetMainCamera()->GetForward();
+
+  auto isExpired = [&](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+      if (!obj) return false;
+
+      // 寿命切れの爆発ライト
+      if (auto* light = obj->GetComponent<ExplosionLightComponent>()) {
+          if (light->IsDead()) return true;
+      }
+
+      if (playerObj_ && obj->GetTag() == "Enemy") {
+          const Vector3& enemyPos = obj->GetTransform().translate;
+          const Vector3 toEnemy = { enemyPos.x - playerPos.x, enemyPos.y - playerPos.y, enemyPos.z - playerPos.z };
+          const float behindDistance = -Dot(toEnemy, forward);
+          return behindDistance > kEnemyDespawnBehindDistance;
+      }
+      return false;
+  };
+  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), isExpired), rootObjects_.end());
+}
+
+void GameScene::SpawnBoss_() {
+  // 【調査用の一時ログ】原因が分かったら削除する。
+  Logger::GetInstance().Log("[BossPhase] start");
+
+  // ボス出現演出（PostEffect加点要素: GaussianFilter）
+  postEffects_.OnBossIntro();
+
+  auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
+  Vector3 forward = GetMainCamera()->GetForward();
+  // 初期出現位置。以降はBossComponent::UpdateMovement()が毎フレーム
+  // 自機のちょっと前(距離14)に追従＋左右上下の揺れを加えて上書きするため、
+  // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromPlayerと合わせておく）。
+  constexpr float kBossInitialDistanceFromPlayer = 14.0f;
+  Vector3 playerPos = playerObj_ ? playerObj_->GetTransform().translate : GetMainCamera()->GetEye();
+  bossObj->GetTransform().translate = {
+      playerPos.x + forward.x * kBossInitialDistanceFromPlayer,
+      playerPos.y + forward.y * kBossInitialDistanceFromPlayer,
+      playerPos.z + forward.z * kBossInitialDistanceFromPlayer
+  };
+  bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
+  auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+  bossModelComp->LoadModel("resources/app/cube/cube.obj");
+  bossModelComp->SetEnvironmentCoefficient(1.0f);
+  bossModelComp->SetColor({0.7f, 0.1f, 0.9f, 1.0f}); // ザコ敵と見分けられるようボスは紫に
+  bossObj->AddComponent(std::move(bossModelComp));
+  // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
+  bossObj->AddComponent(std::make_unique<BossComponent>());
+
+  auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
+  colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+  colliderComp->radius = 5.0f; // ボスなので大きめに
+  bossObj->AddComponent(std::move(colliderComp));
+  bossObj->SetTag("Boss");
+
+  rootObjects_.push_back(bossObj);
+}
+
+void GameScene::CheckGameEnd_() {
+  if (playerObj_) {
+      auto pComp = playerObj_->GetComponent<PlayerComponent>();
+      if (pComp && pComp->IsDead()) {
+          phase_ = GamePhase::GameOver;
+          RequestSceneChange(SceneId::GameOver);
+      }
   }
 
-  // 3. 爆発のポイントライト（寿命付き）を生成
-  auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
-  lightObj->GetTransform().translate = pos;
-  auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-  lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
-  lightNodeComp->color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光
-  lightNodeComp->radius = 30.0f;
-  lightNodeComp->decay = 1.0f;
-  lightObj->AddComponent(std::move(lightNodeComp));
-  auto lightComp = std::make_unique<ExplosionLightComponent>();
-  lightComp->maxIntensity_ = 20.0f;
-  lightComp->lifeTime_ = 0.5f;
-  lightObj->AddComponent(std::move(lightComp));
-  rootObjects_.push_back(lightObj);
+  if (phase_ == GamePhase::Boss) {
+      const bool bossAlive = std::any_of(rootObjects_.begin(), rootObjects_.end(),
+          [](const auto& obj) { return obj && obj->GetComponent<BossComponent>(); });
+      if (!bossAlive) {
+          phase_ = GamePhase::Clear;
+          RequestSceneChange(SceneId::Clear);
+      }
+  }
+}
 
-  // 4. 旧型スケールアニメーションのヒットエフェクト（後方互換）
-  HitEffect ef;
-  ef.instance.Initialize({ resEffect_, {1, 1, 1, 1}, 0 });
-  ef.position = pos;
-  ef.frame = 0.0f;
-  ef.isActive = true;
-  hitEffects_.push_back(std::move(ef));
+// Animation補間（加点要素）：ロックオンのON/OFF切り替わり時に
+// 歩行アニメーション同士をクロスフェードで遷移させる。
+void GameScene::UpdatePlayerAnimation_(bool isLockingMode) {
+  if (isLockingMode == wasLockingMode_) return;
+
+  if (auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+      if (auto* instance = playerModelComp->GetModelInstance()) {
+          instance->PlayAnimation(isLockingMode ? playerSneakWalkAnim_ : playerWalkAnim_, true, 0.3f);
+      }
+  }
+  wasLockingMode_ = isLockingMode;
+}
+
+void GameScene::UpdateHud_() {
+  if (!gameHUD_) return;
+
+  Camera* hudCam = GetGameplayCamera_();
+  auto* pComp = playerObj_ ? playerObj_->GetComponent<PlayerComponent>() : nullptr;
+
+  if (!pComp) {
+      gameHUD_->Update(0, 0, {}, false, { ScreenSize::kCenterX, ScreenSize::kCenterY },
+                       hudCam, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 });
+      return;
+  }
+
+  const bool isLockingMode = pComp->lockon_.IsLockingMode();
+  UpdatePlayerAnimation_(isLockingMode);
+
+  gameHUD_->Update(pComp->GetHp(), pComp->GetMaxHp(),
+                   pComp->lockon_.GetLockedScreenPositions(GetMainCamera()), isLockingMode,
+                   pComp->GetCursorPos(), hudCam,
+                   pComp->GetNearReticleWorldPos(), pComp->GetMidReticleWorldPos(), pComp->GetFarReticleWorldPos());
 }
 
 void GameScene::Update() {
-  bool isTransitioning = false;
   const float deltaTime = 1.0f / 60.0f;
   time_ += deltaTime;
 
-  // -----------------------------------------------------------------------
-  // カメラシェイクの更新
-  // -----------------------------------------------------------------------
-  if (cameraShakeTimer_ < cameraShakeDuration_) {
-      cameraShakeTimer_ += deltaTime;
-      float t = 1.0f - (cameraShakeTimer_ / cameraShakeDuration_);
-      float intensity = cameraShakeIntensity_ * t;
-      float rX = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
-      float rY = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
-      cameraShakeOffset_ = { rX, rY, 0.0f };
-  } else {
-      cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
-  }
+  playerObj_ = FindPlayerObject_();
 
-  // -----------------------------------------------------------------------
-  // 画面歪み（RadialBlur）の更新
-  // タイマー・パラメータのみ更新し、モードの確定は後段のPostEffect優先度チェーンで行う
-  // （複数のゲームイベントがフルスクリーンPostProcessModeという単一スロットを取り合うため）
-  // -----------------------------------------------------------------------
-  if (hitDistortionTimer_ < hitDistortionDuration_) {
-      hitDistortionTimer_ += deltaTime;
-      float t = 1.0f - (hitDistortionTimer_ / hitDistortionDuration_);
-      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
-  } else if (hitDistortionDuration_ > 0.0f) {
-      Renderer::GetInstance()->SetRadialBlurParam(radialBlurCenter_, 0.0f);
-      hitDistortionDuration_ = 0.0f;
-  }
-
-  // ボス出現演出（GaussianFilter）のタイマー更新（k/sigmaはボス出現時に一度だけ設定済み）
-  if (bossIntroBlurTimer_ < bossIntroBlurDuration_) {
-      bossIntroBlurTimer_ += deltaTime;
-  } else if (bossIntroBlurDuration_ > 0.0f) {
-      bossIntroBlurDuration_ = 0.0f;
-  }
-
-  // 被弾演出（Vignette）のタイマー更新（scale/powはトリガー時に一度だけ設定済み）
-  if (playerHitVignetteTimer_ < playerHitVignetteDuration_) {
-      playerHitVignetteTimer_ += deltaTime;
-  } else if (playerHitVignetteDuration_ > 0.0f) {
-      playerHitVignetteDuration_ = 0.0f;
-  }
-
-  // 敵出現演出（BoxFilter）のタイマー更新（kはトリガー時に一度だけ設定済み）
-  if (waveSpawnBlurTimer_ < waveSpawnBlurDuration_) {
-      waveSpawnBlurTimer_ += deltaTime;
-  } else if (waveSpawnBlurDuration_ > 0.0f) {
-      waveSpawnBlurDuration_ = 0.0f;
-  }
-
-  // キルストリーク演出（Random）のタイマー更新
-  if (killStreakGlitchTimer_ < killStreakGlitchDuration_) {
-      killStreakGlitchTimer_ += deltaTime;
-  } else if (killStreakGlitchDuration_ > 0.0f) {
-      killStreakGlitchDuration_ = 0.0f;
-  }
-
-  // プレイヤーを探す（ロード時などでポインタが切り替わった場合に対応）
-  playerObj_.reset();
-  for (const auto& obj : rootObjects_) {
-      if (!obj) continue;
-      
-      bool isPlayer = (obj->GetName() == "Player" || obj->GetName() == "player");
-      if (!isPlayer) {
-          for (const auto& comp : obj->GetComponents()) {
-              if (comp->GetTypeName() == "PlayerComponent") {
-                  isPlayer = true;
-                  break;
-              }
-          }
-      }
-      
-      if (isPlayer) {
-          playerObj_ = obj;
-          break;
-      }
-  }
-
-  // -----------------------------------------------------------------------
-  // PostEffect優先度チェーン（加点要素: Grayscale/Vignette/BoxFilter/GaussianFilter/
-  // LuminanceBasedOutline/DepthBasedOutline/Random）
-  // フルスクリーンPostProcessModeは同時に1つしか有効にできないため、複数のゲーム
-  // イベントトリガーをここでまとめて調停し、SetPostProcessModeを1回だけ呼ぶ。
-  //   1. RadialBlur            : 雑魚敵ヒット時の画面歪み（既存）
-  //   2. Vignette              : プレイヤー被弾時の画面フラッシュ
-  //   3. GaussianFilter        : ボス出現演出（約1.2秒）
-  //   4. Random                : 5体撃破ごとのキルストリーク演出
-  //   5. BoxFilter             : 敵出現（新ウェーブ）時のフォーカスぼかし
-  //   6. DepthBasedOutline     : ロックオン中
-  //   7. Grayscale             : プレイヤー瀕死（HP<=1）
-  //   8. LuminanceBasedOutline : ボス戦中
-  //   9. Normal
-  // -----------------------------------------------------------------------
-  {
-      bool isLockingMode = false;
-      bool isCriticalHp = false;
-      if (playerObj_) {
-          if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
-              isLockingMode = pComp->lockon_.IsLockingMode();
-              int hp = pComp->GetHp();
-              isCriticalHp = hp <= 1;
-
-              // 被弾検知：前フレームよりHPが減っていたらVignetteを発火
-              if (lastPlayerHp_ >= 0 && hp < lastPlayerHp_) {
-                  playerHitVignetteTimer_ = 0.0f;
-                  playerHitVignetteDuration_ = 0.3f;
-                  Renderer::GetInstance()->SetVignetteParam(16.0f, 0.5f);
-              }
-              lastPlayerHp_ = hp;
-          }
-      }
-
-      Renderer::PostProcessMode nextMode = Renderer::PostProcessMode::Normal;
-      if (hitDistortionTimer_ < hitDistortionDuration_) {
-          nextMode = Renderer::PostProcessMode::RadialBlur;
-      } else if (playerHitVignetteTimer_ < playerHitVignetteDuration_) {
-          nextMode = Renderer::PostProcessMode::Vignette;
-      } else if (bossIntroBlurTimer_ < bossIntroBlurDuration_) {
-          nextMode = Renderer::PostProcessMode::GaussianFilter;
-      } else if (killStreakGlitchTimer_ < killStreakGlitchDuration_) {
-          Renderer::GetInstance()->SetRandomParam(time_);
-          nextMode = Renderer::PostProcessMode::Random;
-      } else if (waveSpawnBlurTimer_ < waveSpawnBlurDuration_) {
-          nextMode = Renderer::PostProcessMode::BoxFilter;
-      } else if (isLockingMode) {
-          nextMode = Renderer::PostProcessMode::DepthBasedOutline;
-      } else if (isCriticalHp) {
-          nextMode = Renderer::PostProcessMode::Grayscale;
-      } else if (phase_ == GamePhase::Boss) {
-          nextMode = Renderer::PostProcessMode::LuminanceBasedOutline;
-      }
-      Renderer::GetInstance()->SetPostProcessMode(nextMode);
-  }
+  // ポストエフェクトの調停（Editモードでもタイマーは進める）
+  UpdatePostEffects_(deltaTime);
 
   UpdateEditor();
+
+  UpdateMouseCapture_();
 
   if (playMode_ == PlayMode::Play) {
 #ifdef USE_IMGUI
@@ -685,255 +560,34 @@ void GameScene::Update() {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
-  // -----------------------------------------------------------------------
-  // SpawnManager の更新
-  // 毎フレーム経過時間を計測し、トリガー時間を超えたSpawnEventの敵を生成する。
-  // -----------------------------------------------------------------------
-  if (phase_ == GamePhase::InProgress) {
-      spawnTimer_ += deltaTime;
+      // ヒットエフェクトはイベントコールバック（onDestroyed）によって
+      // EnemyComponent::Update 内から自動的に発火されるため、ここでのポーリングは不要。
 
-      for (auto& ev : spawnEvents_) {
-          // 既にスポーン済み or まだトリガー時間に達していない場合はスキップ
-          if (ev.spawned || spawnTimer_ < ev.triggerTime) continue;
+      RemoveExpiredObjects_();
 
-          ev.spawned = true;
+      // パーティクルの更新（爆発エフェクト等）
+      ParticleManager::GetInstance()->Update(deltaTime);
 
-          // 敵出現演出（BoxFilter）：新しい敵が出現した瞬間、一時的にフォーカスをぼかす
-          waveSpawnBlurTimer_ = 0.0f;
-          waveSpawnBlurDuration_ = 0.5f;
-          Renderer::GetInstance()->SetBoxFilterParam(4);
+      // EffectManagerの更新（RingEffectなど）
+      EffectManager::GetInstance()->Update(deltaTime, GetGameplayCamera_());
 
-          // 敵のGameObjectを生成する
-          auto newEnemy = std::make_shared<AbsoluteEngine::GameObject>("Enemy");
-          newEnemy->SetTag("Enemy");
-
-          // ディゾルブコンポーネント（撃破時の消滅エフェクト）
-          newEnemy->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
-
-          // モデルコンポーネント
-          auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-          modelComp->LoadModel("resources/app/cube/cube.obj");
-          newEnemy->AddComponent(std::move(modelComp));
-
-          // 出現座標をセット
-          newEnemy->GetTransform().translate = ev.position;
-
-          // スフィアコライダー（当たり判定）
-          auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-          colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-          colliderComp->radius = 2.0f;
-          newEnemy->AddComponent(std::move(colliderComp));
-
-          // EnemyComponent（死亡状態・ディゾルブ演出の制御）
-          newEnemy->AddComponent(std::make_unique<EnemyComponent>());
-
-          rootObjects_.push_back(newEnemy);
-
-          // Observer（イベントコールバック）の登録は共通ヘルパーに集約している
-          // （Initialize/AddRootObjectと同じRegisterEnemyCallbacks）。
-          RegisterEnemyCallbacks(newEnemy);
-      }
-  }
-
-  // -----------------------------------------------------------------------
-  // ヒットエフェクトはイベントコールバック（onDestroyed）によって
-  // EnemyComponent::Update 内から自動的に発火されるため、
-  // ここでのポーリングは不要。
-  // -----------------------------------------------------------------------
-
-
-  // 寿命切れの ExplosionLight を削除
-  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
-      auto& obj = *it;
-      bool shouldDelete = false;
-      if (obj && obj->GetName() == "ExplosionLight") {
-          for (const auto& comp : obj->GetComponents()) {
-              if (comp->GetTypeName() == "ExplosionLightComponent") {
-                  if (static_cast<ExplosionLightComponent*>(comp.get())->IsDead()) {
-                      shouldDelete = true;
-                  }
-                  break;
-              }
-          }
-      }
-      if (shouldDelete) {
-          it = rootObjects_.erase(it);
-      } else {
-          ++it;
-      }
-  }
-
-  // -----------------------------------------------------------------------
-  // プレイヤーより十分後方に離れた敵を削除する。
-  // 【バグ修正】敵は撃破以外で消える手段が無く、自機が通り過ぎた後もずっと
-  // 生き残ってカメラ視錐台に入り続け、タレット等が背後から撃ち続けていた。
-  // -----------------------------------------------------------------------
-  if (playerObj_) {
-      const Vector3 playerPos = playerObj_->GetTransform().translate;
-      const Vector3 forward = GetMainCamera()->GetForward();
-      constexpr float kEnemyDespawnBehindDistance = 15.0f;
-      for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
-          auto& obj = *it;
-          bool shouldDelete = false;
-          if (obj && obj->GetTag() == "Enemy") {
-              const Vector3& enemyPos = obj->GetTransform().translate;
-              const Vector3 toEnemy = { enemyPos.x - playerPos.x, enemyPos.y - playerPos.y, enemyPos.z - playerPos.z };
-              const float behindDistance = -(toEnemy.x * forward.x + toEnemy.y * forward.y + toEnemy.z * forward.z);
-              if (behindDistance > kEnemyDespawnBehindDistance) {
-                  shouldDelete = true;
-              }
-          }
-          if (shouldDelete) {
-              it = rootObjects_.erase(it);
-          } else {
-              ++it;
-          }
-      }
-  }
-
-  // パーティクルの更新（爆発エフェクト等）
-  ParticleManager::GetInstance()->Update(deltaTime);
-
-  // EffectManagerの更新（RingEffectなど）
-  auto* activeCamera = isDebugCamera_ ? static_cast<Camera*>(debugCamera_.get()) : static_cast<Camera*>(GetMainCamera());
-  EffectManager::GetInstance()->Update(deltaTime, activeCamera);
-
-  // ボスフェーズ移行
-  float railProgress = 0.0f;
-  for (const auto& obj : rootObjects_) {
-      if (auto comp = obj->GetComponent<RailCameraComponent>()) {
-          railProgress = comp->GetProgress();
-          break;
-      }
-  }
-
-  if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
-      phase_ = GamePhase::Boss;
-
-      // 【調査用の一時ログ】原因が分かったら削除する。
-      Logger::GetInstance().Log("[BossPhase] start");
-
-      // ボス出現演出（PostEffect加点要素: GaussianFilter）
-      bossIntroBlurTimer_ = 0.0f;
-      bossIntroBlurDuration_ = 1.2f;
-      Renderer::GetInstance()->SetGaussianFilterParam(5, 4.0f, { 1.0f, 0.0f });
-
-      auto bossObj = std::make_shared<AbsoluteEngine::GameObject>("Boss");
-      Vector3 forward = GetMainCamera()->GetForward();
-      // 初期出現位置。以降はBossComponent::UpdateMovement()が毎フレーム
-      // 自機のちょっと前(距離14)に追従＋左右上下の揺れを加えて上書きするため、
-      // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromPlayerと合わせておく）。
-      constexpr float kBossInitialDistanceFromPlayer = 14.0f;
-      Vector3 playerPos = playerObj_ ? playerObj_->GetTransform().translate : GetMainCamera()->GetEye();
-      bossObj->GetTransform().translate = {
-          playerPos.x + forward.x * kBossInitialDistanceFromPlayer,
-          playerPos.y + forward.y * kBossInitialDistanceFromPlayer,
-          playerPos.z + forward.z * kBossInitialDistanceFromPlayer
-      };
-      bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
-      auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-      bossModelComp->LoadModel("resources/app/cube/cube.obj");
-      bossModelComp->SetEnvironmentCoefficient(1.0f);
-      bossModelComp->SetColor({0.7f, 0.1f, 0.9f, 1.0f}); // ザコ敵と見分けられるようボスは紫に
-      bossObj->AddComponent(std::move(bossModelComp));
-      // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-      bossObj->AddComponent(std::make_unique<BossComponent>());
-
-      auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-      colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-      colliderComp->radius = 5.0f; // ボスなので大きめに
-      bossObj->AddComponent(std::move(colliderComp));
-      bossObj->SetTag("Boss");
-
-      rootObjects_.push_back(bossObj);
-  }
-
-  // --- プレイヤーとボスの生存チェック（シーン遷移用） ---
-  if (playerObj_) {
-      auto pComp = playerObj_->GetComponent<PlayerComponent>();
-      if (pComp && pComp->IsDead()) {
-          phase_ = GamePhase::GameOver;
-          RequestSceneChange(SceneId::GameOver);
-          isTransitioning = true;
-      }
-  }
-
-  if (phase_ == GamePhase::Boss) {
-      bool bossAlive = false;
-      for (auto& obj : rootObjects_) {
-          if (obj && obj->GetComponent<BossComponent>()) {
-              bossAlive = true;
+      // ボスフェーズ移行
+      float railProgress = 0.0f;
+      for (const auto& obj : rootObjects_) {
+          if (auto comp = obj->GetComponent<RailCameraComponent>()) {
+              railProgress = comp->GetProgress();
               break;
           }
       }
-      if (!bossAlive) {
-          phase_ = GamePhase::Clear;
-          RequestSceneChange(SceneId::Clear);
-          isTransitioning = true;
+      if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
+          phase_ = GamePhase::Boss;
+          SpawnBoss_();
       }
+
+      CheckGameEnd_();
+      hitEffects_.Update();
+      UpdateHud_();
   }
-
-  // ヒットエフェクト（旧型スケールアニメーション）の更新
-  for (auto& ef : hitEffects_) {
-      if (!ef.isActive) continue;
-      ef.frame += 1.0f;
-      float t = ef.frame / ef.maxFrame;
-      float scaleVal = t * 4.0f;
-      ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0.0f, 0.0f, 0.0f}, ef.position));
-      ef.instance.SetColor({1.0f, 0.5f, 0.0f, 1.0f - t});
-      if (ef.frame >= ef.maxFrame) ef.isActive = false;
-  }
-  hitEffects_.erase(std::remove_if(hitEffects_.begin(), hitEffects_.end(), [](const HitEffect& e) { return !e.isActive; }), hitEffects_.end());
-  
-  // HUDの更新
-  if (gameHUD_) {
-      int hp = 0;
-      int maxHp = 0;
-      std::vector<Vector2> lockPositions;
-      bool isLockingMode = false;
-      Vector3 nearPos{ 0,0,0 }, midPos{ 0,0,0 }, farPos{ 0,0,0 };
-
-      // HUD に使うカメラ（デバッグカメラ or ゲームカメラ）
-      Camera* hudCam = isDebugCamera_
-          ? static_cast<Camera*>(debugCamera_.get())
-          : static_cast<Camera*>(GetMainCamera());
-
-      if (playerObj_) {
-          if (auto pComp = playerObj_->GetComponent<PlayerComponent>()) {
-              hp    = pComp->GetHp();
-              maxHp = pComp->GetMaxHp();
-
-              isLockingMode = pComp->lockon_.IsLockingMode();
-              lockPositions = pComp->lockon_.GetLockedScreenPositions(GetMainCamera());
-
-              // Animation補間（加点要素）：ロックオンのON/OFF切り替わり時に
-              // 歩行アニメーション同士をクロスフェードで遷移させる。
-              if (isLockingMode != wasLockingMode_) {
-                  if (auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-                      if (auto* instance = playerModelComp->GetModelInstance()) {
-                          instance->PlayAnimation(isLockingMode ? playerSneakWalkAnim_ : playerWalkAnim_, true, 0.3f);
-                      }
-                  }
-                  wasLockingMode_ = isLockingMode;
-              }
-
-              // 3D レティクルのワールド座標を PlayerComponent から取得
-              nearPos = pComp->GetNearReticleWorldPos();
-              midPos  = pComp->GetMidReticleWorldPos();
-              farPos  = pComp->GetFarReticleWorldPos();
-
-              gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode,
-                               pComp->GetCursorPos(), hudCam, nearPos, midPos, farPos);
-          }
-      } else {
-          gameHUD_->Update(hp, maxHp, lockPositions, isLockingMode,
-                           { 640.0f, 360.0f }, hudCam, nearPos, midPos, farPos);
-      }
-  }
-
-
-  } // end of if (playMode_ == PlayMode::Play)
-
 
   // シーンの自動セーブ（Editモード専用。Play中に動的スポーンされた敵/弾/ボスを含む
   // 現在の rootObjects_ をそのまま保存してしまうとレベルデータが壊れるため、
@@ -952,7 +606,6 @@ void GameScene::Update() {
       }
   }
 }
-
 
 void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
@@ -988,9 +641,7 @@ void GameScene::Draw() {
       if (obj) obj->Draw();
   }
 
-  for (auto& ef : hitEffects_) {
-      renderer->DrawEffectModel(&ef.instance);
-  }
+  hitEffects_.Draw(renderer);
 
   // EffectManager（RingEffect等）の描画
   EffectManager::GetInstance()->Draw();
@@ -1003,40 +654,10 @@ void GameScene::Draw() {
 
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
-      std::vector<Vector3> waypoints;
       for (const auto& obj : rootObjects_) {
-          if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
-              waypoints = rComp->GetWaypoints();
+          if (auto* rComp = obj->GetComponent<RailCameraComponent>()) {
+              rComp->DrawDebugLine(renderer);
               break;
-          }
-      }
-      
-      if (waypoints.size() >= 2) {
-          Matrix4x4 viewMat = renderer->GetViewMatrix();
-          Matrix4x4 invView = Inverse(viewMat);
-          Vector3 camEye = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
-          Vector3 camForward = { invView.m[2][0], invView.m[2][1], invView.m[2][2] };
-
-          Vector4 color = {1.0f, 1.0f, 0.0f, 1.0f}; // 黄色
-          const int subdivisions = 100;
-          Vector3 prevPoint = Spline::GetPoint(waypoints, 0.0f);
-          for (int i = 1; i <= subdivisions; ++i) {
-              float t = (float)i / (float)subdivisions;
-              Vector3 currPoint = Spline::GetPoint(waypoints, t);
-              
-              Vector3 diff1 = { prevPoint.x - camEye.x, prevPoint.y - camEye.y, prevPoint.z - camEye.z };
-              Vector3 diff2 = { currPoint.x - camEye.x, currPoint.y - camEye.y, currPoint.z - camEye.z };
-              if (Dot(diff1, camForward) > 0.0f && Dot(diff2, camForward) > 0.0f) {
-                  renderer->DrawLine(prevPoint, currPoint, color);
-              }
-              prevPoint = currPoint;
-          }
-          for (const auto& wp : waypoints) {
-              Vector3 diff = { wp.x - camEye.x, wp.y - camEye.y, wp.z - camEye.z };
-              if (Dot(diff, camForward) > 0.0f) {
-                  renderer->DrawLine(Vector3{wp.x, wp.y - 1.0f, wp.z}, Vector3{wp.x, wp.y + 1.0f, wp.z}, Vector4{1, 0, 0, 1});
-                  renderer->DrawLine(Vector3{wp.x - 1.0f, wp.y, wp.z}, Vector3{wp.x + 1.0f, wp.y, wp.z}, Vector4{1, 0, 0, 1});
-              }
           }
       }
   }
@@ -1079,10 +700,6 @@ void GameScene::DrawEditorUI() {
     BaseScene::DrawEditorUI(); // ツールバー等の描画
 
 #ifdef USE_IMGUI
-    if (phase_ != GamePhase::GameOver) {
-        // [REMOVED] Duplicated ImGui::Begin("Viewport##GameView") which breaks ImGui rendering
-    }
-
     // -----------------------------------------------------------------------
     // Debug Camera トグルはTimeline Editor内に一本化した（GetDebugCameraFlag経由）
     // ここにあった専用ツールバーウィンドウは廃止
@@ -1106,8 +723,7 @@ void GameScene::DrawEditorUI() {
     }
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
 
-    // スコア（内部カウンタのみ。編隊全滅ボーナスで倍率加算される。本番UI表示は別タスクのため仮置き）
-    ImGui::Text("Score: %d", score_);
+    ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
 
     // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
     if (phase_ == GamePhase::Boss) {
@@ -1127,21 +743,6 @@ void GameScene::DrawEditorUI() {
         }
     }
 
-    // SpawnManagerのデバッグ情報
-    ImGui::SeparatorText("SpawnManager");
-    ImGui::Text("Elapsed Time: %.2f sec", spawnTimer_);
-    int spawnedCount = 0;
-    for (const auto& ev : spawnEvents_) {
-        if (ev.spawned) ++spawnedCount;
-    }
-    ImGui::Text("Spawned: %d / %d events", spawnedCount, (int)spawnEvents_.size());
-    if (ImGui::Button("Reset SpawnTimer")) {
-        spawnTimer_ = 0.0f;
-        for (auto& ev : spawnEvents_) {
-            ev.spawned = false;
-        }
-    }
-    
     ImGui::SeparatorText("Camera Controls");
     Vector3 eye = GetMainCamera()->GetEye();
     Vector3 target = GetMainCamera()->GetTarget();
@@ -1189,4 +790,4 @@ void GameScene::DrawEditorUI() {
 
     ImGui::End();
 #endif
-}
+}

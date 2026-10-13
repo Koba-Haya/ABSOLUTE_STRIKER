@@ -1,9 +1,7 @@
 #include "EnemyShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
-#include "AbsoluteEngine/scene/ModelComponent.h"
-#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../../actor/Bullet/BulletComponent.h"
+#include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
 #include <cmath>
@@ -86,28 +84,11 @@ void EnemyShootComponent::Update(float deltaTime) {
     if (dot < 0.866f) return; // 正面30度以外は発射しない
 
     // --- 弾の発射 ---
-    Vector3 spawnPos = currentPos;
-    
-    Vector3 vel = { toPlayer.x * 20.0f, toPlayer.y * 20.0f, toPlayer.z * 20.0f };
-    
-    auto bulletObj = std::make_shared<AbsoluteEngine::GameObject>("EnemyBullet");
-    bulletObj->SetTag("EnemyBullet");
-    auto bulletModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-    bulletModelComp->LoadModel("resources/app/bullet/bullet.obj");
-    bulletObj->AddComponent(std::move(bulletModelComp));
-    
-    auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-    colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-    colliderComp->radius = 0.5f;
-    bulletObj->AddComponent(std::move(colliderComp));
-    
-    bulletObj->GetTransform().translate = spawnPos;
-    
-    auto bulletComp = std::make_unique<BulletComponent>();
-    bulletComp->Initialize(vel);
-    bulletObj->AddComponent(std::move(bulletComp));
-    
-    scene->AddRootObject(bulletObj);
+    constexpr float kBulletSpeed = 20.0f;
+    BulletSpec spec;
+    spec.position = currentPos;
+    spec.velocity = { toPlayer.x * kBulletSpeed, toPlayer.y * kBulletSpeed, toPlayer.z * kBulletSpeed };
+    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
 }
 
 

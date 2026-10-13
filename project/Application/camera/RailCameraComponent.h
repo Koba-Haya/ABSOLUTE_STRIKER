@@ -8,6 +8,7 @@
 #include <string>
 
 class GameCamera;
+class Renderer;
 
 // AbsoluteEngine::ITimelineCameraを実装することで、エンジンのTimelineManager/BaseSceneが
 // このApplication固有のクラスを直接知らなくても（インターフェース越しに）レール進行を制御できる
@@ -65,6 +66,9 @@ public:
         if (speed_ <= 0.0f || length <= 0.0f) return 0.0f;
         return length / speed_;
     }
+
+    // レールの軌道とウェイポイントをデバッグラインで描画する（カメラの背後にある部分は描かない）
+    void DrawDebugLine(Renderer* renderer) const;
 
     // 変更検知用（エディタ連携など）
     bool ConsumeModifiedFlag() {

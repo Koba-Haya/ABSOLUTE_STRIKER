@@ -147,11 +147,6 @@ void GameApp::Update() {
   if (ImGui::Button("Go to DevScene")) {
     sceneManager_->RequestChange(SceneId::Dev);
   }
-  ImGui::SameLine();
-  if (ImGui::Button("Clash")) {
-    int *p = nullptr;
-    *p = 0; // 故意にクラッシュさせる
-  }
   ImGui::End();
 
   if (sceneManager_) {

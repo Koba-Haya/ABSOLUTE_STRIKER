@@ -1,6 +1,6 @@
 #include "LockOnSystem.h"
-#include "Input.h"
 #include "GameCamera.h"
+#include "Application/ScreenSize.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Enemy/EnemyComponent.h"
@@ -14,8 +14,8 @@ void LockOnSystem::Initialize() {
     isLockingMode_ = false;
 }
 
-void LockOnSystem::Update(float deltaTime, Input* input, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
-    if (!input || !camera || !scene) return;
+void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
+    if (!camera || !scene) return;
 
     // 既に死んでいる・または破棄されている敵をロックオン対象から外す
     lockedTargets_.erase(std::remove_if(lockedTargets_.begin(), lockedTargets_.end(),
@@ -31,9 +31,7 @@ void LockOnSystem::Update(float deltaTime, Input* input, GameCamera* camera, Bas
             return false;
         }), lockedTargets_.end());
 
-    bool isPressing = input->PressKey(DIK_SPACE) || input->IsPadDown(XINPUT_GAMEPAD_A) || input->IsMouseDown(0);
-
-    if (isPressing) {
+    if (fireHeld) {
         holdTimer_ += deltaTime;
         if (holdTimer_ >= lockOnThreshold_) {
             isLockingMode_ = true;
@@ -41,7 +39,7 @@ void LockOnSystem::Update(float deltaTime, Input* input, GameCamera* camera, Bas
             SearchAndLockTargets(camera, scene, cursorPos);
         }
     } else {
-        // ボタンを離した瞬間はPlayerComponent側でFireHomingBulletsの判定に使われるため
+        // ボタンを離した瞬間はPlayerComponent側で発射の判定に使われるため
         // ここで holdTimer_ と isLockingMode_ をリセットしてはいけない
         // (PlayerComponent::Update 側で発射処理後に lockon_.Initialize() を呼んでリセットする)
     }
@@ -92,10 +90,8 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             float ndcY = posV.y / w;
             
             // 画面内かつカーソルに近いか判定
-            float screenW = 1280.0f;
-            float screenH = 720.0f;
-            float sx = (ndcX + 1.0f) * 0.5f * screenW;
-            float sy = (1.0f - ndcY) * 0.5f * screenH;
+            float sx = (ndcX + 1.0f) * 0.5f * ScreenSize::kWidth;
+            float sy = (1.0f - ndcY) * 0.5f * ScreenSize::kHeight;
             
             float dx = sx - cursorPos.x;
             float dy = sy - cursorPos.y;
@@ -122,10 +118,6 @@ std::vector<Vector2> LockOnSystem::GetLockedScreenPositions(GameCamera* camera) 
     Matrix4x4 projMat = camera->GetProjectionMatrix();
     Matrix4x4 vpMat = Multiply(viewMat, projMat);
 
-    // 画面サイズ (とりあえず1280x720決め打ち、必要なら取得する仕組みを入れる)
-    float screenW = 1280.0f;
-    float screenH = 720.0f;
-
     for (const auto& weak : lockedTargets_) {
         // weak_ptr.lock()で生存確認（破棄済みオブジェクトへのアクセスを防ぐ）
         auto obj = weak.lock();
@@ -143,16 +135,11 @@ std::vector<Vector2> LockOnSystem::GetLockedScreenPositions(GameCamera* camera) 
             float ndcY = posV.y / w;
             
             // NDC(-1〜1) から スクリーン座標(0〜ScreenSize) への変換
-            float sx = (ndcX + 1.0f) * 0.5f * screenW;
-            float sy = (1.0f - ndcY) * 0.5f * screenH;
+            float sx = (ndcX + 1.0f) * 0.5f * ScreenSize::kWidth;
+            float sy = (1.0f - ndcY) * 0.5f * ScreenSize::kHeight;
             
             positions.push_back({sx, sy});
         }
     }
     return positions;
-}
-
-void LockOnSystem::FireHomingBullets(BaseScene* scene, const Vector3& spawnPos) {
-    // 実際の発射処理はPlayerComponent側で行うか、ここでHomingBulletを生成する
-    // HomingBulletComponentがまだ無いので、この関数は後でPlayerComponentやBullet生成部分と連携させる
 }

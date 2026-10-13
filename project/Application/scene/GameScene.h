@@ -13,27 +13,18 @@
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "TextureResource.h"
 #include "Animation.h"
+#include "HitEffectSpawner.h"
+#include "PostEffectDirector.h"
+#include "ScoreTracker.h"
 #include <memory>
 #include <vector>
 #include <string>
-#include <unordered_map>
 
 enum class GamePhase {
   InProgress,
   Boss,
   Clear,
   GameOver
-};
-
-// -----------------------------------------------------------------------
-// SpawnEvent 構造体
-// 将来のタイムラインエディタ（再生側）の基盤となるウェーブデータ単位。
-// -----------------------------------------------------------------------
-struct SpawnEvent {
-    float triggerTime;    // 出現時間（ゲーム開始からの秒数）
-    std::string prefabId; // 敵の種類ID（"Enemy" など）
-    Vector3 position;     // 出現ワールド座標
-    bool spawned = false; // 既にスポーン済みかどうか（内部管理用）
 };
 
 class GameScene final : public BaseScene {
@@ -48,7 +39,7 @@ public:
   void DrawEditorUI() override;
 
   // AddRootObject をオーバーライドして EnemyComponent へのコールバックを自動注入する（タスクC）
-  // SpawnEvent 経由でスポーンされた敵にも onDestroyed が登録されるようになる
+  // タイムライン経由でスポーンされた敵にも onDestroyed が登録されるようになる
   void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) override;
 
 protected:
@@ -62,23 +53,32 @@ protected:
   Camera* GetEditorViewCamera() const override;
 
 private:
-  // ヒットエフェクトの発生（パーティクル＋リングエフェクト＋爆発ライト）
-  void SpawnHitEffect(const Vector3 &pos);
-
-  // ウェーブデータの初期化（デモ用ハードコードデータを登録する）
-  //void InitSpawnEvents_();
-
   // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。
-  // 以前は Initialize / AddRootObject / Update(SpawnManager) の3箇所に
-  // 全く同じ内容のラムダが重複していたため、ここに統合した。
   // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
   void RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
 
-  // 編隊メンバーが1体撃破されるたびに呼ばれる。残数が0になったら編隊全滅ボーナスを発火する。
-  void HandleFormationMemberDestroyed(int formationId, const Vector3& pos);
+  // --- Update の各段階 ---
+  // プレイヤーの GameObject を探す（ロード時などでポインタが切り替わった場合に対応）
+  std::shared_ptr<AbsoluteEngine::GameObject> FindPlayerObject_() const;
+  // ゲームプレイ中の描画カメラ（デバッグカメラ or レールカメラ）
+  Camera* GetGameplayCamera_() const;
+  // ワールド座標をスクリーン座標(UV 0〜1)に変換する
+  Vector2 WorldToScreenUv_(const Vector3& worldPos) const;
+  // PostEffectDirector に渡す毎フレームの状態を集めて更新する
+  void UpdatePostEffects_(float deltaTime);
+  // Playモード中のみOSマウスカーソルを隠して閉じ込める（Escで一時解除）
+  void UpdateMouseCapture_();
+  // 寿命切れの爆発ライトと、プレイヤーより十分後方の敵を削除する
+  void RemoveExpiredObjects_();
+  void SpawnBoss_();
+  // プレイヤー死亡 / ボス撃破でシーン遷移を要求する
+  void CheckGameEnd_();
+  void UpdateHud_();
+  // ロックオンON/OFFに合わせてプレイヤーの歩行アニメーションをクロスフェードする
+  void UpdatePlayerAnimation_(bool isLockingMode);
 
-  // 編隊全滅ボーナス（スコア倍率＋強化演出）
-  void OnFormationCleared(const Vector3& pos, int memberCount);
+  // --- Draw の各段階 ---
+  void DrawDebugRail_(Renderer* renderer) const;
 
 private:
   std::unique_ptr<AbsoluteEngine::EditorCamera> debugCamera_;
@@ -86,17 +86,12 @@ private:
   bool isDebugCamera_ = false;
   bool showDebugRail_ = true;
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
+  bool mouseCaptureSuspended_ = false; // Escで一時的にマウスの閉じ込めを解除している間 true
 
   Skybox skybox_;
 
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;
-
-  // リソース
-  std::shared_ptr<ModelResource> resPlayer_;
-  std::shared_ptr<ModelResource> resBullet_;
-  std::shared_ptr<ModelResource> resEnemy_;
-  std::shared_ptr<ModelResource> resEffect_;
 
   // プレイヤー用スキニングモデル（歩行アニメーション）
   std::shared_ptr<Animation> playerWalkAnim_;
@@ -104,71 +99,12 @@ private:
   std::shared_ptr<Animation> playerSneakWalkAnim_;
   bool wasLockingMode_ = false;
 
-  // ヒットエフェクト用テクスチャ
-  std::shared_ptr<TextureResource> texRing_;
+  // ディゾルブのマスクテクスチャ
   std::shared_ptr<TextureResource> texNoise0_;
 
-  // ヒットエフェクト（旧型：スケールアニメーション）
-  struct HitEffect {
-    HitEffect() = default;
-    ~HitEffect() = default;
-    HitEffect(HitEffect &&) noexcept = default;
-    HitEffect &operator=(HitEffect &&) noexcept = default;
-
-    ModelInstance instance;
-    float frame = 0.0f;
-    float maxFrame = 20.0f;
-    bool isActive = false;
-    Vector3 position;
-  };
-  std::vector<HitEffect> hitEffects_;
-
-  // カメラシェイク用
-  float cameraShakeTimer_ = 0.0f;
-  float cameraShakeDuration_ = 0.0f;
-  float cameraShakeIntensity_ = 0.0f;
-  Vector3 cameraShakeOffset_{ 0, 0, 0 };
-
-  // 画面歪み（RadialBlur）用
-  float hitDistortionTimer_ = 0.0f;
-  float hitDistortionDuration_ = 0.0f;
-  float hitDistortionIntensity_ = 0.0f;
-  Vector2 radialBlurCenter_ = { 0.5f, 0.5f };
-
-  // ボス出現演出（GaussianFilter）用
-  float bossIntroBlurTimer_ = 0.0f;
-  float bossIntroBlurDuration_ = 0.0f;
-
-  // 被弾演出（Vignette）用
-  float playerHitVignetteTimer_ = 0.0f;
-  float playerHitVignetteDuration_ = 0.0f;
-  int lastPlayerHp_ = -1; // 前フレームのHP。減少を検知したらVignetteを発火させる
-
-  // 敵出現演出（BoxFilter）用：SpawnEventで新しい敵が出現した瞬間に発火
-  float waveSpawnBlurTimer_ = 0.0f;
-  float waveSpawnBlurDuration_ = 0.0f;
-
-  // キルストリーク演出（Random）用：一定数の敵を撃破するごとに発火
-  float killStreakGlitchTimer_ = 0.0f;
-  float killStreakGlitchDuration_ = 0.0f;
-  int killCount_ = 0;
-
-  // -----------------------------------------------------------------------
-  // SpawnManager：データ駆動型の簡易ウェーブシステム
-  // -----------------------------------------------------------------------
-  float spawnTimer_ = 0.0f;           // ゲーム開始からの経過時間（スポーン判定用）
-  std::vector<SpawnEvent> spawnEvents_; // 全スポーンイベントリスト
-
-  // -----------------------------------------------------------------------
-  // 編隊（Formation）トラッキング用
-  // -----------------------------------------------------------------------
-  // 編隊ID -> 残存メンバー数。0になった時点でOnFormationCleared()を発火してmapから削除する
-  std::unordered_map<int, int> formationRemaining_;
-  // 編隊ID -> 初期メンバー数（ボーナス計算用。全滅時にformationRemaining_と一緒に削除する）
-  std::unordered_map<int, int> formationTotal_;
-
-  // スコア（内部カウンタのみ。本番UI表示は別タスク。現状はImGuiデバッグ表示で仮置き）
-  int score_ = 0;
+  HitEffectSpawner hitEffects_;    // 敵撃破時のヒットエフェクト
+  PostEffectDirector postEffects_; // ポストエフェクト・カメラシェイクの発火とタイマー
+  ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
 
   float time_ = 0.0f;
 

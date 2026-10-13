@@ -2,13 +2,10 @@
 #include "GameHUD.h"
 #include "Camera.h"
 #include "Method.h"   // Multiply, Inverse, TransformPoint
+#include "Application/ScreenSize.h"
 #include "graphics/pipeline/BlendMode.h" // BlendMode::Add
 #include <algorithm>
 #include <cmath>
-
-// 画面解像度定数（仮）
-static constexpr float kScreenW = 1280.0f;
-static constexpr float kScreenH = 720.0f;
 
 // レティクルの見た目サイズ
 static constexpr float kNearSize =  80.0f; // 近：大（遠近法に合わせて手前を大きく）
@@ -95,8 +92,8 @@ bool GameHUD::WorldToScreen(Camera* camera, const Vector3& worldPos, Vector2& ou
     Vector3 ndc = TransformPoint(worldPos, vp);
     // NDC.z が 0〜1 の範囲外はカメラ後方またはクリップ外
     if (ndc.z < 0.0f || ndc.z > 1.0f) return false;
-    outScreen.x = (ndc.x + 1.0f) * 0.5f * kScreenW;
-    outScreen.y = (1.0f - ndc.y) * 0.5f * kScreenH;
+    outScreen.x = (ndc.x + 1.0f) * 0.5f * ScreenSize::kWidth;
+    outScreen.y = (1.0f - ndc.y) * 0.5f * ScreenSize::kHeight;
     return true;
 }
 

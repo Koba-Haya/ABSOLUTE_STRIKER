@@ -8,7 +8,6 @@ namespace AbsoluteEngine {
     class GameObject;
 }
 class BaseScene;
-class Input;
 class GameCamera;
 
 class LockOnSystem {
@@ -18,11 +17,8 @@ public:
 
     void Initialize();
     
-    // 長押し時間のカウントや敵の検索を行う
-    void Update(float deltaTime, Input* input, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos);
-
-    // 長押しを離したときにホーミング弾を発射する
-    void FireHomingBullets(BaseScene* scene, const Vector3& spawnPos);
+    // 長押し時間のカウントや敵の検索を行う。fireHeld は発射/ロックボタンを押している間 true
+    void Update(float deltaTime, bool fireHeld, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos);
 
     bool IsLockingMode() const { return isLockingMode_; }
     // weak_ptrのリストを返す（呼び出し側でlock()して生存確認してから使うこと）

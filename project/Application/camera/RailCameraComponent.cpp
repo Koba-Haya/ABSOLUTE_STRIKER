@@ -2,6 +2,7 @@
 #include "RailCameraComponent.h"
 #include "GameCamera.h"
 #include "Method.h"
+#include "Renderer.h"
 #include "Spline.h"
 #include "../../AbsoluteEngine/scene/BaseScene.h"
 #include "../actor/Player/PlayerComponent.h"
@@ -27,6 +28,38 @@ RailCameraComponent::RailCameraComponent() {
     speed_ = 15.0f; // 秒速15ユニットで走破する（ロックオンの余裕を持たせた速度）
     lookAheadOffset_ = 0.02f;
     RebuildArcLengthTable_();
+}
+
+void RailCameraComponent::DrawDebugLine(Renderer* renderer) const {
+    if (waypoints_.size() < 2) return;
+
+    Matrix4x4 viewMat = renderer->GetViewMatrix();
+    Matrix4x4 invView = Inverse(viewMat);
+    Vector3 camEye = { invView.m[3][0], invView.m[3][1], invView.m[3][2] };
+    Vector3 camForward = { invView.m[2][0], invView.m[2][1], invView.m[2][2] };
+
+    auto isInFront = [&](const Vector3& p) {
+        Vector3 diff = { p.x - camEye.x, p.y - camEye.y, p.z - camEye.z };
+        return Dot(diff, camForward) > 0.0f;
+    };
+
+    Vector4 color = {1.0f, 1.0f, 0.0f, 1.0f}; // 黄色
+    const int subdivisions = 100;
+    Vector3 prevPoint = Spline::GetPoint(waypoints_, 0.0f);
+    for (int i = 1; i <= subdivisions; ++i) {
+        float t = (float)i / (float)subdivisions;
+        Vector3 currPoint = Spline::GetPoint(waypoints_, t);
+        if (isInFront(prevPoint) && isInFront(currPoint)) {
+            renderer->DrawLine(prevPoint, currPoint, color);
+        }
+        prevPoint = currPoint;
+    }
+    for (const auto& wp : waypoints_) {
+        if (isInFront(wp)) {
+            renderer->DrawLine(Vector3{wp.x, wp.y - 1.0f, wp.z}, Vector3{wp.x, wp.y + 1.0f, wp.z}, Vector4{1, 0, 0, 1});
+            renderer->DrawLine(Vector3{wp.x - 1.0f, wp.y, wp.z}, Vector3{wp.x + 1.0f, wp.y, wp.z}, Vector4{1, 0, 0, 1});
+        }
+    }
 }
 
 void RailCameraComponent::Update(float deltaTime) {

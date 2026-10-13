@@ -4,10 +4,12 @@
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "Type/Vector.h"
 #include "LockOnSystem.h"
+#include "PlayerInput.h"
 #include <memory>
 
 class Input;
 class GameCamera;
+class BaseScene;
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
 public:
@@ -41,6 +43,22 @@ public:
   const Vector3& GetFarReticleWorldPos()  const { return farReticleWorldPos_; }
 
 private:
+  // Update の各段階。呼び出し順は Update() を参照。
+  void MoveCursor_(const PlayerInputState& in, float deltaTime);
+  void UpdateBank_(const Vector2& moveDir, float deltaTime);
+  // 回避の発動判定と進行。戻り値は今フレームのロール角オフセット（ラジアン）
+  float UpdateDodge_(const PlayerInputState& in, const Vector2& moveDir, float deltaTime, bool isPlaying);
+  // カーソルに追従して自機位置・姿勢を更新する
+  void UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
+  // 照準点（カーソルレイ上）と発射基点から、3重レティクルのワールド座標を求める
+  void UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir, const Vector3& muzzlePos);
+  // 弾の発射位置（右手ボーン。無ければ自機中心）
+  Vector3 GetHandPosition_() const;
+  void UpdateFire_(const PlayerInputState& in, BaseScene* scene, const GameCamera& camera, const Vector3& handPos);
+  void EmitMuzzleFlash_(const Vector3& handPos) const;
+  void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& handPos);
+  void FireNormalBullet_(BaseScene* scene, const Vector3& handPos);
+
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ
 
@@ -58,8 +76,8 @@ private:
   Vector3 farReticleWorldPos_ { 0, 0, 0 };
 
   // カーソル方向のカメラ射線ベクトルキャッシュ（毎フレーム更新）
-  // 弾の発射方向に直接使用することで、
-  // t.translateのLerp遅れによる方向ズレを完全に排除する。
+  // 通常弾は発射基点→遠レティクルへ飛ばすため、これは基点と照準点が
+  // 重なって方向が定まらない場合のフォールバックにのみ使う。
   Vector3 camDirCached_{ 0, 0, 1 }; // 初期値は正面方向
 
   int hp_ = 5;
