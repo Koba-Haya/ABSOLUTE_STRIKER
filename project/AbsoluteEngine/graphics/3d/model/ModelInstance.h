@@ -98,6 +98,13 @@ public:
 
   TransformCB *GetTransformMapped();
 
+  // 平面反射(鏡像)の描画専用の変換 CB。
+  // 変換 CB は CPU が書き込んだ内容を GPU が実行時に読むので、同じ CB を 1 フレームで 2 回の描画(通常と鏡像)に使うと
+  // 両方とも後から書いた内容で描かれてしまう。鏡像側は別の CB に書いて、これを避ける。
+  // 初めて呼ばれたときに作る(反射を使わないモデルは確保しない)
+  TransformCB *GetMirrorTransformMapped();
+  unsigned long long GetMirrorTransformCBAddress();
+
 private:
   struct Impl;
   std::unique_ptr<Impl> pImpl_;

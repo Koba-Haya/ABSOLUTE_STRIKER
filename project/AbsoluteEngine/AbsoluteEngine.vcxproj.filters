@@ -207,6 +207,7 @@
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\texture\PlanarReflection.cpp" />
     <ClCompile Include="graphics\texture\RenderTexture.cpp" />
     <ClCompile Include="editor\EditorCamera.cpp" />
     <ClCompile Include="editor\EditorUIManager.cpp" />
@@ -418,6 +419,7 @@
     <ClInclude Include="Type\Vector.h">
       <Filter>engine\Type</Filter>
     </ClInclude>
+    <ClInclude Include="graphics\texture\PlanarReflection.h" />
     <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="editor\EditorCamera.h" />
     <ClInclude Include="editor\EditorUIManager.h" />

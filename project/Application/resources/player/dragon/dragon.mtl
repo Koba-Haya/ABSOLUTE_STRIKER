@@ -1,12 +1,12 @@
 # Blender 4.4.1 MTL File: 'None'
 # www.blender.org
 
-newmtl マテリアル.001
+newmtl tripo_material_0c96f0ee_a1bf_4c5e_a4cc_b5dc12747bbd
 Ns 250.000000
 Ka 1.000000 1.000000 1.000000
-Ks 0.500000 0.500000 0.500000
+Ks 1.000000 1.000000 1.000000
 Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd player.png
+map_Kd dragon.jpg

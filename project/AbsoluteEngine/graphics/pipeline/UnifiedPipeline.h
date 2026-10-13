@@ -47,6 +47,9 @@ struct PipelineDesc {
   bool enableDepth = true;
   bool alphaBlend = false;
   D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_BACK;
+  // true: 反時計回りを表面とする(既定は時計回りが表面)。鏡映(y を反転)して描くと三角形の巻き順が逆になるので、
+  // 鏡像を描くパイプラインだけ true にして、表裏の判定(カリング)を元に戻す
+  bool frontCounterClockwise = false;
   D3D12_FILL_MODE fillMode = D3D12_FILL_MODE_SOLID;
   BlendMode blendMode = BlendMode::Opaque;
 
@@ -89,6 +92,10 @@ public:
   static PipelineDesc MakeEmitterAlphaDesc();
   static PipelineDesc MakeParticleDesc();
   static PipelineDesc MakeSkyboxDesc();
+  // 全画面の手続き生成の空(Sky.VS / Sky.PS)
+  static PipelineDesc MakeSkyDesc();
+  // 全画面パスで描く水面(Sky.VS / Water.PS)
+  static PipelineDesc MakeWaterDesc();
   static PipelineDesc MakePrimitiveDesc();
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();

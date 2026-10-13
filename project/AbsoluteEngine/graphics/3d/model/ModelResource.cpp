@@ -182,6 +182,17 @@ uint32_t ModelResource::GetIndexCount() const { return pImpl_->indexCount; }
 
 const ModelData* ModelResource::GetModelData() const { return pImpl_->modelData.get(); }
 
+std::vector<Vector3> ModelResource::GetVertexPositions() const {
+  std::vector<Vector3> positions;
+  if (!pImpl_->modelData) return positions;
+  for (const MeshData &mesh : pImpl_->modelData->meshes) {
+    for (const VertexData &v : mesh.vertices) {
+      positions.push_back({v.position.x, v.position.y, v.position.z});
+    }
+  }
+  return positions;
+}
+
 bool ModelResource::HasBones() const { return pImpl_->hasBones; }
 unsigned long long ModelResource::GetBoneVBVAddress() const { return pImpl_->vbBoneAddress; }
 unsigned int ModelResource::GetBoneVBVSize() const { return pImpl_->vbBoneSize; }

@@ -58,6 +58,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
     objPipelineWireframe_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineWireframe_->Initialize(device, utils, compiler,
                                                  includeHandler, desc));
+    // 反射パス用: 鏡映すると三角形の巻き順が逆になるので、表裏の判定を反転する
+    desc.fillMode = D3D12_FILL_MODE_SOLID;
+    desc.frontCounterClockwise = true;
+    objPipelineMirrored_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(objPipelineMirrored_->Initialize(device, utils, compiler,
+                                                includeHandler, desc));
   }
 
   // Skinned 3D Pipelines
@@ -78,6 +84,20 @@ void Renderer::Initialize(DirectXCommon *dx) {
     skyboxPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(skyboxPipeline_->Initialize(device, utils, compiler,
                                            includeHandler, desc));
+  }
+
+  // Sky Pipeline
+  {
+    skyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(skyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                        UnifiedPipeline::MakeSkyDesc()));
+  }
+
+  // Water Pipeline
+  {
+    waterPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(waterPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                          UnifiedPipeline::MakeWaterDesc()));
   }
 
   // Sprite Pipelines
@@ -112,6 +132,16 @@ void Renderer::Initialize(DirectXCommon *dx) {
     particlePipelineAlpha_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(particlePipelineAlpha_->Initialize(device, utils, compiler,
                                                   includeHandler, desc));
+    {
+      // 深度テストあり(書き込みなし)の Alpha。他の 3D オブジェクトの後ろに回る粒を正しく隠すため
+      PipelineDesc depthDesc = desc;
+      depthDesc.enableDepth = true;
+      depthDesc.depthWrite = false;
+      depthDesc.depthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+      particlePipelineAlphaDepth_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(particlePipelineAlphaDepth_->Initialize(device, utils, compiler,
+                                                         includeHandler, depthDesc));
+    }
     desc.blendMode = BlendMode::Add;
     particlePipelineAdd_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(particlePipelineAdd_->Initialize(device, utils, compiler,
@@ -284,6 +314,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (randomParamMapped_) {
       randomParamMapped_->time = 0.0f;
   }
+
+  skyParamCB_ = CreateUploadBuffer(align256(sizeof(SkyParam)));
+  skyParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&skyParamMapped_));
+
+  waterParamCB_ = CreateUploadBuffer(align256(sizeof(WaterParam)));
+  waterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&waterParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -510,9 +546,19 @@ void Renderer::DrawModel(ModelInstance *instance) {
   auto *cmdList = dx_->GetCommandList();
   auto *resource = instance->GetResource();
 
+  // 反射パスの間は、水面を軸に上下反転した鏡像として描く
+  const bool mirrored = planarReflection_ && planarReflection_->IsActive();
+
   // 描画直前に WVP 行列を最終計算して GPU に送る
-  auto *cbTrans = instance->GetTransformMapped();
-  if (cbTrans) {
+  D3D12_GPU_VIRTUAL_ADDRESS transformCBAddress = instance->GetTransformCBAddress();
+  if (mirrored) {
+    // 鏡像は専用の CB に書く(通常の描画と同じ CB を使うと、後から書いた内容で両方が描かれてしまう)
+    auto *cbMirror = instance->GetMirrorTransformMapped();
+    cbMirror->World = Multiply(instance->GetWorld(), planarReflection_->GetMirrorMatrix());
+    cbMirror->WorldInverseTranspose = Transpose(Inverse(cbMirror->World));
+    cbMirror->WVP = Multiply(Multiply(cbMirror->World, view_), proj_);
+    transformCBAddress = instance->GetMirrorTransformCBAddress();
+  } else if (auto *cbTrans = instance->GetTransformMapped()) {
     // WVP = (World * View) * Projection
     Matrix4x4 worldView = Multiply(instance->GetWorld(), view_);
     cbTrans->WVP = Multiply(worldView, proj_);
@@ -523,7 +569,10 @@ void Renderer::DrawModel(ModelInstance *instance) {
   SkinCluster* skinCluster = instance->GetSkinCluster();
 
   UnifiedPipeline *pipeline = nullptr;
-  if (hasBones && skinCluster) {
+  if (mirrored) {
+    // 反射パスはワイヤーフレームにしない(巻き順を反転した専用パイプライン)
+    pipeline = objPipelineMirrored_.get();
+  } else if (hasBones && skinCluster) {
     // CSでスキニング済みのため、非スキニング用パイプラインを使用する
     pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
                                        : objPipelineOpaque_.get();
@@ -558,8 +607,7 @@ void Renderer::DrawModel(ModelInstance *instance) {
   // 3. 定数バッファ (Material / Transform)
   cmdList->SetGraphicsRootConstantBufferView(0,
                                              instance->GetMaterialCBAddress());
-  cmdList->SetGraphicsRootConstantBufferView(1,
-                                             instance->GetTransformCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, transformCBAddress);
 
   // 4. テクスチャ設定
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
@@ -693,13 +741,82 @@ void Renderer::DrawSkybox(Skybox *skybox) {
   cmdList->DrawIndexedInstanced(skybox->GetIndexCount(), 1, 0, 0, 0);
 }
 
-void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode) {
+void Renderer::DrawSky(const Vector3 &sunDirection, float time, const Vector3 &worldOffset) {
+  if (!skyPipeline_ || !skyParamMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // ピクセルの NDC 座標から視線方向を復元するための逆行列
+  const Matrix4x4 invView = Inverse(view_);
+  skyParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
+  skyParamMapped_->sunDirection = sunDirection;
+  skyParamMapped_->time = time;
+  skyParamMapped_->cameraPosition = {invView.m[3][0] + worldOffset.x, invView.m[3][1] + worldOffset.y, invView.m[3][2] + worldOffset.z};
+
+  skyPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, skyParamCB_->GetGPUVirtualAddress());
+
+  // 頂点バッファなしで3頂点描画(大きな三角形1つで全画面を覆う)
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
+void Renderer::DrawWater(const Vector3 &sunDirection, float time, const Vector3 &worldOffset, float worldWrapLength) {
+  // 水面は平面反射のテクスチャを必ず読むので、InitializePlanarReflection 済みでなければ描かない
+  if (!waterPipeline_ || !waterParamMapped_ || !planarReflection_ || !planarReflection_->IsInitialized())
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 視線の復元用の逆行列と、水面との交点計算に使うカメラ位置(view の逆行列の平行移動成分)
+  const Matrix4x4 invView = Inverse(view_);
+  waterParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
+  waterParamMapped_->cameraPosition = {invView.m[3][0] + worldOffset.x, invView.m[3][1] + worldOffset.y, invView.m[3][2] + worldOffset.z};
+  waterParamMapped_->time = time;
+  waterParamMapped_->sunDirection = sunDirection;
+  waterParamMapped_->localCameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+  waterParamMapped_->worldWrapLength = worldWrapLength;
+  waterParamMapped_->worldWrapCount = worldWrapLength > 0.0f ? std::round(worldOffset.z / worldWrapLength) : 0.0f;
+
+  waterPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, waterParamCB_->GetGPUVirtualAddress());
+
+  // t0: 平面反射のテクスチャ(ルートパラメータの 1 番)
+  ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+  cmdList->SetDescriptorHeaps(1, heaps);
+  cmdList->SetGraphicsRootDescriptorTable(1, planarReflection_->GetSrvGpuHandle());
+
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
+void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest) {
   if (!pm)
     return;
   auto *cmdList = dx_->GetCommandList();
-  UnifiedPipeline *pipeline = GetParticlePipeline_(blendMode);
+  UnifiedPipeline *pipeline = (depthTest && blendMode == BlendMode::Alpha)
+                                  ? particlePipelineAlphaDepth_.get()
+                                  : GetParticlePipeline_(blendMode);
   pipeline->SetPipelineState(cmdList);
   pm->DrawInternal(cmdList);
+}
+
+void Renderer::InitializePlanarReflection(uint32_t width, uint32_t height) {
+    if (planarReflection_) return;
+
+    planarReflection_ = std::make_unique<PlanarReflection>();
+    planarReflection_->Initialize(dx_, width, height);
+}
+
+void Renderer::BeginReflectionPass(float planeHeight) {
+    if (planarReflection_ && planarReflection_->IsInitialized()) {
+        planarReflection_->Begin(dx_, planeHeight);
+    }
+}
+
+void Renderer::EndReflectionPass() {
+    if (planarReflection_ && planarReflection_->IsActive()) {
+        planarReflection_->End(dx_);
+    }
 }
 
 void Renderer::InitializePostProcess(uint32_t width, uint32_t height) {

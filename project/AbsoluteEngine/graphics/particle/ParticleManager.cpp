@@ -149,8 +149,21 @@ void ParticleManager::ClearParticleGroup(const std::string& name) {
     g.activeInstanceCount = 0;
 }
 
+void ParticleManager::TranslateParticleGroup(const std::string& name, const Vector3& delta) {
+    auto it = groups_.find(name);
+    if (it == groups_.end()) {
+        return;
+    }
+    for (Particle& p : it->second.particles) {
+        p.transform.translate.x += delta.x;
+        p.transform.translate.y += delta.y;
+        p.transform.translate.z += delta.z;
+    }
+}
+
 void ParticleManager::Emit(const std::string& name, const Vector3& position, const Vector3& velocity,
-    const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color) {
+    const Vector3& scale, const Vector3& rotate, float lifetime, const Vector4& color,
+    const Vector3* endScale) {
     auto it = groups_.find(name);
     assert(it != groups_.end());
     if (it == groups_.end()) {
@@ -166,6 +179,10 @@ void ParticleManager::Emit(const std::string& name, const Vector3& position, con
     p.lifetime = lifetime;
     p.age = 0.0f;
     p.color = color;
+    if (endScale) {
+        p.endScale = *endScale;
+        p.changesScale = true;
+    }
     g.particles.push_back(p);
 }
 
@@ -203,10 +220,12 @@ void ParticleManager::Update(float deltaTime) {
             p.transform.translate.z += p.velocity.z * deltaTime;
 
             float t = p.age / p.lifetime;
-            float alpha = std::clamp(1.0f - t, 0.0f, 1.0f);
+            // 発生時のアルファ(color.w)から 0 へ線形に消える
+            float alpha = p.color.w * std::clamp(1.0f - t, 0.0f, 1.0f);
 
             if (gpuIndex < capacity) {
-                Matrix4x4 world = MakeBillboardMatrix_(p.transform.scale, p.transform.rotate, p.transform.translate, view);
+                const Vector3 scale = p.changesScale ? Lerp(p.transform.scale, p.endScale, t) : p.transform.scale;
+                Matrix4x4 world = MakeBillboardMatrix_(scale, p.transform.rotate, p.transform.translate, view);
                 Matrix4x4 wvp = Multiply(world, Multiply(view, proj));
                 g.instanceMapped[gpuIndex].World = world;
                 g.instanceMapped[gpuIndex].WVP = wvp;
@@ -221,8 +240,8 @@ void ParticleManager::Update(float deltaTime) {
     }
 }
 
-void ParticleManager::Draw(BlendMode blendMode) {
-    Renderer::GetInstance()->DrawParticles(this, blendMode);
+void ParticleManager::Draw(BlendMode blendMode, bool depthTest) {
+    Renderer::GetInstance()->DrawParticles(this, blendMode, depthTest);
 }
 
 void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList) {

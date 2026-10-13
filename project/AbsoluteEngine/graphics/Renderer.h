@@ -7,6 +7,7 @@
 
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
+#include "graphics/texture/PlanarReflection.h"
 
 #include "LightTypes.h"
 #include "Matrix.h"
@@ -126,8 +127,20 @@ public:
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   void DrawSkybox(Skybox *skybox);
+  // 手続き生成の空(グラデーション・太陽・雲)を全画面で描く(最奥)。sunDirection は太陽へ向かう向き、
+  // time は雲が風で流れるアニメーション用の秒。雲の位置はカメラ位置から求める。
+  // worldOffset: カメラ位置に足す「ワールドの原点のずれ」。描画用の座標を小さく保つために巻き戻している場合、
+  // 巻き戻した分を渡すと、雲の模様が巻き戻しをまたいで連続する(巻き戻していなければ {0,0,0})
+  void DrawSky(const Vector3 &sunDirection, float time, const Vector3 &worldOffset = {0.0f, 0.0f, 0.0f});
+  // 水面を全画面パスで描く(空の直後・オブジェクトの前)。time は波のアニメーション用の秒
+  // worldOffset は DrawSky と同じ(波の模様が巻き戻しをまたいで連続する)。
+  // worldWrapLength: 巻き戻し 1 回分の長さ(z)。worldOffset.z はその整数倍で渡す。波の位相はこの 2 つから厳密に求める
+  // (大きな座標を float に載せると sin の位相が荒れるため)。巻き戻していなければ 0
+  void DrawWater(const Vector3 &sunDirection, float time, const Vector3 &worldOffset = {0.0f, 0.0f, 0.0f}, float worldWrapLength = 0.0f);
+  // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
   void DrawParticles(ParticleManager *pm,
-                     BlendMode blendMode = BlendMode::Alpha);
+                     BlendMode blendMode = BlendMode::Alpha,
+                     bool depthTest = false);
   // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
   void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha);
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
@@ -160,6 +173,15 @@ public:
   void SetDissolveParam(float threshold, float edgeRange, const Vector3& edgeColor, const Vector3& maskColor);
   void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) { dissolveMaskTexture_ = tex; }
   void SetRandomParam(float time);
+
+  // --- 平面反射(水面に映る物体) ---
+  // 反射用の描画先を作る(2 回目以降は何もしない)。大きさは本編の描画先と同じにする(画面座標が揃うため)
+  void InitializePlanarReflection(uint32_t width, uint32_t height);
+  // 反射パスの開始/終了。水面を描く(DrawWater)前に毎フレーム行う(物体が無くても、背景を透明にするために呼ぶ)。
+  // 間に呼んだ DrawModel は、planeHeight を軸に上下反転した鏡像として反射用の描画先へ描かれる。
+  // 本編の描画先は BeginRenderScene で切り替わるので、この 2 つは BeginRenderScene より前に呼ぶこと
+  void BeginReflectionPass(float planeHeight);
+  void EndReflectionPass();
 
   // --- 高レベル レンダリングAPI ---
   void InitializePostProcess(uint32_t width, uint32_t height);
@@ -211,9 +233,12 @@ private:
 
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;
+  std::unique_ptr<UnifiedPipeline> objPipelineMirrored_; // 反射パス用(鏡映で巻き順が逆になるので、表裏の判定を反転)
   std::unique_ptr<UnifiedPipeline> skinnedPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> skinnedPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> skyboxPipeline_;
+  std::unique_ptr<UnifiedPipeline> skyPipeline_;
+  std::unique_ptr<UnifiedPipeline> waterPipeline_;
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -222,6 +247,7 @@ private:
   std::unique_ptr<UnifiedPipeline> spritePipelineScreen_;
 
   std::unique_ptr<UnifiedPipeline> particlePipelineAlpha_;
+  std::unique_ptr<UnifiedPipeline> particlePipelineAlphaDepth_; // 深度テストあり版
   std::unique_ptr<UnifiedPipeline> particlePipelineAdd_;
   std::unique_ptr<UnifiedPipeline> particlePipelineSub_;
   std::unique_ptr<UnifiedPipeline> particlePipelineMul_;
@@ -264,6 +290,28 @@ private:
   };
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;
+
+  struct alignas(16) SkyParam {
+    Matrix4x4 invViewProj;
+    Vector3 sunDirection;
+    float time;
+    Vector3 cameraPosition;
+    float pad;
+  };
+  ComPtr<ID3D12Resource> skyParamCB_;
+  SkyParam* skyParamMapped_ = nullptr;
+
+  struct alignas(16) WaterParam {
+    Matrix4x4 invViewProj;
+    Vector3 cameraPosition;
+    float time;
+    Vector3 sunDirection;
+    float worldWrapLength;
+    Vector3 localCameraPosition;
+    float worldWrapCount;
+  };
+  ComPtr<ID3D12Resource> waterParamCB_;
+  WaterParam* waterParamMapped_ = nullptr;
 
   struct alignas(16) RandomParam {
     float time;
@@ -316,6 +364,7 @@ private:
   std::shared_ptr<TextureResource> dissolveMaskTexture_;
 
   // レンダリング・ポストプロセス用バッファ
+  std::unique_ptr<PlanarReflection> planarReflection_;
   std::unique_ptr<RenderTexture> renderTexture_;
   std::unique_ptr<DepthTexture> depthTexture_;
   std::unique_ptr<RenderTexture> postProcessTexture_;

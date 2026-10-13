@@ -18,6 +18,9 @@ struct ModelInstance::Impl {
   Microsoft::WRL::ComPtr<ID3D12Resource> cbTransform;
   MaterialCB *cbMatMapped = nullptr;
   TransformCB *cbTransMapped = nullptr;
+  // 平面反射(鏡像)用の変換 CB。必要になるまで作らない
+  Microsoft::WRL::ComPtr<ID3D12Resource> cbMirrorTransform;
+  TransformCB *cbMirrorTransMapped = nullptr;
   std::shared_ptr<ModelResource> resource;
   
   std::shared_ptr<Animation> currentAnimation;
@@ -177,6 +180,20 @@ ModelResource *ModelInstance::GetResource() const {
 
 ModelInstance::TransformCB *ModelInstance::GetTransformMapped() {
   return pImpl_->cbTransMapped;
+}
+
+ModelInstance::TransformCB *ModelInstance::GetMirrorTransformMapped() {
+  if (!pImpl_->cbMirrorTransform) {
+    pImpl_->cbMirrorTransform = Renderer::GetInstance()->CreateUploadBuffer(Align256_(sizeof(TransformCB)));
+    pImpl_->cbMirrorTransform->Map(0, nullptr, reinterpret_cast<void **>(&pImpl_->cbMirrorTransMapped));
+    *pImpl_->cbMirrorTransMapped = {};
+  }
+  return pImpl_->cbMirrorTransMapped;
+}
+
+unsigned long long ModelInstance::GetMirrorTransformCBAddress() {
+  GetMirrorTransformMapped(); // 未作成なら作る
+  return pImpl_->cbMirrorTransform->GetGPUVirtualAddress();
 }
 
 SkinCluster* ModelInstance::GetSkinCluster() const {
