@@ -1,5 +1,6 @@
 #include "TextureUtils.h"
 #include "DirectXResourceUtils.h"
+#include "../../base/AssetPath.h"
 
 #include <Windows.h>
 #include <cassert>
@@ -44,21 +45,8 @@ DirectX::ScratchImage LoadTexture(const std::string &filePath) {
   using namespace std::filesystem;
   DirectX::ScratchImage mipImages{};
 
-  // exe と同じフォルダからの絶対パスに直す
-  wchar_t exePathW[MAX_PATH]{};
-  GetModuleFileNameW(nullptr, exePathW, MAX_PATH);
-  path exeDir = path(exePathW).parent_path();
-
-  path candidate =
-      exeDir /
-      ConvertString(filePath); // e.g. ...\Debug\resources\uvChecker.png
-  if (!exists(candidate)) {
-    // プロジェクト直下の resources も一応探す
-    path alt = exeDir.parent_path().parent_path() /
-               ConvertString(filePath); // ..\..\resources\...
-    if (exists(alt))
-      candidate = alt;
-  }
+  // exe があるフォルダ基準の実パスに解決する(他の場所へはフォールバックしない)
+  path candidate = AbsoluteEngine::AssetPath::Resolve(filePath);
 
   if (!exists(candidate)) {
     std::string msg = "LoadTexture: file NOT found: " + filePath + "\n";

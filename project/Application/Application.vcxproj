@@ -93,6 +93,7 @@
     <PostBuildEvent>
       <Command>
         xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
@@ -108,7 +109,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;APPLICATION_ROOT_DIR="$(ProjectDir.Replace('\','/'))";%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
@@ -130,6 +131,7 @@
     <PostBuildEvent>
       <Command>
         xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
@@ -168,6 +170,7 @@
     <PostBuildEvent>
       <Command>
         xcopy "..\AbsoluteEngine\resources" "$(OutDir)resources\engine" /E /I /Y /D
+        del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
         set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"

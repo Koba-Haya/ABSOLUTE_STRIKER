@@ -23,8 +23,11 @@ GameApp::GameApp() = default;
 GameApp::~GameApp() = default;
 
 void GameApp::Initialize() {
-  // マシンやクローン先のパスに関わらずリソースを解決できるよう、ビルド時のプロジェクトパスで初期化する
+#ifdef USE_IMGUI
+  // エディタビルドのみ: ソースツリーの resources を読み書きするため、ビルド時のプロジェクトパスで初期化する。
+  // 配布ビルドは exe 基準(AssetPath)で動くため、ビルドPCの絶対パスを持たせない
   AbsoluteEngine::EnginePath::SetApplicationRoot(APPLICATION_ROOT_DIR);
+#endif
 
   Logger::GetInstance().Initialize();
 

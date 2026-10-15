@@ -22,7 +22,7 @@ void GameHUD::Initialize() {
     // 近レティクル（距離 10）：細く小さい、半透明の水色
     {
         Sprite::CreateInfo info;
-        info.texturePath = "resources/Reticle/reticle.png";
+        info.texturePath = "resources/app/Reticle/reticle.png";
         info.size        = { kNearSize, kNearSize };
         info.color       = { 0.5f, 0.8f, 1.0f, 0.6f }; // 薄い水色（控えめ）
         reticleNear_ = std::make_unique<Sprite>();
@@ -33,7 +33,7 @@ void GameHUD::Initialize() {
     // 中レティクル（距離 30）：明るい白、やや大きく
     {
         Sprite::CreateInfo info;
-        info.texturePath = "resources/Reticle/reticle.png";
+        info.texturePath = "resources/app/Reticle/reticle.png";
         info.size        = { kMidSize, kMidSize };
         info.color       = { 1.0f, 1.0f, 1.0f, 0.85f }; // 明るい白
         reticleMid_ = std::make_unique<Sprite>();
@@ -44,7 +44,7 @@ void GameHUD::Initialize() {
     // 遠レティクル（距離 60）：弾道の照準、最大・最も明るい黄緑で際立たせる
     {
         Sprite::CreateInfo info;
-        info.texturePath = "resources/Reticle/reticle.png";
+        info.texturePath = "resources/app/Reticle/reticle.png";
         info.size        = { kFarSize, kFarSize };
         info.color       = { 0.2f, 1.0f, 0.4f, 1.0f }; // 鮮やかな黄緑（フル不透明）
         reticleFar_ = std::make_unique<Sprite>();

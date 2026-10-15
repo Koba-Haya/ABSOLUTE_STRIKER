@@ -4,6 +4,7 @@
 #include "Renderer.h"
 #include "Method.h"
 #include "texture/TextureResource.h"
+#include "../../base/AssetPath.h"
 #include <cassert>
 #include <cstring>
 #include <dxcapi.h>
@@ -77,11 +78,14 @@ Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
     IDxcCompiler3* dxcCompiler,
     IDxcIncludeHandler* includeHandler) {
     
+    // exe 基準の実パスに解決する(#include もこのパスを起点に解決される)
+    const std::wstring resolvedPath = AbsoluteEngine::AssetPath::Resolve(filePath).wstring();
+
     Microsoft::WRL::ComPtr<IDxcBlobEncoding> shaderSource;
-    HRESULT hr = dxcUtils->LoadFile(filePath.c_str(), nullptr, &shaderSource);
+    HRESULT hr = dxcUtils->LoadFile(resolvedPath.c_str(), nullptr, &shaderSource);
     if (FAILED(hr) || !shaderSource) {
         OutputDebugStringA("Failed to load shader file: ");
-        OutputDebugStringW(filePath.c_str());
+        OutputDebugStringW(resolvedPath.c_str());
         OutputDebugStringA("\n");
         assert(false);
     }
@@ -92,7 +96,7 @@ Microsoft::WRL::ComPtr<IDxcBlob> CompileShader(
     sourceBuffer.Encoding = DXC_CP_UTF8;
 
     std::vector<LPCWSTR> arguments;
-    arguments.push_back(filePath.c_str());
+    arguments.push_back(resolvedPath.c_str());
     arguments.push_back(L"-E");
     arguments.push_back(L"main");
     arguments.push_back(L"-T");
