@@ -19,7 +19,7 @@
             "type": "BossComponent"
         }
     ],
-    "modelPath": "resources/cube/cube.obj",
+    "modelPath": "resources/app/cube/cube.obj",
     "name": "Boss",
     "tag": "Untagged",
     "texturePath": "",

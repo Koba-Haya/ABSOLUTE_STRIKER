@@ -9,8 +9,8 @@
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
-            "modelPath": "resources/cube/cube.obj",
-            "texturePath": "resources/cube/white100x100.png",
+            "modelPath": "resources/app/cube/cube.obj",
+            "texturePath": "resources/app/cube/white100x100.png",
             "type": "ModelComponent"
         },
         {

@@ -15,7 +15,7 @@
         "type": 1
     },
     "components": [],
-    "modelPath": "resources/cube/cube.obj",
+    "modelPath": "resources/app/cube/cube.obj",
     "name": "Model",
     "tag": "Untagged",
     "texturePath": "",

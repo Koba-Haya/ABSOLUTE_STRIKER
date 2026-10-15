@@ -3,7 +3,7 @@
 #include <cassert>
 #include <filesystem>
 #include <Windows.h>
-#include "../../base/EnginePath.h"
+#include "../../base/AssetPath.h"
 static std::string ToLower_(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return (char)std::tolower(c); });
@@ -17,11 +17,11 @@ static std::string GetExtLower_(const std::string &filename) {
   return ToLower_(filename.substr(pos + 1));
 }
 
-std::string ResolvePath_(const std::string& path) {
-  if (std::filesystem::exists(path)) return path;
-  std::string altPath = AbsoluteEngine::EnginePath::Resolve(path);
-  if (std::filesystem::exists(altPath)) return altPath;
-  return path;
+// exe 基準の実パスに解決する。ビルドしたPCのフォルダへはフォールバックしない。
+// Assimp は char* を UTF-8 として扱うため、UTF-8 で返す(日本語を含むフォルダでも開けるように)。
+// 存在しなくてもそのまま返し、呼び出し側(Assimp)のエラーに実パスが表示されるようにする
+static std::string ResolvePath_(const std::string& path) {
+  return AbsoluteEngine::AssetPath::ResolveUtf8(path);
 }
 
 std::shared_ptr<const ModelData>
@@ -43,7 +43,9 @@ AssetLoader::LoadModel(const std::string &directoryPath,
 
   const aiScene *scene = importer.ReadFile(resolvedPath.c_str(), flags);
   if (!scene || !scene->mRootNode) {
-    std::string errorMsg = "Failed to load model:\nPath: " + resolvedPath + "\nError: " + importer.GetErrorString();
+    // MessageBoxA は ANSI で表示するため、表示用のパスは ANSI で作る(resolvedPath は UTF-8)
+    const std::string displayPath = AbsoluteEngine::AssetPath::Resolve(filePath).string();
+    std::string errorMsg = "Failed to load model:\nPath: " + displayPath + "\nError: " + importer.GetErrorString();
     MessageBoxA(nullptr, errorMsg.c_str(), "AssetLoader Error", MB_OK | MB_ICONERROR);
     return nullptr;
   }

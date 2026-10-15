@@ -1,6 +1,7 @@
 #include "ShaderCompilerUtils.h"
 
 #include "TextureUtils.h" // ConvertString が必要なら
+#include "../../base/AssetPath.h"
 
 #include <Windows.h>
 #include <cassert>
@@ -32,10 +33,15 @@ IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
   LogW_(std::format(L"[DXC] Begin CompileShader, path:{}, profile:{}\n", filePath,
                     profile));
 
+  // exe 基準の実パスに解決する(#include もこのパスを起点に解決される)
+  const std::wstring resolvedPath =
+      AbsoluteEngine::AssetPath::Resolve(filePath).wstring();
+
   ComPtr<IDxcBlobEncoding> shaderSource;
-  HRESULT hr =
-      dxcUtils->LoadFile(filePath.c_str(), nullptr, shaderSource.GetAddressOf());
+  HRESULT hr = dxcUtils->LoadFile(resolvedPath.c_str(), nullptr,
+                                  shaderSource.GetAddressOf());
   if (FAILED(hr) || !shaderSource) {
+    LogW_(std::format(L"[DXC] shader file not found: {}\n", resolvedPath));
     LogHr_(L"IDxcUtils::LoadFile", hr);
     return nullptr;
   }
@@ -46,7 +52,7 @@ IDxcBlob *CompileShader(const std::wstring &filePath, const wchar_t *profile,
   shaderSourceBuffer.Encoding = DXC_CP_UTF8;
 
   LPCWSTR arguments[] = {
-      filePath.c_str(), L"-E",  L"main", L"-T", profile, L"-Zi",
+      resolvedPath.c_str(), L"-E",  L"main", L"-T", profile, L"-Zi",
       L"-Qembed_debug", L"-Od", L"-Zpr",
   };
 

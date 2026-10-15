@@ -121,6 +121,7 @@
     <ClCompile Include="audio\Audio.cpp" />
     <ClCompile Include="base\DirectXCommon.cpp" />
     <ClCompile Include="base\EnginePath.cpp" />
+    <ClCompile Include="base\AssetPath.cpp" />
     <ClCompile Include="base\DirectXResourceUtils.cpp" />
     <ClCompile Include="base\FrameWork.cpp" />
     <ClCompile Include="base\ImGuiManager.cpp" />
@@ -189,6 +190,7 @@
     <ClInclude Include="audio\Audio.h" />
     <ClInclude Include="base\DirectXCommon.h" />
     <ClInclude Include="base\EnginePath.h" />
+    <ClInclude Include="base\AssetPath.h" />
     <ClInclude Include="base\DirectXResourceUtils.h" />
     <ClInclude Include="base\FrameWork.h" />
     <ClInclude Include="base\ImGuiManager.h" />

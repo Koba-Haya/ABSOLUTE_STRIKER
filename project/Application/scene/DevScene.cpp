@@ -702,22 +702,22 @@ void DevScene::InitResources_() {
   skybox_.Initialize("resources/app/dds/dds.dds");
 
   // --- 照準（レティクル）の初期化 ---
-  texReticle_ = am->Load<TextureResource>("resources/Reticle/reticle.png");
+  texReticle_ = am->Load<TextureResource>("resources/app/Reticle/reticle.png");
   Sprite::CreateInfo reticleInfo;
-  reticleInfo.texturePath = "resources/Reticle/reticle.png";
+  reticleInfo.texturePath = "resources/app/Reticle/reticle.png";
   reticleInfo.size = reticleSize_;
   reticleInfo.color = {1.0f, 1.0f, 1.0f, 1.0f}; // 白色
   reticleSprite_.Initialize(reticleInfo);
 
   texRing_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
 
-  texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
+  texNoise0_ = am->Load<TextureResource>("resources/app/noise/noise0.png");
   Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
 
   texCylinder_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
 
   ParticleManager::GetInstance()->CreateParticleGroup(particleGroupName_, "resources/app/particle/circle.png", kParticleCount_);
-  ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);
+  ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/app/explosion/explosion.png", 100);
   ParticleEmitter::Params p{};
   p.groupName = particleGroupName_;
   p.emitRate = 10.0f;

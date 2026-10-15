@@ -1,5 +1,6 @@
 #include "ShaderCompiler.h"
 #include "TextureUtils.h" // ConvertString を使うなら
+#include "../../base/AssetPath.h"
 
 #include <cassert>
 #include <format>
@@ -16,8 +17,11 @@ ShaderCompiler::Compile(const std::wstring &path, const wchar_t *profile,
                         const std::vector<LPCWSTR> &extraArgs) {
   assert(utils_ && compiler_ && include_);
 
+  // exe 基準の実パスに解決する(#include もこのパスを起点に解決される)
+  const std::wstring resolvedPath = AbsoluteEngine::AssetPath::Resolve(path).wstring();
+
   ComPtr<IDxcBlobEncoding> shaderSource;
-  HRESULT hr = utils_->LoadFile(path.c_str(), nullptr, shaderSource.GetAddressOf());
+  HRESULT hr = utils_->LoadFile(resolvedPath.c_str(), nullptr, shaderSource.GetAddressOf());
   assert(SUCCEEDED(hr));
 
   DxcBuffer shaderSourceBuffer;
@@ -25,7 +29,7 @@ ShaderCompiler::Compile(const std::wstring &path, const wchar_t *profile,
   shaderSourceBuffer.Size = shaderSource->GetBufferSize();
   shaderSourceBuffer.Encoding = DXC_CP_UTF8;
 
-  std::vector<LPCWSTR> args{path.c_str(), L"-E",  L"main",          L"-T",
+  std::vector<LPCWSTR> args{resolvedPath.c_str(), L"-E",  L"main",          L"-T",
                             profile,      L"-Zi", L"-Qembed_debug", L"-Od",
                             L"-Zpr"};
   args.insert(args.end(), extraArgs.begin(), extraArgs.end());

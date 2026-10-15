@@ -3,7 +3,7 @@
 #include "../graphics/3d/model/ModelManager.h"
 #include "../graphics/texture/TextureManager.h"
 #include "LightNodeComponent.h"
-#include "../base/EnginePath.h"
+#include "../base/AssetPath.h"
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
@@ -49,7 +49,13 @@ void BaseScene::Initialize(const SceneServices &services) {
     }
 
     // プレハブレジストリの初期化スキャン
-    const std::string prefabDir = AbsoluteEngine::EnginePath::Resolve("resources/prefabs");
+    const std::string prefabDir = AbsoluteEngine::AssetPath::ResolveEditableData("prefabs");
+#ifndef USE_IMGUI
+    // 配布ビルドでプレハブが無いと、敵のスポーンが黙って失敗する。気づけるよう止める
+    if (!std::filesystem::exists(prefabDir)) {
+        AbsoluteEngine::AssetPath::ReportMissingAndExit("prefab directory", prefabDir);
+    }
+#endif
     AbsoluteEngine::PrefabRegistry::GetInstance().ScanDirectory(prefabDir);
 
 #ifdef USE_IMGUI
@@ -94,27 +100,35 @@ void BaseScene::RestoreScene() {
 }
 
 std::string BaseScene::GetSceneFilePath() const {
-    if (sceneId_.empty()) return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/scene.json");
-    return AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/" + sceneId_ + ".json");
+    if (sceneId_.empty()) return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/scene.json");
+    return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/" + sceneId_ + ".json");
 }
 
 bool BaseScene::LoadEditorScene() {
     std::string filePath = GetSceneFilePath();
     if (!std::filesystem::exists(filePath)) {
-        // ファイルがない場合は空の状態（または派生先で初期化された状態）で保存して新規作成する
+#ifdef USE_IMGUI
+        // エディタビルド: ファイルがない場合は空の状態（または派生先で初期化された状態）で保存して新規作成する
         SaveEditorScene();
         return false;
+#else
+        // 配布ビルド: 書き込みはしない。空のシーンで黙って進行せず、探した場所を表示して止める
+        AbsoluteEngine::AssetPath::ReportMissingAndExit("scene file", filePath);
+#endif
     }
     AbsoluteEngine::SceneSerializer::Deserialize(filePath, rootObjects_);
     return true;
 }
 
 void BaseScene::SaveEditorScene() {
-    std::string saveDir = AbsoluteEngine::EnginePath::Resolve("resources/editor/scenes/");
+#ifdef USE_IMGUI
+    // 保存はエディタビルドのみ。配布ビルドではソース/配布物のJSONを書き換えない
+    std::string saveDir = AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/");
     std::filesystem::create_directories(saveDir);
     AbsoluteEngine::SceneSerializer::Serialize(GetSceneFilePath(), rootObjects_);
     // タイムラインデータも同時に保存してシーンとタイムラインのデータを完全同期する（タスクB）
     SaveTimeline();
+#endif
 }
 
 void BaseScene::UpdateEditor() {
@@ -364,29 +378,37 @@ std::string BaseScene::GetTimelineFilePath() const {
     // シーンIDに "_timeline" を付加したJSONファイルを使用する
     // 例: "devScene" -> "resources/editor/scenes/devScene_timeline.json"
     const std::string baseName = sceneId_.empty() ? "scene" : sceneId_;
-    return AbsoluteEngine::EnginePath::Resolve(
-        "resources/editor/scenes/" + baseName + "_timeline.json");
+    return AbsoluteEngine::AssetPath::ResolveEditableData(
+        "editor/scenes/" + baseName + "_timeline.json");
 }
 
 void BaseScene::SaveTimeline() {
+#ifdef USE_IMGUI
     // UsesTimeline()がfalseのシーンではtimelineManager_が存在しないため何もしない
     if (!timelineManager_) return;
 
-    // タイムラインデータをシーンIDに紐付けたJSONファイルに保存する
+    // タイムラインデータをシーンIDに紐付けたJSONファイルに保存する（保存はエディタビルドのみ）
     const std::string filePath = GetTimelineFilePath();
     std::filesystem::create_directories(
         std::filesystem::path(filePath).parent_path().string());
     timelineManager_->SaveToFile(filePath);
+#endif
 }
 
 void BaseScene::LoadTimeline() {
     if (!timelineManager_) return;
 
-    // タイムラインデータを読み込む（ファイルが無い場合は空の状態を維持）
+    // タイムラインデータを読み込む（エディタビルドでは、ファイルが無い場合は空の状態を維持）
     const std::string filePath = GetTimelineFilePath();
     if (std::filesystem::exists(filePath)) {
         timelineManager_->LoadFromFile(filePath);
     }
+#ifndef USE_IMGUI
+    else {
+        // 配布ビルドで無いと、敵が一切出ないまま進行してしまう。探した場所を表示して止める
+        AbsoluteEngine::AssetPath::ReportMissingAndExit("timeline file", filePath);
+    }
+#endif
     // 読み込み直後に必ず Stop()を呼び、シーン上のカメラ等を
     // タイムラインの 0.0s の状態に強制スナップする（タスクB）
     timelineManager_->Stop();

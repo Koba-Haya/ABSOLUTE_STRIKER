@@ -14,10 +14,10 @@
         },
         "type": 2
     },
-    "modelPath": "resources/bullet/bullet.obj",
+    "modelPath": "resources/app/bullet/bullet.obj",
     "name": "Bullet",
     "tag": "PlayerBullet",
-    "texturePath": "resources/cube/white100x100.png",
+    "texturePath": "resources/app/cube/white100x100.png",
     "transform": {
         "rotate": {
             "x": 0.0,
