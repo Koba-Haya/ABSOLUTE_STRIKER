@@ -25,11 +25,16 @@ constexpr float kRollStartRatio = 0.2f; // カット内でロールを始める�
 constexpr float kRollEndRatio = 0.8f;
 
 // スタート演出: 自機が u^2 で加速して前へ飛び去り、カメラは自機の動きの一部だけ付いていく(引き)。画角も広がる
-constexpr float kLaunchDistance = 100.0f;      // 演出中に自機が余分に進む距離
-constexpr float kLaunchCameraFollow = 0.35f;   // カメラが余分な移動のうち付いていく割合(残りは引きになる)
+constexpr float kLaunchDistance = 30.0f;       // 演出中に自機が余分に進む距離(急加速に見えないよう控えめにする。速さは画角と筋で見せる)
+constexpr float kLaunchCameraFollow = 0.9f;    // カメラが余分な移動のうち付いていく割合(1 に近いほど自機が離れず、カメラが付いていく)
 const Vector3 kLaunchCameraOffsetStart{0.0f, 1.2f, -9.0f};
-const Vector3 kLaunchCameraOffsetEnd{0.0f, 2.4f, -18.0f};
+const Vector3 kLaunchCameraOffsetEnd{0.0f, 2.4f, -12.0f};
 constexpr float kLaunchFovGain = 0.3f;         // 画角(rad)の増加量
+// スタート演出の上昇: 機首を上げて、雲の層(画面遷移の表の kTitleSlabBottom 〜 kTitleSlabTop)へ昇る。
+// 演出の終わりで、層の中心付近(水面からの高さ 約 75)に届くよう、上昇量を決める
+constexpr float kLaunchClimbHeight = 74.0f;    // 演出の終わりまでの上昇量
+constexpr float kLaunchClimbPower = 1.6f;      // 上昇の加速(進行度のべき。はじめは緩やかに、だんだん急に)
+constexpr float kLaunchCameraClimbFollow = 0.92f; // カメラが上昇についていく割合
 
 // カメラ
 constexpr float kBaseFovY = 0.45f;
@@ -224,6 +229,16 @@ TitleState TitleDirector::Evaluate(double time, float launchProgress) const {
   // --- 自機 ---
   Vector3 playerPos = PlayerPosition(time, zOrigin);
   playerPos.z += launchBoost;
+  // 上昇: 高さは進行度のべきで増える。機首の上げ角は、上昇と前進の速さの比(進行度あたりの変化量)から求める
+  float climb = 0.0f;
+  float pitchUp = 0.0f;
+  if (launching) {
+    climb = kLaunchClimbHeight * std::pow(launchU, kLaunchClimbPower);
+    const float climbRate = kLaunchClimbHeight * kLaunchClimbPower * std::pow(launchU, kLaunchClimbPower - 1.0f);
+    const float forwardRate = kFlightSpeed * kLaunchDurationSec + 2.0f * launchU * kLaunchDistance;
+    pitchUp = std::atan2(climbRate, forwardRate);
+  }
+  playerPos.y += climb;
   const float vx = PlayerLateralVelocity(time);
   const float heading = std::atan2(vx, kFlightSpeed); // 進行方向(+Z から左右へ振れる角)
   const float bank = -kBankGain * vx;                 // 進行方向側の翼を下げる(Z 回転は正で右翼が上がる)
@@ -231,8 +246,8 @@ TitleState TitleDirector::Evaluate(double time, float launchProgress) const {
   if (!launching && shot == kRollShotIndex) {
     roll = kTwoPi * Smooth01(Clamp01((u - kRollStartRatio) / (kRollEndRatio - kRollStartRatio)));
   }
-  // 行ベクトル規約なので左から順に適用: 機首軸(Z)まわりのロール → 進行方向(Y)
-  const Matrix4x4 rotation = Multiply(MakeRotateZMatrix(bank + roll), MakeRotateYMatrix(heading));
+  // 行ベクトル規約なので左から順に適用: 機首軸(Z)まわりのロール → 機首上げ(X。負の回転で機首が上を向く) → 進行方向(Y)
+  const Matrix4x4 rotation = Multiply(Multiply(MakeRotateZMatrix(bank + roll), MakeRotateXMatrix(-pitchUp)), MakeRotateYMatrix(heading));
   // 中心を原点へ → 拡大 → 回転(ロール・進行方向) → 位置。モデルの原点が足元などにあっても、中心まわりに回る
   const Matrix4x4 centering = MakeTranslateMatrix({-playerCenter_.x, -playerCenter_.y, -playerCenter_.z});
   state.playerWorld = Multiply(Multiply(Multiply(centering, MakeScaleMatrix({playerScale_, playerScale_, playerScale_})), rotation), MakeTranslateMatrix(playerPos));
@@ -245,6 +260,7 @@ TitleState TitleDirector::Evaluate(double time, float launchProgress) const {
     const float e = Smooth01(launchU);
     Vector3 follow = PlayerPosition(time, zOrigin);
     follow.z += launchBoost * kLaunchCameraFollow;
+    follow.y += climb * kLaunchCameraClimbFollow;
     cam = {Plus(follow, Lerp(kLaunchCameraOffsetStart, kLaunchCameraOffsetEnd, e)), playerPos};
     state.fovY += kLaunchFovGain * e;
   } else {

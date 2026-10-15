@@ -472,6 +472,13 @@ PipelineDesc UnifiedPipeline::MakeWaterDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeCloudSeaDesc() {
+  // 空と同じ全画面パス(深度設定も同じ)で、ピクセルシェーダーだけ雲海にする。b0 は CloudSeaParam
+  PipelineDesc d = MakeSkyDesc();
+  d.psPath = L"resources/engine/shaders/CloudSea.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -690,6 +697,15 @@ PipelineDesc UnifiedPipeline::MakeVignetteDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/Vignette.PS.hlsl";
   d.usePSMaterial_b0 = true;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeTransitionDesc() {
+  // ポストエフェクトと同じ全画面コピーの形(b0 = パラメータ、t0 = 画面のテクスチャ)で、ピクセルシェーダーだけ遷移用にする
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/Transition.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  d.usePSEnvironmentMap_t1 = true; // t1: シーンの深度(雲を抜ける遷移で、自機の手前の雲だけをかぶせる)
   return d;
 }
 

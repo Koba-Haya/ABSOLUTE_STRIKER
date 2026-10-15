@@ -32,7 +32,11 @@
 #include "../actor/Enemy/RamAttackComponent.h"
 #include "../actor/Player/PlayerInput.h"
 #include "../ScreenSize.h"
+#include "CloudSeaDebugUi.h"
+#include "GameIntroDirector.h"
+#include "SceneManager.h"
 #include "SceneIds.h"
+#include "ExhibitionMode.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -41,6 +45,21 @@
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "graphics/particle/EffectManager.h"
 #include "component/ExplosionLightComponent.h"
+
+namespace {
+// ゲームのカメラの投影(画角・ニア・ファー)
+constexpr float kGameCameraFovY = 0.45f;
+constexpr float kGameCameraNear = 0.1f;
+constexpr float kGameCameraFar = 1000.0f;
+
+// 自機のモデル(タイトルと同じ竜)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
+constexpr const char *kPlayerModelPath = "resources/app/player/dragon/dragon.obj";
+constexpr float kPlayerWingspan = 3.7f;
+
+// 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
+// SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
+constexpr bool kDebugFlowShortcutEnabled = true;
+} // namespace
 
 void GameScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
@@ -65,13 +84,13 @@ void GameScene::Initialize(const SceneServices &services) {
   // レールカメラの初期化
   auto camera = std::make_shared<GameCamera>();
   camera->Initialize();
-  camera->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  camera->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
   SetMainCamera(camera);
 
   // デバッグカメラ初期化（EditorCameraを、右ドラッグ不要で常時動ける自由視点モードで使う）
   debugCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
   debugCamera_->Initialize();
-  debugCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  debugCamera_->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
   debugCamera_->SetRequireMouseForMovement(false);
   debugCamera_->SetKeyboardRotationEnabled(true);
   debugCamera_->SetMovementSpeeds(0.5f, 0.02f, 0.005f);
@@ -139,9 +158,9 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   // -----------------------------------------------------------------------
-  // プレイヤーモデルを骨あり(Skinning対応)のgltfに強制的に差し替える。
-  // resources/editor/scenes/Game.json 上は旧player.objのままでも、
-  // 実行時に必ずSkinning/Animation機能が可視化されるようにするための処置。
+  // 自機のモデルを、タイトルと同じ竜に差し替える。
+  // resources/editor/scenes/Game.json 上は旧 player.obj のままでも、実行時に必ず竜にする。
+  // 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)
   // -----------------------------------------------------------------------
   {
       auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
@@ -150,40 +169,12 @@ void GameScene::Initialize(const SceneServices &services) {
           playerObj_->AddComponent(std::move(newModelComp));
           playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
       }
-      playerModelComp->LoadModel("resources/app/human/walk.gltf");
-
-      if (!playerWalkAnim_) {
-          playerWalkAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "walk.gltf");
+      // JSON がすでに同じモデルを指しているときは、読み込み直さない。
+      // 読み込み直すと、直前のインスタンスを同じフレームの更新で破棄してしまい、アップロード中のテクスチャが先に消える
+      if (playerModelComp->GetModelPath() != kPlayerModelPath) {
+          playerModelComp->LoadModel(kPlayerModelPath);
       }
-      // ロックオンON/OFF時のAnimation補間（クロスフェード）実演用に別アニメーションもロードしておく
-      if (!playerSneakWalkAnim_) {
-          playerSneakWalkAnim_ = AnimationManager::GetInstance()->LoadAnimation("resources/app/human", "sneakWalk.gltf");
-      }
-      if (auto* instance = playerModelComp->GetModelInstance()) {
-          instance->PlayAnimation(playerWalkAnim_, true);
-      }
-  }
-
-  // -----------------------------------------------------------------------
-  // GPU Particle拡張の常時可視化（加点要素）：
-  // プレイヤー付近に常駐エミッタ(Box)を1つ設置し、Vortex Fieldで渦を巻かせる。
-  // フレーム開始直後からゲーム画面で複数エミッタ/Fieldが確認できるようにする。
-  // -----------------------------------------------------------------------
-  {
-      GPUParticleManager::EmitterDesc desc;
-      desc.shape = GPUParticleManager::EmitterShape::Box;
-      desc.translate = { 0.0f, 2.0f, 10.0f };
-      desc.halfExtents = { 2.0f, 2.0f, 2.0f };
-      desc.count = 12;
-      desc.frequency = 0.3f;
-      GPUParticleManager::GetInstance()->CreateEmitter(desc);
-
-      GPUParticleManager::FieldDesc fieldDesc;
-      fieldDesc.type = GPUParticleManager::FieldType::Vortex;
-      fieldDesc.target = { 0.0f, 2.0f, 10.0f };
-      fieldDesc.direction = { 0.0f, 1.0f, 0.0f };
-      fieldDesc.strength = 1.5f;
-      GPUParticleManager::GetInstance()->SetField(0, fieldDesc);
+      playerModelComp->FitToWingspan(kPlayerWingspan);
   }
 
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
@@ -222,32 +213,6 @@ void GameScene::Initialize(const SceneServices &services) {
       rootObjects_.push_back(railCamObj);
   }
 
-  // -----------------------------------------------------------------------
-  // MultiMesh & MultiMaterial対応（加点要素）の常時可視化：
-  // multiMaterial.objは複数メッシュ×複数マテリアルを持つアセットで、
-  // Renderer::DrawModelのサブメッシュ描画パスをゲームシーン上で確認できるようにする。
-  // -----------------------------------------------------------------------
-  {
-      // シーンJSONへのオートセーブで既に保存されている場合に毎回重複生成しないよう、
-      // 名前で既存チェックしてから生成する。
-      bool hasMultiMaterialDecoration = false;
-      for (const auto& obj : rootObjects_) {
-          if (obj && obj->GetName() == "MultiMaterialDecoration") {
-              hasMultiMaterialDecoration = true;
-              break;
-          }
-      }
-      if (!hasMultiMaterialDecoration) {
-          auto multiMaterialObj = std::make_shared<AbsoluteEngine::GameObject>("MultiMaterialDecoration");
-          multiMaterialObj->GetTransform().translate = { 8.0f, 1.0f, 5.0f };
-          multiMaterialObj->GetTransform().scale = { 2.0f, 2.0f, 2.0f };
-          auto multiMaterialModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-          multiMaterialModelComp->LoadModel("resources/app/multiMaterial/multiMaterial.obj");
-          multiMaterialObj->AddComponent(std::move(multiMaterialModelComp));
-          rootObjects_.push_back(multiMaterialObj);
-      }
-  }
-
   // HUDの初期化
   gameHUD_ = std::make_unique<GameHUD>();
   gameHUD_->Initialize();
@@ -278,10 +243,89 @@ void GameScene::Initialize(const SceneServices &services) {
   SetPlayMode(PlayMode::Play);
   timelineManager_->Play();
 #endif
+
+  // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
+  BeginIntro_();
 }
 
 void GameScene::Finalize() {
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
+}
+
+void GameScene::BeginIntro_() {
+  // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは通常どおり始める)
+  introActive_ = sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+  if (!introActive_ || GetMainCamera() == nullptr) {
+    introActive_ = false;
+    return;
+  }
+
+  // 自機の位置は、通常は更新の中でカメラの前へ置かれる。イントロ中は更新しないので、時間 0 で 1 度だけ更新して置く
+  playerObj_ = FindPlayerObject_();
+  if (playerObj_) {
+    playerObj_->Update(0.0f);
+    introBasePlayerPosition_ = playerObj_->GetTransform().translate;
+    introBasePlayerRotation_ = playerObj_->GetTransform().rotate;
+  }
+  introBaseEye_ = GetMainCamera()->GetEye();
+  introBaseTarget_ = GetMainCamera()->GetTarget();
+
+  introRailSpeed_ = 0.0f;
+  for (const auto &obj : rootObjects_) {
+    if (auto *rail = obj ? obj->GetComponent<RailCameraComponent>() : nullptr) {
+      introRailSpeed_ = rail->GetSpeed();
+      break;
+    }
+  }
+}
+
+void GameScene::UpdateIntro_(float deltaTime) {
+  // 覆いが晴れ終わったら、助走を終えて通常の更新へ戻る
+  if (sceneManager_ == nullptr || !sceneManager_->IsTransitioning()) {
+    FinishIntro_();
+    return;
+  }
+
+  const GameIntroPose pose = GameIntroDirector::Evaluate(
+      sceneManager_->GetRevealProgress(), introRailSpeed_, sceneManager_->GetRevealSeconds());
+
+  // 進行方向(カメラの向き)の後ろへ戻した位置へ、カメラと自機を同じだけずらす。
+  // 一緒に動かすので、画面の中の自機の位置は変わらず、背景(雲海・グリッド)だけが流れて見える
+  Vector3 forward{introBaseTarget_.x - introBaseEye_.x, introBaseTarget_.y - introBaseEye_.y, introBaseTarget_.z - introBaseEye_.z};
+  forward = Normalize(forward);
+  // 進行方向の後ろへ戻し、さらに下へ下げる(雲の層の中から昇り始める)
+  const Vector3 shift{-forward.x * pose.backOffset, -forward.y * pose.backOffset - pose.riseOffset, -forward.z * pose.backOffset};
+
+  auto *camera = GetMainCamera();
+  camera->SetEye({introBaseEye_.x + shift.x, introBaseEye_.y + shift.y, introBaseEye_.z + shift.z});
+  camera->SetTarget({introBaseTarget_.x + shift.x, introBaseTarget_.y + shift.y, introBaseTarget_.z + shift.z});
+  camera->SetPerspective(kGameCameraFovY * pose.fovScale, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
+
+  if (playerObj_) {
+    playerObj_->GetTransform().translate = {introBasePlayerPosition_.x + shift.x, introBasePlayerPosition_.y + shift.y,
+                                           introBasePlayerPosition_.z + shift.z};
+    // 昇りの機首上げ(X まわりの負の回転で、機首が上を向く)
+    Vector3 rotation = introBasePlayerRotation_;
+    rotation.x -= pose.pitchUp;
+    playerObj_->GetTransform().rotate = rotation;
+    // モデルだけ更新する(自機の入力・射撃を含む PlayerComponent は更新しない)
+    if (auto *modelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+      modelComp->Update(deltaTime);
+    }
+  }
+}
+
+void GameScene::FinishIntro_() {
+  introActive_ = false;
+  if (auto *camera = GetMainCamera()) {
+    camera->SetEye(introBaseEye_);
+    camera->SetTarget(introBaseTarget_);
+    camera->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
+  }
+  if (playerObj_) {
+    playerObj_->GetTransform().translate = introBasePlayerPosition_;
+    playerObj_->GetTransform().rotate = introBasePlayerRotation_;
+  }
 }
 
 // -----------------------------------------------------------------------
@@ -398,6 +442,12 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 }
 
 void GameScene::UpdateMouseCapture_() {
+  // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
+  if (ExhibitionMode::kEnabled) {
+      MouseCapture::Apply(false);
+      return;
+  }
+
   // Development では ImGui のエディタを操作する必要があるため、Escでいつでも解除/再開できる
   if (services_.input && services_.input->TriggerKey(DIK_ESCAPE)) {
       mouseCaptureSuspended_ = !mouseCaptureSuspended_;
@@ -472,6 +522,38 @@ void GameScene::SpawnBoss_() {
   rootObjects_.push_back(bossObj);
 }
 
+void GameScene::CheckDebugFlowShortcut_() {
+  if (!kDebugFlowShortcutEnabled || !services_.input) {
+    return;
+  }
+  // すでに終了の要求を出している間は受け付けない(二重に要求しない)
+  if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
+    return;
+  }
+  if (services_.input->TriggerKey(DIK_RETURN)) {
+    phase_ = GamePhase::Clear;
+    RequestSceneChange(SceneId::Clear);
+  } else if (services_.input->TriggerKey(DIK_BACK)) {
+    phase_ = GamePhase::GameOver;
+    RequestSceneChange(SceneId::GameOver);
+  }
+}
+
+void GameScene::UpdateExhibitionFlow_(float deltaTime) {
+  // すでに終了の要求を出している間は何もしない(二重に要求しない)
+  if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
+    return;
+  }
+  // 覆いが晴れてから(通常の更新に入ってから)の時間を数え、一定時間たったら終わらせる
+  exhibitionHoldTimer_ += deltaTime;
+  if (exhibitionHoldTimer_ < ExhibitionMode::kGameHoldSec) {
+    return;
+  }
+  const std::string &nextSceneId = ExhibitionMode::NextGameEndSceneId();
+  phase_ = (nextSceneId == SceneId::Clear) ? GamePhase::Clear : GamePhase::GameOver;
+  RequestSceneChange(nextSceneId);
+}
+
 void GameScene::CheckGameEnd_() {
   if (playerObj_) {
       auto pComp = playerObj_->GetComponent<PlayerComponent>();
@@ -491,19 +573,6 @@ void GameScene::CheckGameEnd_() {
   }
 }
 
-// Animation補間（加点要素）：ロックオンのON/OFF切り替わり時に
-// 歩行アニメーション同士をクロスフェードで遷移させる。
-void GameScene::UpdatePlayerAnimation_(bool isLockingMode) {
-  if (isLockingMode == wasLockingMode_) return;
-
-  if (auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-      if (auto* instance = playerModelComp->GetModelInstance()) {
-          instance->PlayAnimation(isLockingMode ? playerSneakWalkAnim_ : playerWalkAnim_, true, 0.3f);
-      }
-  }
-  wasLockingMode_ = isLockingMode;
-}
-
 void GameScene::UpdateHud_() {
   if (!gameHUD_) return;
 
@@ -517,7 +586,6 @@ void GameScene::UpdateHud_() {
   }
 
   const bool isLockingMode = pComp->lockon_.IsLockingMode();
-  UpdatePlayerAnimation_(isLockingMode);
 
   gameHUD_->Update(pComp->GetHp(), pComp->GetMaxHp(),
                    pComp->lockon_.GetLockedScreenPositions(GetMainCamera()), isLockingMode,
@@ -530,6 +598,15 @@ void GameScene::Update() {
   time_ += deltaTime;
 
   playerObj_ = FindPlayerObject_();
+
+  // イントロ(画面遷移の覆いが晴れる間)は、世界の進行を止め、見た目だけの助走を動かす。
+  // 晴れ終わった(UpdateIntro_ が終了した)フレームから、通常の更新に入る
+  if (introActive_) {
+      UpdateIntro_(deltaTime);
+      if (introActive_) {
+          return;
+      }
+  }
 
   // ポストエフェクトの調停（Editモードでもタイマーは進める）
   UpdatePostEffects_(deltaTime);
@@ -556,7 +633,7 @@ void GameScene::Update() {
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (services_.input && services_.input->TriggerKey(DIK_B)) {
+      if (!ExhibitionMode::kEnabled && services_.input && services_.input->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
@@ -584,6 +661,11 @@ void GameScene::Update() {
           SpawnBoss_();
       }
 
+      if (ExhibitionMode::kEnabled) {
+          UpdateExhibitionFlow_(deltaTime);
+      } else {
+          CheckDebugFlowShortcut_();
+      }
       CheckGameEnd_();
       hitEffects_.Update();
       UpdateHud_();
@@ -634,7 +716,12 @@ void GameScene::Draw() {
   ApplyEditorLightsToRenderer(renderer);
 
   // オブジェクトの描画
-  skybox_.Draw();
+  // 背景: 手続き生成の雲海。比較用に、従来のスカイボックスへ切り替えられる
+  if (useCloudSea_) {
+      renderer->DrawCloudSea(cloudSea_);
+  } else {
+      skybox_.Draw();
+  }
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : rootObjects_) {
@@ -662,8 +749,10 @@ void GameScene::Draw() {
       }
   }
 
-  // グリッドの描画（進行感を演出）
-  renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
+  // グリッドの描画（デバッグ用。雲海の背景では、雲の層の中から昇る間に空へ線として見えてしまうので、既定では描かない）
+  if (showDebugGrid_) {
+      renderer->DrawGrid(500.0f, 50, Vector4{0.2f, 0.4f, 0.8f, 0.5f});
+  }
 
   // 骨のデバッグ表示（Bキートグル）
   if (showDebugSkeleton_ && playerObj_) {
@@ -708,6 +797,12 @@ void GameScene::DrawEditorUI() {
     ImGui::Begin("GameScene Controls##LeftPanel");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Cloud Sea")) {
+        ImGui::Checkbox("Use Cloud Sea (off = Skybox)", &useCloudSea_);
+        CloudSeaDebugUi::Draw(cloudSea_);
+        ImGui::Separator();
+    }
     
     int hp = 0;
     int maxHp = 0;
@@ -775,6 +870,7 @@ void GameScene::DrawEditorUI() {
         }
     }
     ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
+    ImGui::Checkbox("Show Debug Grid", &showDebugGrid_);
     if (ImGui::Button("Reset Rail Camera")) {
         for (const auto& obj : rootObjects_) {
             if (auto rComp = obj->GetComponent<RailCameraComponent>()) {

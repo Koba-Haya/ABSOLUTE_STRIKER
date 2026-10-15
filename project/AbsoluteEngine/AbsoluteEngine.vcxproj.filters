@@ -207,6 +207,7 @@
     <ClCompile Include="scene\BaseScene.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\SceneTransition.cpp" />
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -407,6 +408,8 @@
     <ClInclude Include="scene\ISceneFactory.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
+    <ClInclude Include="scene\SceneTransition.h" />
+    <ClInclude Include="graphics\TransitionStyle.h" />
     <ClInclude Include="scene\SceneManager.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
@@ -425,6 +428,7 @@
     <ClInclude Include="Type\Vector.h">
       <Filter>engine\Type</Filter>
     </ClInclude>
+    <ClInclude Include="graphics\CloudSeaSettings.h" />
     <ClInclude Include="graphics\texture\PlanarReflection.h" />
     <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="editor\EditorCamera.h" />

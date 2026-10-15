@@ -29,6 +29,10 @@ struct TitleState {
 // - スタート演出(launchProgress が 0〜1): 自機が加速して飛び去り、カメラは遅れて付いて引き、画角が広がる
 class TitleDirector {
 public:
+  // スタート演出の長さ(秒)。演出の進行(0〜1)を時間へ戻して、機首の上げ角(昇る傾き)を求めるのに使う。
+  // 演出を進める側(TitleScene)も、この長さで進行を数える
+  static constexpr float kLaunchDurationSec = 2.4f;
+
   // 自機モデルの設定。モデルを差し替えても、大きさと回転の中心が合うようにする(モデルの頂点から求めた値を渡す)
   // - center: モデル空間での中心(ここを原点に、回転・バンクする)
   // - scale: モデル空間 → ワールドの拡大率

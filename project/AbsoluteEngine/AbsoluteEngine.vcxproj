@@ -175,6 +175,7 @@
     <ClCompile Include="scene\ModelComponent.cpp" />
     <ClCompile Include="scene\DissolveComponent.cpp" />
     <ClCompile Include="scene\SceneManager.cpp" />
+    <ClCompile Include="scene\SceneTransition.cpp" />
     <ClCompile Include="scene\SceneSerializer.cpp" />
     <ClCompile Include="resources\AssetManager.cpp" />
     <ClCompile Include="scene\RigidbodyComponent.cpp" />
@@ -237,6 +238,7 @@
     <ClInclude Include="graphics\resources\ResourceObject.h" />
     <ClInclude Include="graphics\shader\ShaderCompiler.h" />
     <ClInclude Include="graphics\shader\ShaderCompilerUtils.h" />
+    <ClInclude Include="graphics\CloudSeaSettings.h" />
     <ClInclude Include="graphics\texture\PlanarReflection.h" />
     <ClInclude Include="graphics\texture\RenderTexture.h" />
     <ClInclude Include="graphics\texture\TextureManager.h" />
@@ -254,6 +256,8 @@
     <ClInclude Include="scene\DissolveComponent.h" />
     <ClInclude Include="scene\ISceneFactory.h" />
     <ClInclude Include="scene\SceneManager.h" />
+    <ClInclude Include="scene\SceneTransition.h" />
+    <ClInclude Include="graphics\TransitionStyle.h" />
     <ClInclude Include="scene\SceneSerializer.h" />
     <ClInclude Include="scene\SceneServices.h" />
     <ClInclude Include="Type\AABB.h" />

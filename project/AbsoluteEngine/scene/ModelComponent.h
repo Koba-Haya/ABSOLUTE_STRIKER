@@ -47,6 +47,12 @@ public:
 
     ModelInstance* GetModelInstance() const { return modelInstance_.get(); }
 
+    // 読み込んだモデルの翼幅(x 方向の幅)が wingspan になるよう拡大し、バウンディングボックスの中心を
+    // オブジェクトの位置に合わせる。Transform の scale / rotate / translate とは別に、モデルの空間で掛かる補正。
+    // モデルを差し替えても大きさと中心がそろう。モデルが読み込まれていなければ何もしない。
+    // 注意: LoadModel() のあとに呼ぶこと(読み込み直すと補正は初期化される)
+    void FitToWingspan(float wingspan);
+
     void SetEnvironmentCoefficient(float c) {
         environmentCoefficient_ = c;
         if (modelInstance_) {
@@ -78,6 +84,9 @@ private:
     std::unique_ptr<ModelInstance> pendingDestroyModelInstance_;
     float environmentCoefficient_ = 0.0f;
     Vector4 color_{1.0f, 1.0f, 1.0f, 1.0f};
+    // FitToWingspan の補正(モデル空間)。既定は補正なし
+    Vector3 fitCenter_{0.0f, 0.0f, 0.0f};
+    float fitScale_ = 1.0f;
 };
 
 } // namespace AbsoluteEngine

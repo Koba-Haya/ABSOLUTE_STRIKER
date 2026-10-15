@@ -100,6 +100,20 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                           UnifiedPipeline::MakeWaterDesc()));
   }
 
+  // Transition Pipeline(画面遷移の最終パス)
+  {
+    transitionPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(transitionPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                               UnifiedPipeline::MakeTransitionDesc()));
+  }
+
+  // CloudSea Pipeline
+  {
+    cloudSeaPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(cloudSeaPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                             UnifiedPipeline::MakeCloudSeaDesc()));
+  }
+
   // Sprite Pipelines
   {
     PipelineDesc desc = UnifiedPipeline::MakeSpriteDesc();
@@ -320,6 +334,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
 
   waterParamCB_ = CreateUploadBuffer(align256(sizeof(WaterParam)));
   waterParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&waterParamMapped_));
+
+  cloudSeaParamCB_ = CreateUploadBuffer(align256(sizeof(CloudSeaParam)));
+  cloudSeaParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&cloudSeaParamMapped_));
+
+  transitionParamCB_ = CreateUploadBuffer(align256(sizeof(TransitionParam)));
+  transitionParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&transitionParamMapped_));
 
   InitSkinningPipeline_();
 }
@@ -789,6 +809,75 @@ void Renderer::DrawWater(const Vector3 &sunDirection, float time, const Vector3 
   cmdList->DrawInstanced(3, 1, 0, 0);
 }
 
+namespace {
+// 雲海のノイズの層ごとの倍率(主ノイズ gScale に対する比)。シェーダー側へは定数バッファで渡すので、値はここだけで決める
+constexpr float kCloudSeaLowRatioA = 0.18f;   // 大きなうねり 1 層目
+constexpr float kCloudSeaLowRatioB = 0.37f;   // 大きなうねり 2 層目
+constexpr float kCloudSeaFloorRatio = 0.8f;   // 切れ間から見える下の雲層
+} // namespace
+
+// カメラ位置(xz)にノイズ空間の倍率 cellsPerUnit を掛け、整数のマス番号と小数に分ける(double で計算する)
+void Renderer::SplitCloudSeaCell(const Vector3 &cameraPosition, double cellsPerUnit, CloudSeaCellOrigin &out) {
+  const double cellX = static_cast<double>(cameraPosition.x) * cellsPerUnit;
+  const double cellZ = static_cast<double>(cameraPosition.z) * cellsPerUnit;
+  const double floorX = std::floor(cellX);
+  const double floorZ = std::floor(cellZ);
+  out.cell[0] = static_cast<int32_t>(floorX);
+  out.cell[1] = static_cast<int32_t>(floorZ);
+  out.frac[0] = static_cast<float>(cellX - floorX);
+  out.frac[1] = static_cast<float>(cellZ - floorZ);
+}
+
+void Renderer::DrawCloudSea(const CloudSeaSettings &settings) {
+  if (!cloudSeaPipeline_ || !cloudSeaParamMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  const Matrix4x4 invView = Inverse(view_);
+  const Vector3 cameraPosition{invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+  CloudSeaParam *param = cloudSeaParamMapped_;
+  param->invViewProj = Inverse(Multiply(view_, proj_));
+  param->cameraPosition = cameraPosition;
+  param->seaHeight = settings.seaHeight;
+  param->sunDirection = Normalize(settings.SunDirection());
+  param->thickness = settings.thickness;
+  param->bump = settings.bump;
+  param->scale = settings.scale;
+  param->threshold = settings.threshold;
+  param->softness = settings.softness;
+  param->density = settings.density;
+  param->fog = settings.fog;
+  param->steps = static_cast<float>(settings.steps);
+  param->jitter = settings.jitter ? 1.0f : 0.0f;
+  param->swellHeight = settings.swellHeight;
+  param->swellBlend = settings.swellBlend;
+  param->billow = settings.billow;
+  param->shadowStrength = settings.shadowStrength;
+  param->shadowLength = settings.shadowLength;
+  param->gapDarkness = settings.gapDarkness;
+  param->aerial = settings.aerial;
+  param->contrast = settings.contrast;
+  param->lowRatioA = kCloudSeaLowRatioA;
+  param->lowRatioB = kCloudSeaLowRatioB;
+  param->floorRatio = kCloudSeaFloorRatio;
+
+  // 雲の模様の位置(ノイズ空間 = ワールド座標 * 倍率)を、double で整数部と小数部に分ける。
+  // シェーダーは視線上の点をカメラからの相対位置だけで計算するので、ワールド座標が大きくなっても精度が落ちない
+  const double scale = static_cast<double>(settings.scale);
+  SplitCloudSeaCell(cameraPosition, scale, param->base);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaLowRatioA, param->lowA);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaLowRatioB, param->lowB);
+  SplitCloudSeaCell(cameraPosition, scale * kCloudSeaFloorRatio, param->floor);
+
+  cloudSeaPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, cloudSeaParamCB_->GetGPUVirtualAddress());
+
+  // 頂点バッファなしで3頂点描画(大きな三角形1つで全画面を覆う)
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
 void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest) {
   if (!pm)
     return;
@@ -886,12 +975,78 @@ void Renderer::EndRenderScene(const Matrix4x4& projInverse) {
         }
     }
 
+    // 画面遷移の覆い(ポストエフェクトのあと。Debug のビューポートにも、Release の画面にも反映される)
+    ApplyTransitionPass_();
+
 #ifndef USE_IMGUI
     if (postProcessTexture_) {
         dx_->ResetRenderTarget();
         DrawFullscreen(postProcessTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
     }
 #endif
+}
+
+void Renderer::SetTransition(const TransitionStyle &style, float cover, float time, float duration) {
+    transitionStyle_ = style;
+    transitionCover_ = cover;
+    transitionTime_ = time;
+    transitionDuration_ = duration;
+}
+
+void Renderer::ApplyTransitionPass_() {
+    if (transitionCover_ <= 0.0f || !transitionPipeline_ || !transitionParamMapped_ || !postProcessTexture_ || !gaussianTempTexture_) {
+        return;
+    }
+
+    // パラメータ
+    TransitionParam *param = transitionParamMapped_;
+    // 描画したシーンのカメラ(最後に SetCamera された行列)。世界の視線の復元・深度から位置への変換・太陽の画面位置に使う
+    const Matrix4x4 invView = Inverse(view_);
+    const Matrix4x4 viewProj = Multiply(view_, proj_);
+    param->invViewProj = Inverse(viewProj);
+    param->viewProj = viewProj;
+    param->cameraPosition[0] = invView.m[3][0];
+    param->cameraPosition[1] = invView.m[3][1];
+    param->cameraPosition[2] = invView.m[3][2];
+    param->slabBottom = transitionStyle_.slabBottom;
+    param->slabTop = transitionStyle_.slabTop;
+    const Vector3 sunDirection = Normalize(transitionStyle_.sunDirection);
+    param->sunDirection[0] = sunDirection.x;
+    param->sunDirection[1] = sunDirection.y;
+    param->sunDirection[2] = sunDirection.z;
+    param->color[0] = transitionStyle_.color.x;
+    param->color[1] = transitionStyle_.color.y;
+    param->color[2] = transitionStyle_.color.z;
+    param->cover = (std::min)(transitionCover_, 1.0f);
+    param->kind = static_cast<float>(static_cast<int32_t>(transitionStyle_.kind));
+    param->softness = transitionStyle_.softness;
+    param->noiseScale = transitionStyle_.noiseScale;
+    param->blurStrength = transitionStyle_.blurStrength;
+    param->center[0] = transitionStyle_.center.x;
+    param->center[1] = transitionStyle_.center.y;
+    param->aspect = GetAspectRatio();
+    param->time = transitionTime_;
+    param->duration = transitionDuration_;
+
+    // パス1: postProcessTexture_ を読み、遷移の効果をかけて一時のテクスチャへ描く
+    auto *cmdList = dx_->GetCommandList();
+    dx_->SetRenderTarget(gaussianTempTexture_.get());
+    ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+    cmdList->SetDescriptorHeaps(1, heaps);
+    transitionPipeline_->SetPipelineState(cmdList);
+    cmdList->SetGraphicsRootConstantBufferView(0, transitionParamCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, postProcessTexture_->GetSrvGpuHandle());
+    if (depthTexture_) {
+        cmdList->SetGraphicsRootDescriptorTable(2, depthTexture_->GetSrvGpuHandle()); // t1: シーンの深度
+    }
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->DrawInstanced(3, 1, 0, 0);
+    dx_->FinishRendering(gaussianTempTexture_.get());
+
+    // パス2: 結果を postProcessTexture_ へ戻す(以降の処理は、これまで通り postProcessTexture_ を読む)
+    dx_->SetRenderTarget(postProcessTexture_.get());
+    DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
+    dx_->FinishRendering(postProcessTexture_.get());
 }
 
 void Renderer::RenderPrimitives() {
