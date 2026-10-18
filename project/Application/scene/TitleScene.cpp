@@ -15,6 +15,7 @@
 #include "ExhibitionMode.h"
 #include "ParticleManager.h"
 #include "ModelResource.h"
+#include "GameAssetPreloader.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -222,6 +223,9 @@ void TitleScene::Initialize(const SceneServices &services) {
   // 翼のプルーム。同名のグループが残っていれば、ParticleManager がリセットして再利用する
   ParticleManager::GetInstance()->CreateParticleGroup(kContrailGroup, kContrailTexture, kContrailMaxParticles);
   contrailHasPrev_ = false;
+
+  // ゲームシーンが使う重い資産を、ここで先に読んで保持する(遷移時の停止を避けるため)
+  GameAssetPreloader::Preload();
 }
 
 void TitleScene::Finalize() {

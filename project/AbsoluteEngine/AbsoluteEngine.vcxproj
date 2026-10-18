@@ -120,6 +120,8 @@
     <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="audio\Audio.cpp" />
     <ClCompile Include="base\DirectXCommon.cpp" />
+    <ClCompile Include="base\GpuTimer.cpp" />
+    <ClCompile Include="base\CpuTimer.cpp" />
     <ClCompile Include="base\EnginePath.cpp" />
     <ClCompile Include="base\AssetPath.cpp" />
     <ClCompile Include="base\DirectXResourceUtils.cpp" />
@@ -134,6 +136,7 @@
     <ClCompile Include="editor\EditorUIManager.cpp" />
     <ClCompile Include="editor\CommandManager.cpp" />
     <ClCompile Include="graphics\Renderer.cpp" />
+    <ClCompile Include="graphics\VolumeCloudQuality.cpp" />
     <ClCompile Include="graphics\Skybox.cpp" />
     <ClCompile Include="graphics\2d\Sprite.cpp" />
     <ClCompile Include="graphics\2d\SpriteManager.cpp" />
@@ -165,6 +168,8 @@
     <ClCompile Include="graphics\texture\TextureResource.cpp" />
     <ClCompile Include="graphics\texture\TextureUtils.cpp" />
     <ClCompile Include="graphics\texture\DepthTexture.cpp" />
+    <ClCompile Include="graphics\texture\CloudNoiseGenerator.cpp" />
+    <ClCompile Include="graphics\texture\CloudNoiseTextures.cpp" />
     <ClCompile Include="math\Method.cpp" />
     <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
@@ -190,6 +195,8 @@
     <ClInclude Include="..\externals\ImGuizmo\ImGuizmo.h" />
     <ClInclude Include="audio\Audio.h" />
     <ClInclude Include="base\DirectXCommon.h" />
+    <ClInclude Include="base\GpuTimer.h" />
+    <ClInclude Include="base\CpuTimer.h" />
     <ClInclude Include="base\EnginePath.h" />
     <ClInclude Include="base\AssetPath.h" />
     <ClInclude Include="base\DirectXResourceUtils.h" />
@@ -207,6 +214,7 @@
     <ClInclude Include="editor\CommandManager.h" />
     <ClInclude Include="graphics\LightTypes.h" />
     <ClInclude Include="graphics\Renderer.h" />
+    <ClInclude Include="graphics\VolumeCloudQuality.h" />
     <ClInclude Include="graphics\Skybox.h" />
     <ClInclude Include="graphics\2d\Sprite.h" />
     <ClInclude Include="graphics\2d\SpriteManager.h" />
@@ -245,6 +253,8 @@
     <ClInclude Include="graphics\texture\TextureResource.h" />
     <ClInclude Include="graphics\texture\TextureUtils.h" />
     <ClInclude Include="graphics\texture\DepthTexture.h" />
+    <ClInclude Include="graphics\texture\CloudNoiseGenerator.h" />
+    <ClInclude Include="graphics\texture\CloudNoiseTextures.h" />
     <ClInclude Include="math\Method.h" />
     <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />

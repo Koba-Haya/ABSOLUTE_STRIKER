@@ -78,6 +78,12 @@
     <ClCompile Include="base\DirectXCommon.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="base\GpuTimer.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
+    <ClCompile Include="base\CpuTimer.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="base\EnginePath.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
@@ -109,6 +115,9 @@
       <Filter>engine\camera</Filter>
     </ClCompile>
     <ClCompile Include="graphics\Renderer.cpp">
+      <Filter>engine\graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\VolumeCloudQuality.cpp">
       <Filter>engine\graphics</Filter>
     </ClCompile>
     <ClCompile Include="graphics\Skybox.cpp">
@@ -198,6 +207,12 @@
     <ClCompile Include="graphics\texture\DepthTexture.cpp">
       <Filter>engine\graphics\texture</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\texture\CloudNoiseGenerator.cpp">
+      <Filter>engine\graphics\texture</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\texture\CloudNoiseTextures.cpp">
+      <Filter>engine\graphics\texture</Filter>
+    </ClCompile>
     <ClCompile Include="math\Method.cpp">
       <Filter>engine\math</Filter>
     </ClCompile>
@@ -252,6 +267,12 @@
     <ClInclude Include="base\DirectXCommon.h">
       <Filter>engine\base</Filter>
     </ClInclude>
+    <ClInclude Include="base\GpuTimer.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\CpuTimer.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
     <ClInclude Include="base\EnginePath.h">
       <Filter>engine\base</Filter>
     </ClInclude>
@@ -289,6 +310,9 @@
       <Filter>engine\graphics</Filter>
     </ClInclude>
     <ClInclude Include="graphics\Renderer.h">
+      <Filter>engine\graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\VolumeCloudQuality.h">
       <Filter>engine\graphics</Filter>
     </ClInclude>
     <ClInclude Include="graphics\Skybox.h">
@@ -394,6 +418,12 @@
       <Filter>engine\graphics\texture</Filter>
     </ClInclude>
     <ClInclude Include="graphics\texture\DepthTexture.h">
+      <Filter>engine\graphics\texture</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\texture\CloudNoiseGenerator.h">
+      <Filter>engine\graphics\texture</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\texture\CloudNoiseTextures.h">
       <Filter>engine\graphics\texture</Filter>
     </ClInclude>
     <ClInclude Include="math\Method.h">

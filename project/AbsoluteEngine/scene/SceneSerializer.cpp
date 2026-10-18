@@ -1,6 +1,7 @@
 #include "SceneSerializer.h"
 #include <fstream>
 #include <iostream>
+#include "CpuTimer.h"
 #include "../../externals/nlohmann/json.hpp"
 #include "ComponentFactory.h"
 #include "ColliderComponent.h"
@@ -249,11 +250,14 @@ bool SceneSerializer::SavePrefab(const std::string& filepath, std::shared_ptr<Ga
 }
 
 std::shared_ptr<GameObject> SceneSerializer::LoadPrefab(const std::string& filepath) {
+  // 停止の調査用: プレハブ 1 件の読み込み全体(ファイル読み込み・解析・オブジェクト生成)の合計を測る
+  CpuTimer::AccumScope prefabScope("LoadPrefab(all)");
   std::ifstream file(filepath);
   if (!file.is_open()) return nullptr;
 
   json j;
   try {
+    CpuTimer::AccumScope parseScope("LoadPrefab.fileParse");
     file >> j;
   } catch (const json::parse_error& e) {
     std::cerr << "JSON parse error: " << e.what() << std::endl;

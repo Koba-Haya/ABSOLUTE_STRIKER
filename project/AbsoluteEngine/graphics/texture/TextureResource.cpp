@@ -113,6 +113,9 @@ bool TextureResource::CreateFromMetadata(DirectXCommon *dx,
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);
       }
+    } else if (meta.dimension == DirectX::TEX_DIMENSION_TEXTURE3D) {
+      srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+      srvDesc.Texture3D.MipLevels = static_cast<UINT>(meta.mipLevels);
     } else {
       srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
       srvDesc.Texture2D.MipLevels = static_cast<UINT>(meta.mipLevels);

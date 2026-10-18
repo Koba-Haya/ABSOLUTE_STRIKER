@@ -198,6 +198,419 @@
             "transform": {
                 "rotate": {
                     "x": 0.0,
+                    "y": -0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -3.4568324089050293,
+                    "y": -0.5,
+                    "z": 283.5467529296875
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.6499999761581421,
+                        "z": 0.05000000074505806
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "ChargeOnApproachComponent"
+                },
+                {
+                    "type": "RamAttackComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyHoming.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 0.6000000238418579,
+                    "y": 0.6000000238418579,
+                    "z": 1.7999999523162842
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 90.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": -1.7700001001358032,
+                    "y": -0.9899999499320984,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 1.0200001001358032,
+                    "y": 0.0,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 2.070000171661377,
+                    "y": 0.7200000286102295,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": -0.6600000858306885,
+                    "y": 1.7400001287460327,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 1.8600000143051147,
+                    "y": -1.0800000429153442,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
                     "y": 0.0,
                     "z": 0.0
                 },
@@ -208,8 +621,1032 @@
                 },
                 "translate": {
                     "x": 0.0,
-                    "y": -0.5,
-                    "z": -28.0
+                    "y": 0.0,
+                    "z": 195.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.14999985694885254,
+                    "y": 1.3500001430511475,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -0.5699999928474426,
+                    "y": -2.190000057220459,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 1.8300000429153442,
+                    "y": -0.2699999213218689,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 2.8500001430511475,
+                    "y": 1.2599998712539673,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 300.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.6499999761581421,
+                        "z": 0.05000000074505806
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "ChargeOnApproachComponent"
+                },
+                {
+                    "type": "RamAttackComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyHoming.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 0.6000000238418579,
+                    "y": 0.6000000238418579,
+                    "z": 1.7999999523162842
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 90.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": -1.7700001001358032,
+                    "y": -0.9899999499320984,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 1.0200001001358032,
+                    "y": 0.0,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 2.070000171661377,
+                    "y": 0.7200000286102295,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": -0.6600000858306885,
+                    "y": 1.7400001287460327,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 1.8600000143051147,
+                    "y": -1.0800000429153442,
+                    "z": 135.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 195.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 0.14999985694885254,
+                    "y": 1.3500001430511475,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": -0.5699999928474426,
+                    "y": -2.190000057220459,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 1.8300000429153442,
+                    "y": -0.2699999213218689,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 0.4000000059604645,
+                        "y": 0.75,
+                        "z": 1.0
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.0,
+                    "size": {
+                        "x": 0.5,
+                        "y": 0.5,
+                        "z": 0.5
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 1,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "FormationMemberComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
+                },
+                "translate": {
+                    "x": 2.8500001430511475,
+                    "y": 1.2599998712539673,
+                    "z": 240.0
+                }
+            }
+        },
+        {
+            "components": [
+                {
+                    "color": {
+                        "w": 1.0,
+                        "x": 1.0,
+                        "y": 0.25,
+                        "z": 0.20000000298023224
+                    },
+                    "environmentCoefficient": 0.0,
+                    "modelPath": "resources/app/cube/cube.obj",
+                    "texturePath": "resources/app/cube/white100x100.png",
+                    "type": "ModelComponent"
+                },
+                {
+                    "centerOffset": {
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": 0.0
+                    },
+                    "colliderType": 2,
+                    "radius": 1.5,
+                    "size": {
+                        "x": 0.75,
+                        "y": 0.75,
+                        "z": 0.75
+                    },
+                    "type": "ColliderComponent"
+                },
+                {
+                    "maxHp": 3,
+                    "type": "EnemyComponent"
+                },
+                {
+                    "type": "TurretShootComponent"
+                }
+            ],
+            "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
+            "transform": {
+                "rotate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 0.0
+                },
+                "scale": {
+                    "x": 1.5,
+                    "y": 1.5,
+                    "z": 1.5
+                },
+                "translate": {
+                    "x": 0.0,
+                    "y": 0.0,
+                    "z": 300.0
                 }
             }
         }

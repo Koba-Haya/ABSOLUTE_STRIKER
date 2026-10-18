@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include <objbase.h>
 #include <string>
+#include "CpuTimer.h"
 
 static void FatalBoxAndTerminate_(const char* msg) {
 	MessageBoxA(nullptr, msg, "Fatal", MB_OK | MB_ICONERROR);
@@ -94,6 +95,9 @@ void AbsoluteFrameWork::Run() {
 			break;
 		}
 
+		// 1 フレームの CPU 時間の測定(停止の調査用。結果はログへ出る)
+		CpuTimer::BeginFrame();
+
 		input_.Update();
 		imgui_.Begin();
 
@@ -105,6 +109,8 @@ void AbsoluteFrameWork::Run() {
 		Draw();
 		imgui_.Draw(dx_.GetCommandList());
 		dx_.PostDraw();
+
+		CpuTimer::EndFrame();
 	}
 
 	Finalize();

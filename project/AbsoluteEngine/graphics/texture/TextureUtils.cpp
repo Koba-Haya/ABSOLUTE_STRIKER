@@ -103,7 +103,8 @@ CreateTextureResource(const ComPtr<ID3D12Device> &device,
   resourceDesc.Width = UINT(metadata.width);
   resourceDesc.Height = UINT(metadata.height);
   resourceDesc.MipLevels = UINT16(metadata.mipLevels);
-  resourceDesc.DepthOrArraySize = UINT16(metadata.arraySize);
+  // 3D テクスチャでは、この値は奥行き(スライス数)。1D/2D では配列の要素数
+  resourceDesc.DepthOrArraySize = UINT16(metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D ? metadata.depth : metadata.arraySize);
   resourceDesc.Format = metadata.format;
   resourceDesc.SampleDesc.Count = 1;
   resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION(metadata.dimension);

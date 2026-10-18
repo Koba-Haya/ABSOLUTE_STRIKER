@@ -56,6 +56,7 @@ void DirectXCommon::Initialize(const InitParams &params) {
   CreateRTVs_();
   CreateDepthStencil_();
   CreateFenceAndEvent_();
+  gpuTimer_.Initialize(device_.Get(), commandQueue_.Get());
   SetupViewportAndScissor_();
   InitDXC_();
 
@@ -65,6 +66,8 @@ void DirectXCommon::Initialize(const InitParams &params) {
 }
 
 void DirectXCommon::BeginFrame() {
+  frameTimerSlot_ = gpuTimer_.Begin(commandList_.Get(), "Frame");
+
   UINT backBufferIndex = swapChain_->GetCurrentBackBufferIndex();
   D3D12_RESOURCE_BARRIER barrier{};
   barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -91,6 +94,10 @@ void DirectXCommon::EndFrame() {
   barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
   commandList_->ResourceBarrier(1, &barrier);
 
+  // 1 フレーム全体の計測を閉じ、結果を読み戻しバッファへ書き出す命令を積む(Close の前でないと間に合わない)
+  gpuTimer_.End(commandList_.Get(), frameTimerSlot_);
+  gpuTimer_.Resolve(commandList_.Get());
+
   HRESULT hr = commandList_->Close();
   assert(SUCCEEDED(hr));
 
@@ -104,6 +111,9 @@ void DirectXCommon::EndFrame() {
     fence_->SetEventOnCompletion(fenceValue_, fenceEvent_);
     WaitForSingleObject(fenceEvent_, INFINITE);
   }
+
+  // GPU の完了を待ったあとなので、この時点で今フレームの計測結果を読める
+  gpuTimer_.Collect();
 
   hr = commandAllocator_->Reset();
   assert(SUCCEEDED(hr));
@@ -371,6 +381,75 @@ void DirectXCommon::SetRenderTargetWithDepth(RenderTexture* target, DepthTexture
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = target->GetRtvHandle();
     D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = depthTarget->GetDsvHandle();
     commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, &dsvHandle);
+}
+
+void DirectXCommon::BeginColorPassReadingDepth(RenderTexture* target, DepthTexture* depthTarget) {
+    assert(target);
+    assert(depthTarget);
+
+    // 深度: 書き込み用 -> 読み取り用
+    EnsureDepthReadable(depthTarget);
+
+    // 色だけを描画先にする(target はシーン描画中なので、すでに描画先の状態)
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = target->GetRtvHandle();
+    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+}
+
+void DirectXCommon::EnsureDepthReadable(DepthTexture* depthTarget) {
+    assert(depthTarget);
+    if (depthTarget->GetCurrentState() == D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = depthTarget->GetResource();
+    barrier.Transition.StateBefore = depthTarget->GetCurrentState();
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    depthTarget->SetCurrentState(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commandList_->ResourceBarrier(1, &barrier);
+}
+
+void DirectXCommon::SetRenderTargetColorOnly(RenderTexture* target) {
+    assert(target);
+
+    // 読み取り用(SRV) -> 描画用(RT)
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target->GetResource();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    commandList_->ResourceBarrier(1, &barrier);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = target->GetRtvHandle();
+    commandList_->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+}
+
+void DirectXCommon::TransitionToShaderResource(RenderTexture* target) {
+    assert(target);
+
+    // 描画用(RT) -> 読み取り用(SRV)
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target->GetResource();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    commandList_->ResourceBarrier(1, &barrier);
+}
+
+void DirectXCommon::SetViewportAndScissor(uint32_t width, uint32_t height) {
+    D3D12_VIEWPORT viewport = viewport_;
+    viewport.Width = static_cast<float>(width);
+    viewport.Height = static_cast<float>(height);
+    D3D12_RECT scissor = scissorRect_;
+    scissor.right = static_cast<LONG>(width);
+    scissor.bottom = static_cast<LONG>(height);
+    commandList_->RSSetViewports(1, &viewport);
+    commandList_->RSSetScissorRects(1, &scissor);
+}
+
+void DirectXCommon::ResetViewportAndScissor() {
+    commandList_->RSSetViewports(1, &viewport_);
+    commandList_->RSSetScissorRects(1, &scissorRect_);
 }
 
 void DirectXCommon::FinishRendering(RenderTexture* target) {

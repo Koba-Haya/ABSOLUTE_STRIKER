@@ -31,6 +31,9 @@ struct PipelineDesc {
   bool useVSInstancingTable_t1 = false;  // VS: t1
   bool usePSEnvironmentMap_t1 = false; // PS: t1 (環境マップ用SRVテーブル)
   bool usePSMaskTexture_t2 = false; // 追加: PS: t2 (Dissolve用マスクなど)
+  // PS: s1 に、線形補間 + 繰り返し(WRAP)のサンプラーを足す。タイル可能なノイズ(3D ノイズ)を、継ぎ目なく引くために使う。
+  // s0 は従来どおり端を引き伸ばす(CLAMP)
+  bool usePSWrapSampler_s1 = false;
   bool depthWrite = true;
 
   // カメラCB b2
@@ -98,6 +101,16 @@ public:
   static PipelineDesc MakeWaterDesc();
   static PipelineDesc MakeCloudSeaDesc();
   static PipelineDesc MakeTransitionDesc();
+  // ボリューム雲は 3 つの全画面パスでできている(どれも Fullscreen.VS、深度バッファなし、b0 = VolumeCloudParam)。
+  // ルートの並びは共通: 0 = b0、1 = t0、2 = t1(環境マップ用の枠を借りる)、3 = t2(マスク用の枠を借りる)
+  // パス 1: シーンの深度を低解像度へ縮める(t0 = 深度)。出力は R32_FLOAT の距離
+  static PipelineDesc MakeVolumeCloudDepthDesc();
+  // パス 2: 雲を低解像度で描く(t0 = 形の 3D ノイズ、t1 = 細かい模様の 3D ノイズ、t2 = 縮めた距離、s1 = 繰り返し)。
+  // 出力は R16G16B16A16_FLOAT(ブレンドなし)
+  static PipelineDesc MakeVolumeCloudDesc();
+  // パス 3: 低解像度の雲を拡大してシーンの色へ重ねる(t0 = 低解像度の雲、t1 = 縮めた距離、t2 = 元の深度)。
+  // プリマルチプライドでブレンドする
+  static PipelineDesc MakeVolumeCloudCompositeDesc();
   static PipelineDesc MakePrimitiveDesc();
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();

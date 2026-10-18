@@ -13,7 +13,10 @@
 #include "GameObject.h"
 #include <algorithm>
 #include <cmath>
+#include <optional>
 #include "Logger.h"
+#include "CpuTimer.h"
+#include "GameAssetPreloader.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -33,6 +36,7 @@
 #include "../actor/Player/PlayerInput.h"
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
+#include "VolumeCloudDebugUi.h"
 #include "GameIntroDirector.h"
 #include "SceneManager.h"
 #include "SceneIds.h"
@@ -53,7 +57,7 @@ constexpr float kGameCameraNear = 0.1f;
 constexpr float kGameCameraFar = 1000.0f;
 
 // 自機のモデル(タイトルと同じ竜)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
-constexpr const char *kPlayerModelPath = "resources/app/player/dragon/dragon.obj";
+constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
 constexpr float kPlayerWingspan = 3.7f;
 
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
@@ -62,24 +66,40 @@ constexpr bool kDebugFlowShortcutEnabled = true;
 } // namespace
 
 void GameScene::Initialize(const SceneServices &services) {
+  // 読み込みの各ブロックの時間を測る(タイトルからの遷移で止まる原因の調査用)。
+  // 全体の時間は、関数を抜けるときにログへ出る
+  CpuTimer::Scope totalScope("GameScene.Initialize(total)");
+
   BaseScene::Initialize(services);
 
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
-  hitEffects_.Initialize();
-
-  // ディゾルブのマスクテクスチャのロード
-  texNoise0_ = am->Load<TextureResource>("resources/noise/noise0.png");
-  // ディゾルブのマスクテクスチャをレンダラーにセット
-  if (texNoise0_) {
-      Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
+  {
+    CpuTimer::Scope scope("GameScene.hitEffects");
+    hitEffects_.Initialize();
   }
 
-  skybox_.Initialize("resources/app/dds/dds.dds");
+  {
+    CpuTimer::Scope scope("GameScene.noise0.png");
+    // ディゾルブのマスクテクスチャのロード
+    texNoise0_ = am->Load<TextureResource>(GameAssetPaths::kDissolveNoise);
+    // ディゾルブのマスクテクスチャをレンダラーにセット
+    if (texNoise0_) {
+        Renderer::GetInstance()->SetDissolveMaskTexture(texNoise0_);
+    }
+  }
 
-  // パーティクルグループの初期化（連射ヒット時のアサートクラッシュ防止）
-  ParticleManager::GetInstance()->CreateParticleGroup("default", "resources/app/particle/circle.png", 500);
-  ParticleManager::GetInstance()->CreateParticleGroup("explosion", "resources/explosion/explosion.png", 100);
+  {
+    CpuTimer::Scope scope("GameScene.skybox(dds)");
+    skybox_.Initialize(GameAssetPaths::kSkyboxDds);
+  }
+
+  {
+    CpuTimer::Scope scope("GameScene.particleGroups");
+    // パーティクルグループの初期化（連射ヒット時のアサートクラッシュ防止）
+    ParticleManager::GetInstance()->CreateParticleGroup(GameParticleGroups::kDefaultName, GameAssetPaths::kDefaultParticleTexture, GameParticleGroups::kDefaultMax);
+    ParticleManager::GetInstance()->CreateParticleGroup(GameParticleGroups::kExplosionName, GameAssetPaths::kExplosionParticleTexture, GameParticleGroups::kExplosionMax);
+  }
 
   // レールカメラの初期化
   auto camera = std::make_shared<GameCamera>();
@@ -121,7 +141,12 @@ void GameScene::Initialize(const SceneServices &services) {
   });
 
   // オートロード：保存されたシーンを読み込む
-  LoadEditorScene();
+  {
+    CpuTimer::Scope scope("GameScene.LoadEditorScene");
+    LoadEditorScene();
+  }
+  // LoadEditorScene の中身の内訳(プレハブ読み込み、モデル読み込みの回数と合計)
+  CpuTimer::FlushAccumulated();
 
   // -----------------------------------------------------------------------
   // 【バグ修正】エディタで配置した敵への onDestroyed コールバック一括登録
@@ -138,6 +163,10 @@ void GameScene::Initialize(const SceneServices &services) {
   // プレイヤーを探す（ロードされたデータにあるか）
   playerObj_ = FindPlayerObject_();
 
+  // プレイヤー周りの準備(竜モデルの読み込みを含む)の時間を測る。
+  // Scope を optional に入れて、この区間の終わりで明示的に閉じる
+  std::optional<CpuTimer::Scope> playerScope;
+  playerScope.emplace("GameScene.playerSetup(model+Fit)");
   // プレイヤーがいなければ生成
   if (!playerObj_) {
       playerObj_ = std::make_shared<AbsoluteEngine::GameObject>("Player");
@@ -177,7 +206,12 @@ void GameScene::Initialize(const SceneServices &services) {
       playerModelComp->FitToWingspan(kPlayerWingspan);
   }
 
-  Renderer::GetInstance()->InitializePostProcess(1280, 720);
+  playerScope.reset(); // プレイヤー周りの区間の終わり
+
+  {
+    CpuTimer::Scope scope("GameScene.InitializePostProcess");
+    Renderer::GetInstance()->InitializePostProcess(1280, 720);
+  }
 
   // デフォルトのライトを探す
   bool hasLight = false;
@@ -213,9 +247,12 @@ void GameScene::Initialize(const SceneServices &services) {
       rootObjects_.push_back(railCamObj);
   }
 
-  // HUDの初期化
-  gameHUD_ = std::make_unique<GameHUD>();
-  gameHUD_->Initialize();
+  {
+    CpuTimer::Scope scope("GameScene.HUD");
+    // HUDの初期化
+    gameHUD_ = std::make_unique<GameHUD>();
+    gameHUD_->Initialize();
+  }
 
   // -----------------------------------------------------------------------
   // タイムラインマネージャーにRailCameraComponentを登録する
@@ -234,7 +271,10 @@ void GameScene::Initialize(const SceneServices &services) {
   // 遠レティクルはさらに約60ユニット先にあるため、その付近に出現するよう80ユニットにする
   SetTimelineSpawnAheadDistance(80.0f);
   // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
-  LoadTimeline();
+  {
+    CpuTimer::Scope scope("GameScene.LoadTimeline");
+    LoadTimeline();
+  }
 
 #ifndef USE_IMGUI
   // ImGuiが無いビルド（Release）ではPlayボタンを押す手段が無いため、
@@ -717,10 +757,19 @@ void GameScene::Draw() {
 
   // オブジェクトの描画
   // 背景: 手続き生成の雲海。比較用に、従来のスカイボックスへ切り替えられる
+  const bool seaLayer = seaCloudMode_ == SeaCloudMode::NewMethod;
   if (useCloudSea_) {
-      renderer->DrawCloudSea(cloudSea_);
+      CloudSeaSettings seaToDraw = cloudSea_;
+      seaToDraw.skyOnly = seaLayer; // 層のときは、空だけ描く(雲は層が描く)
+      renderer->DrawCloudSea(seaToDraw);
   } else {
       skybox_.Draw();
+  }
+
+  // ボリューム雲(箱の中の雲)。実際の描画は、物体を描き終えたあと(EndRenderScene)に行われる。毎フレーム依頼する。
+  // 太陽の向きは雲海と同じにして、光の向きをそろえる
+  if (useVolumeCloud_) {
+      renderer->SetVolumeCloud(seaLayer ? volumeCloudSea_ : volumeCloud_, cloudSea_.SunDirection(), time_);
   }
 
   // エディタ上で配置したオブジェクト群の描画
@@ -800,7 +849,20 @@ void GameScene::DrawEditorUI() {
 
     if (ImGui::CollapsingHeader("Cloud Sea")) {
         ImGui::Checkbox("Use Cloud Sea (off = Skybox)", &useCloudSea_);
+        int seaMode = static_cast<int>(seaCloudMode_);
+        ImGui::RadioButton("Sea clouds: new method (volume layer)", &seaMode, static_cast<int>(SeaCloudMode::NewMethod));
+        ImGui::RadioButton("Sea clouds: old method (height field)", &seaMode, static_cast<int>(SeaCloudMode::OldMethod));
+        seaCloudMode_ = static_cast<SeaCloudMode>(seaMode);
         CloudSeaDebugUi::Draw(cloudSea_);
+        ImGui::Separator();
+    }
+
+    if (ImGui::CollapsingHeader("Volume Cloud")) {
+        ImGui::Checkbox("Use Volume Cloud", &useVolumeCloud_);
+        // 新方式のあいだは、層の設定を調整する(箱の雲は描かない)
+        VolumeCloudSettings &editing = seaCloudMode_ == SeaCloudMode::NewMethod ? volumeCloudSea_ : volumeCloud_;
+        VolumeCloudDebugUi::Draw(editing);
+        VolumeCloudDebugUi::DrawQuality(Renderer::GetInstance()->GetVolumeCloudQuality(), editing);
         ImGui::Separator();
     }
     

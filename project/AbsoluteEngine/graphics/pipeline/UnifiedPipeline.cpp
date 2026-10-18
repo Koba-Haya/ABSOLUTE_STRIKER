@@ -65,6 +65,15 @@ static D3D12_BLEND_DESC MakeBlendDesc(const PipelineDesc &desc) {
     rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
     break;
 
+  case BlendMode::PremultipliedAlpha: // src の色はすでに alpha を掛けてある前提
+    rt.SrcBlend = D3D12_BLEND_ONE;
+    rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+    rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    break;
+
   case BlendMode::Screen: // スクリーンっぽい近似
     // 1 - (1-s) * (1-d) ≒ s + d - s*d
     rt.SrcBlend = D3D12_BLEND_INV_DEST_COLOR;
@@ -226,12 +235,25 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   samp.ShaderRegister = 0;
   samp.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+  // s1: 線形補間 + 繰り返し(usePSWrapSampler_s1 のときだけ)
+  D3D12_STATIC_SAMPLER_DESC samplers[2]{};
+  samplers[0] = samp;
+  UINT numSamplers = 1;
+  if (desc.usePSWrapSampler_s1) {
+    D3D12_STATIC_SAMPLER_DESC &wrap = samplers[numSamplers++];
+    wrap = samp;
+    wrap.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    wrap.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    wrap.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    wrap.ShaderRegister = 1;
+  }
+
   D3D12_ROOT_SIGNATURE_DESC rs{};
   rs.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
   rs.pParameters = params;
   rs.NumParameters = numParams;
-  rs.pStaticSamplers = &samp;
-  rs.NumStaticSamplers = 1;
+  rs.pStaticSamplers = samplers;
+  rs.NumStaticSamplers = numSamplers;
 
   Microsoft::WRL::ComPtr<ID3DBlob> sig, err;
   hr = D3D12SerializeRootSignature(&rs, D3D_ROOT_SIGNATURE_VERSION_1,
@@ -706,6 +728,43 @@ PipelineDesc UnifiedPipeline::MakeTransitionDesc() {
   d.psPath = L"resources/engine/shaders/Transition.PS.hlsl";
   d.usePSMaterial_b0 = true;
   d.usePSEnvironmentMap_t1 = true; // t1: シーンの深度(雲を抜ける遷移で、自機の手前の雲だけをかぶせる)
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeVolumeCloudDepthDesc() {
+  PipelineDesc d = MakeCopyImageDesc(); // 頂点バッファなしの全画面三角形、深度テストなし
+  d.psPath = L"resources/engine/shaders/VolumeCloudDepth.PS.hlsl";
+  d.usePSMaterial_b0 = true;          // b0: VolumeCloudParam
+  d.usePSTextureTable_t0 = true;      // t0: シーンの深度
+  d.rtvFormat = DXGI_FORMAT_R32_FLOAT; // カメラから物体までの距離(無限遠は大きな値)
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;  // 深度バッファは付けずに描く
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeVolumeCloudDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/VolumeCloud.PS.hlsl";
+  d.usePSMaterial_b0 = true;          // b0: VolumeCloudParam
+  d.usePSTextureTable_t0 = true;      // t0: 形のノイズ(3D)
+  d.usePSEnvironmentMap_t1 = true;    // t1: 細かい模様(3D)。ルートの枠は環境マップ用のものを借りる
+  d.usePSMaskTexture_t2 = true;       // t2: 縮めた距離。ルートの枠はマスク用のものを借りる
+  d.usePSWrapSampler_s1 = true;       // s1: 繰り返し
+  d.rtvFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // 光はリニア、1 を超えてもよい(HDR)。ブレンドなしで、そのまま書く
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeVolumeCloudCompositeDesc() {
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/VolumeCloudComposite.PS.hlsl";
+  d.usePSMaterial_b0 = true;          // b0: VolumeCloudParam
+  d.usePSTextureTable_t0 = true;      // t0: 低解像度の雲
+  d.usePSEnvironmentMap_t1 = true;    // t1: 縮めた距離。ルートの枠は環境マップ用のものを借りる
+  d.usePSMaskTexture_t2 = true;       // t2: 元の深度。ルートの枠はマスク用のものを借りる
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::PremultipliedAlpha;
+  d.depthWrite = false;
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;  // 深度バッファは付けずに描く(深度はテクスチャとして読む)
   return d;
 }
 
