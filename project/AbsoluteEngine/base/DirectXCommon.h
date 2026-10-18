@@ -2,6 +2,7 @@
 #include "externals/DirectXTex/d3dx12.h"
 #include "SrvAllocator.h"
 #include "DirectXResourceUtils.h"
+#include "GpuTimer.h"
 #include <Windows.h>
 #include <dxgi1_6.h>
 #include <wrl.h>
@@ -68,6 +69,9 @@ public:
 	// const版SRV割当器取得
 	const SrvAllocator& GetSrvAllocator() const { return *srvAlloc_; }
 
+	// GPU 処理時間の計測器(区間の測り方は GpuTimer.h を参照)
+	GpuTimer& GetGpuTimer() { return gpuTimer_; }
+
 	UINT GetSRVDescriptorSize() const { return descriptorSizeSRV_; }
 	UINT GetDSVDescriptorSize() const { return descriptorSizeDSV_; }
 	int GetBackBufferCount() const { return swapChainDesc_.BufferCount; }
@@ -81,6 +85,21 @@ public:
 	void SetRenderTarget(class RenderTexture* target);
 	void SetRenderTargetWithDepth(class RenderTexture* target, class DepthTexture* depthTarget);
 	void FinishRendering(class RenderTexture* target); // リソース遷移を行ってからバックバッファへ
+	// 描画中のシーン(target と depthTarget)に対して、深度をテクスチャとして読みながら色だけへ描くパスを始める。
+	// 深度を「書き込み用(DSV)」から「読み取り用(SRV)」へ切り替え、深度バッファを付けずに target へ描く。
+	// 終わったら、通常どおり FinishRenderingWithDepth を呼ぶ(深度はすでに読み取り用なので、色だけが遷移する)
+	void BeginColorPassReadingDepth(class RenderTexture* target, class DepthTexture* depthTarget);
+	// 深度を「書き込み用」から「読み取り用(テクスチャ)」へ切り替える(すでに読み取り用なら何もしない)
+	void EnsureDepthReadable(class DepthTexture* depthTarget);
+	// 色だけを描画先にして(深度バッファなし)、読み取り用から描画用へ切り替える。終わったら TransitionToShaderResource を呼ぶ。
+	// ビューポートはそのまま(SetViewportAndScissor で、描く範囲を先に決めておく)
+	void SetRenderTargetColorOnly(class RenderTexture* target);
+	// 描き終えた target を、描画用から読み取り用(テクスチャ)へ切り替える。描画先はそのまま(戻さない)
+	void TransitionToShaderResource(class RenderTexture* target);
+	// ビューポートとシザー矩形を、左上から width x height の範囲にする(低解像度の描画用)
+	void SetViewportAndScissor(uint32_t width, uint32_t height);
+	// ビューポートとシザー矩形を、通常(画面全体)へ戻す
+	void ResetViewportAndScissor();
 	void FinishRenderingWithDepth(class RenderTexture* target, class DepthTexture* depthTarget);
 	void ResetRenderTarget(); // 強制的にバックバッファへ（遷移なし）
 
@@ -143,6 +162,10 @@ private:
 	ComPtr<ID3D12Fence> fence_;
 	uint64_t fenceValue_ = 0;
 	HANDLE fenceEvent_ = nullptr;
+
+	// GPU 時間の計測。frameTimerSlot_ は 1 フレーム全体("Frame")の区間番号
+	GpuTimer gpuTimer_;
+	int32_t frameTimerSlot_ = -1;
 
 	// ビューポート/シザー
 	D3D12_VIEWPORT viewport_{};

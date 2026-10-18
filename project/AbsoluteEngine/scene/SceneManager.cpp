@@ -5,6 +5,7 @@
 #include "BaseScene.h"
 #include "ISceneFactory.h"
 #include "Renderer.h"
+#include "CpuTimer.h"
 
 namespace {
 // 遷移の時間を進める 1 フレームの長さ。シーン側(BaseScene)の固定 deltaTime と同じ 1/60 秒。
@@ -92,11 +93,14 @@ void SceneManager::ApplySceneChangeIfNeeded() {
     return;
   }
 
+  // 遷移時の停止の調査用: 旧シーンの後始末と、新シーンの生成・初期化の時間を測る
   if (current_) {
+    CpuTimer::Scope scope("SceneManager.OldScene.Finalize");
     current_->Finalize();
     current_.reset();
   }
 
+  CpuTimer::Scope initScope("SceneManager.NewScene.Initialize(total)");
   current_ = std::move(next_);
   currentSceneId_ = nextSceneId_;
   current_->SetSceneManager(this);

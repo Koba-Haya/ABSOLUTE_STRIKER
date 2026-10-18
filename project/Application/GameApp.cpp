@@ -3,6 +3,7 @@
 
 #include "AbsoluteEngine/base/EnginePath.h"
 #include "Logger.h"
+#include "scene/GameAssetPreloader.h"
 #include "Renderer.h"
 #include "SceneFactory.h"
 #include "SceneIds.h"
@@ -57,6 +58,9 @@ void GameApp::Finalize() {
     sceneManager_->Finalize();
     sceneManager_.reset();
   }
+
+  // 先読みして保持している資産を、DirectX の破棄より前に手放す
+  GameAssetPreloader::Release();
 }
 
 void GameApp::Update() {

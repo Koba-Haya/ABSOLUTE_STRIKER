@@ -105,6 +105,19 @@ private:
   // skybox_ は、雲海のときも環境マップ(反射)として使い続ける
   CloudSeaSettings cloudSea_;
   bool useCloudSea_ = true;
+  // ボリューム雲(ワールドに固定した箱の雲。ImGui で調整できる)。useVolumeCloud_ が false なら描かない(比較用)。
+  // 描画の仕組みは Renderer::AddVolumeCloud と shaders/VolumeCloud.hlsli を参照
+  VolumeCloudSettings volumeCloud_;
+  bool useVolumeCloud_ = true;
+  // 雲海を、どちらの方式で描くか(比較用。既定は新方式)。
+  //   OldMethod: 旧方式(高さの地図を探す簡易版。空と雲を CloudSea.hlsli が 1 つのシェーダーで描く。cloudSea_)
+  //   NewMethod: 新方式。空は SeaSky.PS.hlsl(seaSky_)、雲はボリューム雲の「層」(volumeCloudSea_)。
+  //              箱の雲(volumeCloud_)と同じフレームに重ねて描ける(奥から手前の順)
+  enum class SeaCloudMode : int { OldMethod = 0, NewMethod = 1 };
+  SeaCloudMode seaCloudMode_ = SeaCloudMode::NewMethod;
+  SeaSkySettings seaSky_;
+  VolumeCloudSettings volumeCloudSea_ = MakeSeaLayerSettings();
+  bool volumeCloudEditSea_ = true; // 調整 UI で、雲海の層(true)と箱(false)のどちらを調整するか
 
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;

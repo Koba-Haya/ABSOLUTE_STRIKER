@@ -6,7 +6,9 @@
 #include "../graphics/3d/model/ModelResource.h"
 #include "Method.h"
 #include <algorithm>
+#include <optional>
 #include <vector>
+#include "CpuTimer.h"
 
 namespace AbsoluteEngine {
 
@@ -15,9 +17,14 @@ constexpr float kMinFitWidth = 1e-4f; // これより幅が小さいモデルは
 } // namespace
 
 void ModelComponent::LoadModel(const std::string& path) {
+    // 停止の調査用: リソース取得(キャッシュ命中なら速い)と、インスタンス生成を分けて測る
+    std::optional<CpuTimer::AccumScope> resScope;
+    resScope.emplace("ModelComponent.LoadResource");
     auto res = AssetManager::GetInstance()->Load<ModelResource>(path);
+    resScope.reset();
     if (!res) return;
 
+    CpuTimer::AccumScope instScope("ModelComponent.CreateInstance");
     modelPath_ = path;
     fitCenter_ = {0.0f, 0.0f, 0.0f};
     fitScale_ = 1.0f;

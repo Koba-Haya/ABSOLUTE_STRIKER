@@ -63,10 +63,12 @@
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
+    <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
     <ClCompile Include="scene\GameIntroDirector.cpp" />
     <ClCompile Include="scene\ResultBackdrop.cpp" />
     <ClCompile Include="scene\ResultBanner.cpp" />
     <ClCompile Include="scene\HitEffectSpawner.cpp" />
+    <ClCompile Include="scene\GameAssetPreloader.cpp" />
     <ClCompile Include="scene\PostEffectDirector.cpp" />
     <ClCompile Include="scene\ScoreTracker.cpp" />
   </ItemGroup>
@@ -106,10 +108,12 @@
     <ClInclude Include="actor\Player\PlayerInput.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
+    <ClInclude Include="scene\VolumeCloudDebugUi.h" />
     <ClInclude Include="scene\GameIntroDirector.h" />
     <ClInclude Include="scene\ResultBackdrop.h" />
     <ClInclude Include="scene\ResultBanner.h" />
     <ClInclude Include="scene\HitEffectSpawner.h" />
+    <ClInclude Include="scene\GameAssetPreloader.h" />
     <ClInclude Include="scene\PostEffectDirector.h" />
     <ClInclude Include="scene\ScoreTracker.h" />
   </ItemGroup>
