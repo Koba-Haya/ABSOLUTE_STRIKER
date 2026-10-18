@@ -36,6 +36,11 @@ public:
     float GetCollisionRadius() const { return radius_; }
 
 private:
+    /// <summary>
+    /// 弾が消えるときの共通処理。尾を切り離して残し、弾自体を破棄する。
+    /// </summary>
+    void Finish_();
+
     // --- ベジェ曲線用パラメータ ---
     Vector3 startPos_{ 0, 0, 0 };    // P0: 発射時の始点（固定）
     Vector3 controlPos_{ 0, 0, 0 };  // P1: 制御点（固定）

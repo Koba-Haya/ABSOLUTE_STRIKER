@@ -18,6 +18,8 @@
 #include "SkinCluster.h"
 #include "UnifiedPipeline.h"
 #include "PrimitiveDrawer.h"
+#include "RibbonDrawer.h"
+#include "RibbonTrail.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -30,6 +32,12 @@
     if (!_res)                                                                 \
       throw std::runtime_error(#call " failed!");                              \
   }
+
+namespace {
+// 1フレームに描けるリボンの頂点の総数(共有バッファの大きさ)。
+// 1本のリボンは最大 (RibbonTrail::Params::maxPoints + 1) * 2 頂点なので、同時に数十本は描ける
+constexpr uint32_t kMaxRibbonVertices = 16384;
+} // namespace
 
 // シングルトンの実体を .cpp 内に隠蔽
 Renderer *Renderer::GetInstance() {
@@ -213,6 +221,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ringPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ringPipeline_->Initialize(device, utils, compiler,
                                          includeHandler, ringDesc));
+    PipelineDesc ribbonDesc = UnifiedPipeline::MakeRibbonDesc();
+    ribbonPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(ribbonPipeline_->Initialize(device, utils, compiler,
+                                           includeHandler, ribbonDesc));
     PipelineDesc cylinderDesc = UnifiedPipeline::MakeCylinderDesc();
     cylinderPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(cylinderPipeline_->Initialize(device, utils, compiler,
@@ -281,6 +293,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   primitiveDrawer_ = std::make_unique<PrimitiveDrawer>();
   primitiveDrawer_->Initialize(dx_);
 
+  // Ribbon Drawer(軌跡の帯。頂点バッファは全リボンで共有)
+  ribbonDrawer_ = std::make_unique<RibbonDrawer>();
+  ribbonDrawer_->Initialize(device, kMaxRibbonVertices);
+
   auto align256 = [](size_t size) -> size_t { return (size + 255) & ~255; };
 
   cameraCB_ = CreateUploadBuffer(align256(sizeof(CameraForGPU)));
@@ -302,6 +318,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
   primitiveTransformCB_->Map(
       0, nullptr, reinterpret_cast<void **>(&primitiveTransformMapped_));
+
+  ribbonTransformCB_ = CreateUploadBuffer(align256(sizeof(TransformCB)));
+  ribbonTransformCB_->Map(
+      0, nullptr, reinterpret_cast<void **>(&ribbonTransformMapped_));
 
   vignetteParamCB_ = CreateUploadBuffer(align256(sizeof(VignetteParam)));
   vignetteParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&vignetteParamMapped_));
@@ -1144,6 +1164,9 @@ void Renderer::InitializePostProcess(uint32_t width, uint32_t height) {
 }
 
 void Renderer::BeginRenderScene() {
+    // リボンの共有頂点バッファの書き込み位置を、フレームの最初に先頭へ戻す
+    if (ribbonDrawer_) ribbonDrawer_->Reset();
+
     if (renderTexture_ && depthTexture_) {
         dx_->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
         float clearColor[] = { 0.1f, 0.25f, 0.5f, 1.0f };
@@ -1396,6 +1419,27 @@ void Renderer::DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE text
 
   // 描画
   cylinder->Draw(cmdList);
+}
+
+void Renderer::DrawRibbon(const RibbonTrail &trail) {
+  if (!ribbonDrawer_ || !ribbonTransformMapped_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // リボンの頂点はワールド座標なので、ビュー射影行列だけを渡す。
+  // 同じフレームの全リボンで同じ値になるため、定数バッファは1つを共有してよい
+  ribbonTransformMapped_->WVP = Multiply(view_, proj_);
+
+  // カメラのワールド座標は、ビュー行列の逆行列の平行移動成分から求める。
+  // 帯の幅方向(カメラに面を向ける向き)を決めるのに使う
+  const Matrix4x4 invView = Inverse(view_);
+  const Vector3 cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+  ribbonPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(
+      0, ribbonTransformCB_->GetGPUVirtualAddress());
+
+  ribbonDrawer_->Draw(cmdList, trail, cameraPosition);
 }
 
 UnifiedPipeline *Renderer::GetSpritePipeline_(BlendMode mode) {

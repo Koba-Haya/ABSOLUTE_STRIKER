@@ -621,6 +621,31 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeRibbonDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      {"COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+  };
+  d.vsPath = L"resources/engine/shaders/Ribbon.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/Ribbon.PS.hlsl";
+  d.usePSMaterial_b0 = false;      // 色は頂点カラーで渡すので、PS の定数バッファは使わない
+  d.useVSTransform_b0 = true;      // ルートパラメータ 0 番: VS の変換行列
+  d.usePSTextureTable_t0 = false;
+  d.enableDepth = true;            // 敵や地形に隠れるようにする
+  d.depthWrite = false;            // 半透明の帯が、後ろの物を隠さないようにする
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Add;    // 加算合成で光らせる
+  d.cullMode = D3D12_CULL_MODE_NONE; // 帯は裏から見ても描く
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeCopyImageDesc() {
   PipelineDesc d{};
   d.inputElements = {}; // 頂点バッファなし
