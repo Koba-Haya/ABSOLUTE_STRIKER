@@ -27,6 +27,8 @@ class ModelInstance;
 class Sprite;
 class Skybox;
 class PrimitiveDrawer;
+class RibbonDrawer;
+class RibbonTrail;
 class ParticleManager;
 class Camera;
 class Ring;
@@ -182,7 +184,9 @@ public:
   void DrawEffectModel(ModelInstance *model);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
-  
+  // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ
+  void DrawRibbon(const RibbonTrail &trail);
+
   enum class PostProcessMode {
     Normal,
     Grayscale,
@@ -311,6 +315,10 @@ private:
 
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
+  std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
+  std::unique_ptr<RibbonDrawer> ribbonDrawer_;
+  ComPtr<ID3D12Resource> ribbonTransformCB_;
+  TransformCB *ribbonTransformMapped_ = nullptr;
   std::unique_ptr<UnifiedPipeline> cylinderPipeline_;
   std::unique_ptr<UnifiedPipeline> copyImagePipeline_;
   std::unique_ptr<UnifiedPipeline> grayscalePipeline_;

@@ -119,6 +119,8 @@ public:
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
   static PipelineDesc MakeRingDesc();
+  // 軌跡の帯(リボン)。頂点は位置・UV・色。b0 は VS の変換行列だけ(PS の定数バッファ・テクスチャなし)
+  static PipelineDesc MakeRibbonDesc();
   static PipelineDesc MakeCylinderDesc();
   static PipelineDesc MakeCopyImageDesc();
   static PipelineDesc MakeGrayscaleDesc();

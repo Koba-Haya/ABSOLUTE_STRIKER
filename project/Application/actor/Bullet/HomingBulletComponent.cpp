@@ -1,6 +1,7 @@
 #include "HomingBulletComponent.h"
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
+#include "RibbonTrailComponent.h"
 #include <cmath>
 
 // -----------------------------------------------------------------------
@@ -42,12 +43,12 @@ void HomingBulletComponent::Update(float deltaTime) {
 
         if (!alive) {
             // ターゲットが消滅 → 弾も消す
-            owner_->Destroy();
+            Finish_();
             return;
         }
     } else {
         // ターゲットのGameObjectが既に解放済み → 弾も消す
-        owner_->Destroy();
+        Finish_();
         return;
     }
 
@@ -116,7 +117,20 @@ void HomingBulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     // タグのみで判定する（名前に「Enemy」が含まれる敵弾を誤って消滅させるバグを防ぐ）
     const std::string& otherTag = other->GetTag();
     if (otherTag == "Enemy" || otherTag == "Boss") {
-        isActive_ = false;
-        owner_->Destroy();
+        Finish_();
     }
+}
+
+// -----------------------------------------------------------------------
+// Finish_（弾が消えるときの共通処理）
+// -----------------------------------------------------------------------
+void HomingBulletComponent::Finish_() {
+    isActive_ = false;
+
+    // 尾を弾から切り離して残す。弾と一緒に尾が一瞬で消えて、光の帯がぶつ切りに見えるのを防ぐ
+    if (auto* trail = owner_->GetComponent<RibbonTrailComponent>()) {
+        trail->DetachToScene();
+    }
+
+    owner_->Destroy();
 }

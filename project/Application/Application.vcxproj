@@ -182,6 +182,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="actor\Bullet\HomingBulletComponent.cpp" />
+    <ClCompile Include="actor\Bullet\RibbonTrailComponent.cpp" />
+    <ClCompile Include="actor\Bullet\RibbonTrailFadeComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
@@ -223,6 +225,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="actor\Bullet\HomingBulletComponent.h" />
+    <ClInclude Include="actor\Bullet\RibbonTrailComponent.h" />
+    <ClInclude Include="actor\Bullet\RibbonTrailFadeComponent.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />
     <ClInclude Include="actor\Enemy\EnemyComponent.h" />

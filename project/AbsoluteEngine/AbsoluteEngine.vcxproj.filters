@@ -189,6 +189,12 @@
     <ClCompile Include="graphics\primitive\Ring.cpp">
       <Filter>engine\graphics\primitive</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\primitive\RibbonDrawer.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\primitive\RibbonTrail.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\shader\ShaderCompiler.cpp">
       <Filter>engine\graphics\shader</Filter>
     </ClCompile>
@@ -397,6 +403,12 @@
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\primitive\Ring.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\RibbonDrawer.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\RibbonTrail.h">
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\resources\ResourceObject.h">

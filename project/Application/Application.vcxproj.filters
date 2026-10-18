@@ -47,6 +47,8 @@
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\GameOverScene.cpp" />
     <ClCompile Include="actor\Bullet\HomingBulletComponent.cpp" />
+    <ClCompile Include="actor\Bullet\RibbonTrailComponent.cpp" />
+    <ClCompile Include="actor\Bullet\RibbonTrailFadeComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
@@ -90,6 +92,8 @@
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />
     <ClInclude Include="actor\Bullet\HomingBulletComponent.h" />
+    <ClInclude Include="actor\Bullet\RibbonTrailComponent.h" />
+    <ClInclude Include="actor\Bullet\RibbonTrailFadeComponent.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />

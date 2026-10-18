@@ -160,6 +160,8 @@
     <ClCompile Include="graphics\primitive\Cylinder.cpp" />
     <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp" />
     <ClCompile Include="graphics\primitive\Ring.cpp" />
+    <ClCompile Include="graphics\primitive\RibbonDrawer.cpp" />
+    <ClCompile Include="graphics\primitive\RibbonTrail.cpp" />
     <ClCompile Include="graphics\shader\ShaderCompiler.cpp" />
     <ClCompile Include="graphics\shader\ShaderCompilerUtils.cpp" />
     <ClCompile Include="graphics\texture\PlanarReflection.cpp" />
@@ -243,6 +245,8 @@
     <ClInclude Include="graphics\primitive\Cylinder.h" />
     <ClInclude Include="graphics\primitive\PrimitiveDrawer.h" />
     <ClInclude Include="graphics\primitive\Ring.h" />
+    <ClInclude Include="graphics\primitive\RibbonDrawer.h" />
+    <ClInclude Include="graphics\primitive\RibbonTrail.h" />
     <ClInclude Include="graphics\resources\ResourceObject.h" />
     <ClInclude Include="graphics\shader\ShaderCompiler.h" />
     <ClInclude Include="graphics\shader\ShaderCompilerUtils.h" />
