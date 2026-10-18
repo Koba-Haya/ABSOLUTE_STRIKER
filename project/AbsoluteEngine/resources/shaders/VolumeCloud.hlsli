@@ -29,6 +29,7 @@
 Texture3D<float32_t4> gShape : register(t0);   // 形のノイズ(R: Perlin-Worley, G/B/A: Worley)
 Texture3D<float32_t4> gDetail : register(t1);  // 細かい模様(R/G/B: Worley)
 Texture2D<float32_t> gSceneDistance : register(t2); // カメラから物体までの距離(パス 1 で、低解像度へ縮めた結果)
+Texture2D<float32_t> gBlueNoise : register(t3);     // 青色雑音(レイの開始位置を画素ごとにずらす乱数。0〜1 に一様)
 SamplerState gWrap : register(s1);             // 線形補間 + 繰り返し(ノイズはタイル可能)
 
 static const uint32_t kMaxSteps = 64u;                 // gSteps の上限(ループを抑える)
@@ -46,8 +47,6 @@ static const float32_t kBackLobeRatio = 0.5f;          // 後ろ向きの散乱�
 static const float32_t kForwardWeight = 0.7f;          // 位相関数: 前向きの山の割合(残りは後ろ向き)
 static const float32_t kMinPhaseDenominator = 1.0e-3f;
 static const float32_t kPhaseExponent = 1.5f;
-static const float32_t2 kInterleavedGradientScale = float32_t2(0.06711056f, 0.00583715f); // 画素ごとの乱数(縞を砂目にする)
-static const float32_t kInterleavedGradientMul = 52.9829189f;
 
 static const float32_t kShapeModeLayerThreshold = 0.5f; // gShapeMode はこの値より大きければ層(float で受けるので、整数との比較に幅を持たせる)
 static const float32_t kLayerMarchTopRatio = 0.8f;     // 層: 視線を進め始める高さ(下面から上面までの割合)。上面近くは、薄くて実際には雲がほぼ無いので、そこを飛ばして、雲の表面に近い所から細かい歩幅で進む
@@ -57,7 +56,7 @@ static const float32_t kLayerMaxPathLength = 300.0f;   // 層: 1 本の視線が
 static const float32_t kLayerJitterMin = 0.30f;        // 層: 区間の中でのずらしの範囲(0〜1 全部だと粒が目立つので、中央寄りに狭める。縞と粒の兼ね合い)
 static const float32_t kLayerJitterRange = 0.4f;
 static const float32_t kLayerEdgeSharpness = 0.5f;     // 層: 雲の縁の急さ(小さいほど急で、輪郭がくっきりする。大きいと、ぼやける)
-static const float32_t kLayerEdgeFadeStart = 0.75f;    // 層: 描く距離のこの割合から、雲を薄くして霞へ溶かし始める
+static const float32_t kLayerEdgeFadeStart = 0.5f;     // 層: 描く距離のこの割合から、雲を薄くして霞へ溶かし始める
 static const float32_t3 kLayerHazeColor = float32_t3(0.612f, 0.755f, 1.000f); // 層: 遠くの霞の色(リニア。旧方式の雲海の地平線の色)
 // 層は水平に無限に続くので、ノイズのタイルが繰り返して見える(遠くでは縞になる)。次の 2 つで崩す。
 //   大きな周期の濃淡: タイルと割り切れない大きさの周期で、雲の量をゆるやかに変える(周期が違う 2 つが重なり、繰り返しが目立たない)
@@ -69,7 +68,15 @@ static const float32_t kCoverageLow = 0.55f;             // 形のノイズ R �
 static const float32_t kCoverageHigh = 0.85f;
 static const float32_t kLayerLodStartRatio = 0.35f;      // 細かい模様を省き始める距離(描く距離の上限に対する割合)
 static const float32_t kLayerLodEndRatio = 0.90f;        // 細かい模様を完全に省く距離
-static const float32_t kLowFbmMean = 0.476f;             // 形のノイズ G/B/A の fbm の平均(生成したノイズの統計。省いたときの寄せ先)
+// 歩幅による細かさの省略: 歩幅 dt を、細かい模様の波長(1 / (noiseScale * detailScale))で割った値 r を見る。
+// 標本化定理により、r = 0.5(波長の半分)を超えると、模様を正しく測れず、偽の模様(エイリアシング)がカメラの移動でちらつく。
+// r が小さい(歩幅が細かい)うちはそのまま、限界に近づくにつれて省き、限界で完全に平均へ寄せる
+static const float32_t kLayerStepLodStart = 0.25f;       // 細かい模様を省き始める r(波長の 1/4)
+static const float32_t kLayerStepLodEnd = 0.50f;         // 完全に省く r(波長の 1/2。測れる限界)
+static const float32_t kLowFbmMean = 0.476f;            // 形のノイズ G/B/A の fbm の平均(生成したノイズの統計。省いたときの寄せ先)
+
+static const float32_t kMinKnee = 0.05f;                 // ハイライト圧縮の始まりの下限(0 に近いと、全体が潰れる)
+static const float32_t kKneeOffThreshold = 0.999f;       // 圧縮の始まりがこの値以上なら、圧縮しない
 
 static const float32_t3 kSunColor = float32_t3(1.00f, 0.93f, 0.80f);
 static const float32_t3 kAmbientLow = float32_t3(0.20f, 0.27f, 0.42f);   // 箱の下側の、空からの光
@@ -82,9 +89,14 @@ float32_t Remap(float32_t v, float32_t oldMin, float32_t oldMax, float32_t newMi
     return newMin + (v - oldMin) / max(oldMax - oldMin, kMinRange) * (newMax - newMin);
 }
 
-// 画素ごとの乱数(0〜1)。レイの開始位置をずらして、ステップの段状の縞を細かい粒に変える
-float32_t InterleavedGradientNoise(float32_t2 pixel) {
-    return frac(kInterleavedGradientMul * frac(dot(pixel, kInterleavedGradientScale)));
+// 画素ごとの乱数(0〜1)。レイの開始位置をずらして、ステップの段状の縞を細かい粒に変える。
+// 青色雑音を、画素の座標で引く(画像より広い範囲は、折り返して繰り返す)。
+// 規則的な乱数だと、粒が格子状に並んで、網点のようなドットに見える。青色雑音は、並びに規則性がなく、細かい砂目に見える
+float32_t PixelJitter(float32_t2 pixel) {
+    uint32_t width;
+    uint32_t height;
+    gBlueNoise.GetDimensions(width, height);
+    return gBlueNoise.Load(int3(int2(pixel) % int2(width, height), 0));
 }
 
 // 視線と箱の交差。交差すれば true で、tNear / tFar に入口と出口の距離(カメラから)を返す
@@ -206,6 +218,21 @@ float32_t LightTransmittance(float32_t3 p, float32_t lod) {
     return exp(-opticalDepth * gExtinction);
 }
 
+// 明るい部分だけを、滑らかに圧縮する(ソフトニー)。knee 以下はそのまま、それを超える分を、1 へ向けて有理関数(x / (1 + x))で近づける。
+// 指数関数より、1 への近づき方がゆっくりなので、とても明るい所(前方散乱で、太陽の方を見たときなど)でも、明暗の差が残る。
+// 光が強いと、足し合わせた光が 1 を超えて、白で潰れる(雲の起伏が見えなくなる)。
+// 光を弱める代わりに、明るい所だけを圧縮すれば、暗い所の明るさを保ったまま、白飛びを抑えられる。
+float32_t3 CompressHighlights(float32_t3 color) {
+    if (gHighlightKnee >= kKneeOffThreshold) {
+        return color;
+    }
+    float32_t knee = max(gHighlightKnee, kMinKnee);
+    float32_t range = 1.0f - knee;
+    float32_t3 over = max(color - knee, 0.0f) / range; // knee を 0、knee + range を 1 とした値
+    float32_t3 compressed = knee + range * (over / (1.0f + over));
+    return select(color > knee, compressed, color);
+}
+
 struct VolumeCloudResult {
     float32_t3 color;          // 雲が足す光
     float32_t transmittance;   // 雲を通り抜ける光の割合(1 = 雲なし)
@@ -239,7 +266,7 @@ VolumeCloudResult MarchVolumeCloud(float32_t3 origin, float32_t3 dir, float32_t 
     // 区間を u = 0〜1 に分け、位置を u の累乗で決める)。各区間の中で、画素ごとにずらして縞を粒に変える
     float32_t steps = clamp(gSteps, 1.0f, (float32_t)kMaxSteps);
     float32_t stepPower = layer ? kLayerStepPower : 1.0f;
-    float32_t jitter = InterleavedGradientNoise(pixel);
+    float32_t jitter = PixelJitter(pixel);
     float32_t marchLength = tFar - tNear;
     float32_t phase = Phase(dot(dir, gSunDirection));
 
@@ -252,7 +279,14 @@ VolumeCloudResult MarchVolumeCloud(float32_t3 origin, float32_t3 dir, float32_t 
 
         float32_t3 p = origin + dir * t;
         // 遠いほど細かい模様を省く(層のみ)
-        float32_t lod = layer ? smoothstep(kLayerLodStartRatio * gMaxDistance, kLayerLodEndRatio * gMaxDistance, t) : 0.0f;
+        // 距離による省略と、歩幅による省略(歩幅が細かい模様の波長に対して粗いほど省く)の、強いほうを使う
+        float32_t lod = 0.0f;
+        if (layer) {
+            float32_t distanceLod = smoothstep(kLayerLodStartRatio * gMaxDistance, kLayerLodEndRatio * gMaxDistance, t);
+            float32_t stepToWavelength = dt * gNoiseScale * gDetailScale; // 歩幅 / 細かい模様の波長
+            float32_t stepLod = smoothstep(kLayerStepLodStart, kLayerStepLodEnd, stepToWavelength);
+            lod = max(distanceLod, stepLod);
+        }
         float32_t density = SampleDensity(p, true, lod);
         if (layer) {
             // 描く距離の端へ向けて薄くする(境目を消す)
@@ -264,7 +298,9 @@ VolumeCloudResult MarchVolumeCloud(float32_t3 origin, float32_t3 dir, float32_t 
             // 光: 太陽(遮られずに届く分 * 位相)と、空からの光(上ほど明るい)
             float32_t heightRatio = layer ? saturate((p.y - gLayerBottom) / max(gLayerTop - gLayerBottom, kMinRange))
                                           : saturate(0.5f + (p.y - gBoxCenter.y) / (2.0f * gBoxHalfSize.y));
-            float32_t3 ambient = (layer ? lerp(kLayerAmbientLow, kLayerAmbientHigh, heightRatio) : lerp(kAmbientLow, kAmbientHigh, heightRatio)) * gAmbientIntensity;
+            // 影の持ち上げ: 下側(影)にも、上側の明るい光が回るようにする(大きいほど、影が浅くなる)
+            float32_t lift = saturate(heightRatio + gShadowLift * (1.0f - heightRatio));
+            float32_t3 ambient = (layer ? lerp(kLayerAmbientLow, kLayerAmbientHigh, lift) : lerp(kAmbientLow, kAmbientHigh, lift)) * gAmbientIntensity;
             float32_t3 sun = kSunColor * gSunIntensity * LightTransmittance(p, lod) * phase;
             float32_t3 scatter = ambient + sun;
             if (layer) {
@@ -280,6 +316,7 @@ VolumeCloudResult MarchVolumeCloud(float32_t3 origin, float32_t3 dir, float32_t 
             }
         }
     }
+    result.color = CompressHighlights(result.color);
     return result;
 }
 

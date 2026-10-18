@@ -33,7 +33,8 @@ cbuffer VolumeCloudParam : register(b0) {
     float32_t gLayerTop;          // 層: 上面の高さ(ワールド y)
     float32_t gMaxDistance;       // 層: 描く距離の上限(カメラから。端は霞へ溶かす)
     float32_t gFogDensity;        // 層: 距離に対する霞の強さ(大きいほど、近くから霞む)
-    float32_t2 gPadding;
+    float32_t gHighlightKnee;     // 明るい部分の圧縮を始める値(0〜1)。これを超える光を、1 へ向けて滑らかに圧縮する(1 で圧縮なし)
+    float32_t gShadowLift;        // 影の持ち上げ(0〜1)。大きいほど、影の部分に空からの明るい光が回る
 };
 
 static const float32_t kFarDepth = 0.99999f;           // これ以上の深度は、何も描かれていない(無限遠)

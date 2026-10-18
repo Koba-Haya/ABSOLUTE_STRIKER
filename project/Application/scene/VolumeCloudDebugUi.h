@@ -4,7 +4,7 @@
 
 // ボリューム雲のパラメータを ImGui のスライダーで調整する開発用の UI。
 // Release(USE_IMGUI なし)では何も描かず、常に false を返す(設定値は既定値のまま使われる)。
-// 描画の仕組みは Renderer::SetVolumeCloud と shaders/VolumeCloud.hlsli を参照。
+// 描画の仕組みは Renderer::AddVolumeCloud と shaders/VolumeCloud.hlsli を参照。
 namespace VolumeCloudDebugUi {
 
 // 呼び出し側が開いている ImGui のウィンドウの中に、スライダー群を出す。

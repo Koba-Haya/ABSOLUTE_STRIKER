@@ -35,6 +35,7 @@ constexpr float kDensityMax = 0.5f;
 constexpr float kSunIntensityMax = 5.0f;
 constexpr float kAmbientIntensityMax = 3.0f;
 constexpr float kPhaseGMax = 0.95f;
+constexpr float kHighlightKneeMin = 0.3f;
 constexpr int kStepsMin = 4;
 constexpr int kStepsMax = 64; // シェーダーの kMaxSteps と同じ
 constexpr int kLightStepsMax = 8; // シェーダーの kMaxLightSteps と同じ
@@ -80,6 +81,8 @@ bool Draw(VolumeCloudSettings &settings) {
   changed |= ImGui::SliderFloat("Sun Intensity", &settings.sunIntensity, 0.0f, kSunIntensityMax, "%.2f");
   changed |= ImGui::SliderFloat("Ambient Intensity", &settings.ambientIntensity, 0.0f, kAmbientIntensityMax, "%.2f");
   changed |= ImGui::SliderFloat("Phase G", &settings.phaseG, 0.0f, kPhaseGMax, "%.2f");
+  changed |= ImGui::SliderFloat("Highlight Knee", &settings.highlightKnee, kHighlightKneeMin, 1.0f, "%.2f");
+  changed |= ImGui::SliderFloat("Shadow Lift", &settings.shadowLift, 0.0f, 1.0f, "%.2f");
 
   ImGui::SeparatorText("Cost");
   changed |= ImGui::SliderInt("Resolution Divisor", &settings.resolutionDivisor, kVolumeCloudMinResolutionDivisor,
@@ -101,12 +104,13 @@ bool Draw(VolumeCloudSettings &settings) {
                   "float noiseScale = %.4ff;\nfloat detailScale = %.1ff;\nfloat threshold = %.2ff;\n"
                   "float edgeFade = %.2ff;\nfloat erosion = %.2ff;\nVector3 wind{%.1ff, %.1ff, %.1ff};\n"
                   "float density = %.3ff;\nfloat sunIntensity = %.2ff;\nfloat ambientIntensity = %.2ff;\n"
-                  "float phaseG = %.2ff;\nint32_t resolutionDivisor = %d;\nint32_t steps = %d;\nint32_t lightSteps = %d;\nfloat lightStepLength = %.1ff;\n",
+                  "float phaseG = %.2ff;\nfloat highlightKnee = %.2ff;\nfloat shadowLift = %.2ff;\nint32_t resolutionDivisor = %d;\nint32_t steps = %d;\nint32_t lightSteps = %d;\nfloat lightStepLength = %.1ff;\n",
                   settings.layerBottom, settings.layerTop, settings.maxDistance, settings.fogDensity,
                   settings.center.x, settings.center.y, settings.center.z, settings.halfSize.x, settings.halfSize.y,
                   settings.halfSize.z, settings.noiseScale, settings.detailScale, settings.threshold, settings.edgeFade,
                   settings.erosion, settings.wind.x, settings.wind.y, settings.wind.z, settings.density,
-                  settings.sunIntensity, settings.ambientIntensity, settings.phaseG, settings.resolutionDivisor, settings.steps,
+                  settings.sunIntensity, settings.ambientIntensity, settings.phaseG, settings.highlightKnee, settings.shadowLift,
+                  settings.resolutionDivisor, settings.steps,
                   settings.lightSteps,
                   settings.lightStepLength);
     ImGui::SetClipboardText(text);

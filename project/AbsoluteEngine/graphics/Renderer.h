@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "graphics/CloudSeaSettings.h"
 #include "graphics/VolumeCloudSettings.h"
 #include "graphics/VolumeCloudQuality.h"
+#include "graphics/SeaSkySettings.h"
 #include "graphics/TransitionStyle.h"
 
 #include "LightTypes.h"
@@ -149,14 +151,22 @@ public:
   // カメラは SetCamera で渡したものを使う。雲の模様の位置はカメラ位置から求める(ワールドに固定され、自機が進むと後ろへ流れる)。
   // 座標が大きくなっても模様が崩れないよう、カメラ位置は「整数のマス番号 + 小数」に分けてシェーダーへ渡す
   void DrawCloudSea(const CloudSeaSettings &settings);
-  // ボリューム雲(ワールドに固定した箱の中の雲)を、このフレームに描くよう依頼する。毎フレーム、シーンの Draw の中で呼ぶ。
+  // 新方式の雲海の背景(空)を全画面パスで描く(最奥。旧方式の DrawCloudSea の代わり)。
+  // 空のグラデーション・太陽・雲の切れ間の下の層だけを描く(雲は、AddVolumeCloud の層が担う)。カメラは SetCamera で渡したものを使う
+  void DrawSeaSky(const SeaSkySettings &settings);
+  // 同じフレームに依頼できるボリューム雲の最大数
+  static constexpr size_t kMaxVolumeClouds = 4;
+  // ボリューム雲(箱や層)を、このフレームに描くよう依頼する。毎フレーム、シーンの Draw の中で、描きたい数だけ呼ぶ
+  // (最大 kMaxVolumeClouds 個。それ以上は無視する)。
   // 実際の描画は EndRenderScene の中で、物体とパーティクルを描いたあと・ポストエフェクトの前に行う
   // (シーンの深度を読んで、物体の手前の雲だけを重ねるため)。カメラは SetCamera で渡したものを使う。
+  // 重なる雲は、奥(遠い方)から手前の順に追加すること(追加した順に重ねるため)。
+  // 同じフレームの雲は、解像度の分母をそろえて描く(深度の縮小を 1 回で済ませるため。いちばん粗い分母に合わせる)。
   // sunDirection: 太陽へ向かう向き(正規化は内部で行う)、time: 雲が風で流れるアニメーション用の秒。
   // 3D ノイズの生成に失敗しているときや、settings.enabled が false のときは何もしない
-  void SetVolumeCloud(const VolumeCloudSettings &settings, const Vector3 &sunDirection, float time);
-  // ボリューム雲の品質の自動調整(実測の GPU 時間に合わせて、解像度とステップ数を上げ下げする)。
-  // SetVolumeCloud に渡した設定は「基準」で、描くときだけ、今の段に合わせて軽くした値で上書きされる。
+  void AddVolumeCloud(const VolumeCloudSettings &settings, const Vector3 &sunDirection, float time);
+  // ボリューム雲の品質の自動調整(実測の GPU 時間に合わせて、解像度とステップ数を上げ下げする。全ての雲に同じ段を適用する)。
+  // AddVolumeCloud に渡した設定は「基準」で、描くときだけ、今の段に合わせて軽くした値で上書きされる。
   // 設定や現在の段の確認用(調整 UI が使う)
   VolumeCloudQuality &GetVolumeCloudQuality() { return volumeCloudQuality_; }
   // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
@@ -368,7 +378,7 @@ private:
     float lowRatioA;
     float lowRatioB;
     float floorRatio;
-    float skyOnly; // 1 なら、雲のレイマーチを飛ばして空だけ描く
+    float padding;
   };
   // カメラ位置にノイズ空間の倍率を掛け、整数のマス番号と小数に分ける(double で計算し、座標が大きくなっても精度を保つ)
   static void SplitCloudSeaCell(const Vector3 &cameraPosition, double cellsPerUnit, CloudSeaCellOrigin &out);
@@ -405,6 +415,18 @@ private:
   // 画面遷移の覆いを、ポストエフェクト後のテクスチャ(postProcessTexture_)へ上書きでかける
   void ApplyTransitionPass_();
 
+  // SeaSky.PS.hlsl の cbuffer SeaSkyParam と同じ並び(16 バイト区切り)にすること
+  struct alignas(16) SeaSkyParam {
+    Matrix4x4 invViewProj;
+    Vector3 cameraPosition;
+    float floorHeight;
+    Vector3 sunDirection;
+    float gapDarkness;
+  };
+  std::unique_ptr<UnifiedPipeline> seaSkyPipeline_;
+  ComPtr<ID3D12Resource> seaSkyParamCB_;
+  SeaSkyParam *seaSkyParamMapped_ = nullptr;
+
   // VolumeCloud.hlsli の cbuffer VolumeCloudParam と同じ並び(16 バイト区切り)にすること
   struct alignas(16) VolumeCloudParam {
     Matrix4x4 invViewProj;
@@ -434,7 +456,8 @@ private:
     float layerTop;     // 層: 上面の高さ
     float maxDistance;  // 層: 描く距離の上限
     float fogDensity;   // 層: 霞の強さ
-    float padding[2];
+    float highlightKnee; // 明るい部分の圧縮を始める値
+    float shadowLift;   // 影の持ち上げ
   };
   std::unique_ptr<UnifiedPipeline> volumeCloudDepthPipeline_;     // パス 1: 深度を低解像度へ縮める
   std::unique_ptr<UnifiedPipeline> volumeCloudPipeline_;          // パス 2: 雲を低解像度で描く
@@ -444,18 +467,26 @@ private:
   std::unique_ptr<RenderTexture> volumeCloudColorLow_;    // R16G16B16A16_FLOAT: 雲の光と alpha
   uint32_t sceneWidth_ = 0;  // シーンの描画先の大きさ(InitializePostProcess で決まる)
   uint32_t sceneHeight_ = 0;
-  ComPtr<ID3D12Resource> volumeCloudParamCB_;
-  VolumeCloudParam *volumeCloudParamMapped_ = nullptr;
-  VolumeCloudSettings volumeCloud_{}; // 描く値(基準の設定を、品質の段で軽くしたもの)
+  // このフレームに依頼されたボリューム雲(AddVolumeCloud の順)。描いたら空にする
+  struct VolumeCloudRequest {
+    VolumeCloudSettings settings;
+    Vector3 sunDirection;
+    float time;
+  };
+  std::vector<VolumeCloudRequest> volumeCloudRequests_;
+  // 定数バッファは、雲 1 つにつき 1 つ(同じフレームに複数の雲を描くとき、設定が上書きされないように)
+  ComPtr<ID3D12Resource> volumeCloudParamCBs_[kMaxVolumeClouds];
+  VolumeCloudParam *volumeCloudParamMapped_[kMaxVolumeClouds] = {};
   VolumeCloudQuality volumeCloudQuality_;
-  std::chrono::steady_clock::time_point volumeCloudLastTime_{}; // SetVolumeCloud を前回呼んだ時刻(品質の自動調整に経過時間を渡す)
+  std::chrono::steady_clock::time_point volumeCloudLastTime_{}; // 品質の自動調整を前回更新した時刻(経過時間を渡すため)
   bool volumeCloudHasLastTime_ = false;
-  Vector3 volumeCloudSun_{0.0f, 1.0f, 0.0f};
-  float volumeCloudTime_ = 0.0f;
-  bool volumeCloudPending_ = false; // SetVolumeCloud で依頼され、まだ描いていない間 true
 
   // ボリューム雲の全画面パス。シーンの色へプリマルチプライドでブレンドする(依頼がなければ何もしない)
   void DrawVolumeCloudPass_();
+  // 雲 1 つ分の定数バッファの中身を埋める。divisor: 解像度の分母(同じフレームの雲で共通)
+  static void FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudSettings &settings, const Vector3 &sunDirection,
+                                    float time, const Matrix4x4 &invViewProj, const Vector3 &cameraPosition,
+                                    uint32_t sceneWidth, uint32_t sceneHeight, int32_t divisor);
 
   struct alignas(16) WaterParam {
     Matrix4x4 invViewProj;

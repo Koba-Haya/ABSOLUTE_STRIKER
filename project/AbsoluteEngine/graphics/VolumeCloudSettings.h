@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ボリューム雲(ワールドに固定した箱 1 つ)の見た目のパラメータ。
-// 描画(Renderer::SetVolumeCloud / VolumeCloud.PS.hlsl)とデバッグ UI(VolumeCloudDebugUi)の両方が参照するデータだけの構造体。
+// 描画(Renderer::AddVolumeCloud / VolumeCloud.PS.hlsl)とデバッグ UI(VolumeCloudDebugUi)の両方が参照するデータだけの構造体。
 // 描画の仕組み(3D ノイズ + レイマーチ)は shaders/VolumeCloud.hlsli を参照。
 constexpr int32_t kVolumeCloudMinResolutionDivisor = 1;
 constexpr int32_t kVolumeCloudMaxResolutionDivisor = 4;
@@ -25,9 +25,9 @@ struct VolumeCloudSettings {
 
   // --- 層(shape が Layer のとき。箱の位置と大きさは使わない) ---
   float layerBottom = -44.0f; // 下面の高さ(ワールド y)。既定は旧方式の雲海(平均 y = -35.5、厚み 9)に合わせた値
-  float layerTop = -24.0f;    // 上面の高さ(旧方式の雲海の起伏の最大に合わせた値)
+  float layerTop = -24.0f;  // 上面の高さ(旧方式の雲海の起伏の最大に合わせた値)
   float maxDistance = 1000.0f; // 描く距離の上限(カメラから。ゲームカメラの遠方クリップと同じ。その先は霞)
-  float fogDensity = 0.0012f;  // 距離に対する霞の強さ(大きいと、遠くの雲が早く霞に溶けて、地平線の近くが空だけになる)
+  float fogDensity = 0.0022f;  // 距離に対する霞の強さ(大きいほど、遠くの雲が早く霞に溶ける。小さいと、描く距離の端で雲が急に途切れて見える)
 
   // --- 形 ---
   float noiseScale = 0.05f; // 形のノイズの細かさ(1 ユニットあたりのタイル数。0.05 なら 20 ユニットで 1 周期)
@@ -39,9 +39,11 @@ struct VolumeCloudSettings {
 
   // --- 光と濃さ ---
   float density = 0.06f;          // 消光係数(大きいほど濃く、向こうが見えなくなる)
-  float sunIntensity = 1.0f;      // 太陽の光の強さ
+  float sunIntensity = 0.7f;      // 太陽の光の強さ
   float ambientIntensity = 0.7f;  // 空からの光の強さ
   float phaseG = 0.55f;           // 前方散乱の強さ(0〜1)
+  float highlightKnee = 0.75f;    // 明るい部分の圧縮を始める値(0〜1)。光が強くても、これを超える分は 1 へ滑らかに圧縮されて、白飛びが減る。1 で圧縮なし
+  float shadowLift = 0.15f;       // 影の持ち上げ(0〜1)。大きいほど、影の部分に空からの明るい光が回り、影が浅くなる
 
   // --- 負荷 ---
   // 雲を描く解像度の分母。1 = シーンと同じ、2 = 縦横半分(負荷は約 1/4)、4 = 縦横 1/4。
@@ -63,7 +65,7 @@ inline VolumeCloudSettings MakeSeaLayerSettings() {
   s.edgeFade = 0.35f; // 上面側の薄くなる幅。広いと、上面近くが透けて、水平に近い視線で雲が見えなくなる
   s.erosion = 0.60f;
   s.density = 0.4f;     // 上から見ると、表面近くで光が尽きる濃さ
-  s.sunIntensity = 0.85f;
+  s.sunIntensity = 0.75f;
   s.ambientIntensity = 1.0f;
   s.resolutionDivisor = 2;
   s.steps = 32;

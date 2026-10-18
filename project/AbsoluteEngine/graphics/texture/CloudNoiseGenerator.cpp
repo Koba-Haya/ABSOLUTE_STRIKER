@@ -4,6 +4,8 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <limits>
+#include <random>
 #include <thread>
 #include <vector>
 
@@ -216,9 +218,146 @@ template <class Sampler> DirectX::ScratchImage GenerateVolume(uint32_t size, Sam
   return image;
 }
 
+// --- 青色雑音(void-and-cluster 法。Ulichney 1993) ---
+// 仕組み: 点が「詰まった所(cluster)」から取り除き、「空いた所(void)」へ足す、を繰り返して、点を均等にばらけさせる。
+//         点を取り除く順 / 足す順を、そのまま画素の順位(0 〜 画素数-1)にする。順位が近い画素は、離れて配置される。
+// 「詰まり具合」は、ガウス関数で近くの点の影響を足した値(エネルギー)で測る。端はつながっているものとして扱う(タイル可能)。
+constexpr float kBlueNoiseSigma = 1.9f;            // ガウスの広がり(画素)
+constexpr int32_t kBlueNoiseKernelRadius = 6;      // ガウスを計算する範囲の半径(約 3 sigma)
+constexpr float kBlueNoiseInitialDensity = 0.1f;   // 最初に置く点の割合
+constexpr uint32_t kBlueNoiseSeed = 20261018u;     // 乱数の種(毎回同じ模様になる)
+constexpr int32_t kBlueNoiseMinSize = 16;          // これより小さいと、ガウスの範囲が 1 周して重なる
+
+// size x size の画素の順位(0 〜 size*size-1)を、画素番号(y * size + x)の順で返す
+std::vector<int32_t> BuildBlueNoiseRanks(int32_t size) {
+  const int32_t count = size * size;
+
+  // ガウスの核(中心からの距離で決まる重み)
+  const int32_t kernelWidth = kBlueNoiseKernelRadius * 2 + 1;
+  std::vector<float> kernel(static_cast<size_t>(kernelWidth) * kernelWidth);
+  for (int32_t dy = -kBlueNoiseKernelRadius; dy <= kBlueNoiseKernelRadius; ++dy) {
+    for (int32_t dx = -kBlueNoiseKernelRadius; dx <= kBlueNoiseKernelRadius; ++dx) {
+      const float distanceSq = static_cast<float>(dx * dx + dy * dy);
+      kernel[static_cast<size_t>(dy + kBlueNoiseKernelRadius) * kernelWidth + (dx + kBlueNoiseKernelRadius)] =
+          std::exp(-distanceSq / (2.0f * kBlueNoiseSigma * kBlueNoiseSigma));
+    }
+  }
+
+  std::vector<uint8_t> pattern(count, 0); // 1 = 点がある
+  std::vector<float> energy(count, 0.0f);  // 各画素の、近くの点の影響の合計(大きいほど詰まっている)
+
+  // 点を足す(sign = +1)/ 取り除く(sign = -1)ときに、まわりのエネルギーを更新する
+  auto splat = [&](int32_t index, float sign) {
+    const int32_t x = index % size;
+    const int32_t y = index / size;
+    for (int32_t dy = -kBlueNoiseKernelRadius; dy <= kBlueNoiseKernelRadius; ++dy) {
+      const int32_t yy = ((y + dy) % size + size) % size;
+      for (int32_t dx = -kBlueNoiseKernelRadius; dx <= kBlueNoiseKernelRadius; ++dx) {
+        const int32_t xx = ((x + dx) % size + size) % size;
+        energy[static_cast<size_t>(yy) * size + xx] +=
+            sign * kernel[static_cast<size_t>(dy + kBlueNoiseKernelRadius) * kernelWidth + (dx + kBlueNoiseKernelRadius)];
+      }
+    }
+  };
+  // 点がある画素のうち、一番詰まっている(エネルギーが最大の)画素
+  auto findTightestCluster = [&]() {
+    int32_t best = -1;
+    float bestEnergy = -(std::numeric_limits<float>::max)();
+    for (int32_t i = 0; i < count; ++i) {
+      if (pattern[i] != 0 && energy[i] > bestEnergy) {
+        bestEnergy = energy[i];
+        best = i;
+      }
+    }
+    return best;
+  };
+  // 点がない画素のうち、一番空いている(エネルギーが最小の)画素
+  auto findLargestVoid = [&]() {
+    int32_t best = -1;
+    float bestEnergy = (std::numeric_limits<float>::max)();
+    for (int32_t i = 0; i < count; ++i) {
+      if (pattern[i] == 0 && energy[i] < bestEnergy) {
+        bestEnergy = energy[i];
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  // 初期パターン: 乱数で、一定の割合の点を置く
+  std::vector<int32_t> order(count);
+  for (int32_t i = 0; i < count; ++i) {
+    order[i] = i;
+  }
+  std::mt19937 random(kBlueNoiseSeed);
+  std::shuffle(order.begin(), order.end(), random);
+  const int32_t initialOnes = (std::max)(1, static_cast<int32_t>(static_cast<float>(count) * kBlueNoiseInitialDensity));
+  for (int32_t k = 0; k < initialOnes; ++k) {
+    pattern[order[k]] = 1;
+    splat(order[k], 1.0f);
+  }
+
+  // 緩和: 一番詰まった点を、一番空いた所へ動かす。動かす先が元の位置と同じになったら、落ち着いたとみなして止める
+  for (int32_t iteration = 0; iteration < count; ++iteration) {
+    const int32_t cluster = findTightestCluster();
+    pattern[cluster] = 0;
+    splat(cluster, -1.0f);
+    const int32_t voidIndex = findLargestVoid();
+    pattern[voidIndex] = 1;
+    splat(voidIndex, 1.0f);
+    if (voidIndex == cluster) {
+      break;
+    }
+  }
+  const std::vector<uint8_t> relaxedPattern = pattern;
+  const std::vector<float> relaxedEnergy = energy;
+
+  std::vector<int32_t> ranks(count, 0);
+
+  // 段階 1: 初期の点を、一番詰まった順に取り除き、順位を大きい方(initialOnes - 1)から小さい方へ割り当てる
+  for (int32_t rank = initialOnes - 1; rank >= 0; --rank) {
+    const int32_t cluster = findTightestCluster();
+    ranks[cluster] = rank;
+    pattern[cluster] = 0;
+    splat(cluster, -1.0f);
+  }
+
+  // 段階 2: 初期パターンへ戻し、一番空いた所へ順に点を足して、残りの順位(initialOnes 〜 最後)を割り当てる
+  pattern = relaxedPattern;
+  energy = relaxedEnergy;
+  for (int32_t rank = initialOnes; rank < count; ++rank) {
+    const int32_t voidIndex = findLargestVoid();
+    ranks[voidIndex] = rank;
+    pattern[voidIndex] = 1;
+    splat(voidIndex, 1.0f);
+  }
+  return ranks;
+}
+
 } // namespace
 
 namespace CloudNoiseGenerator {
+
+DirectX::ScratchImage GenerateBlueNoise(uint32_t size) {
+  if (static_cast<int32_t>(size) < kBlueNoiseMinSize) {
+    return DirectX::ScratchImage{};
+  }
+  DirectX::ScratchImage image;
+  if (FAILED(image.Initialize2D(DXGI_FORMAT_R8_UNORM, size, size, 1, 1))) {
+    return DirectX::ScratchImage{};
+  }
+  const int32_t count = static_cast<int32_t>(size * size);
+  const std::vector<int32_t> ranks = BuildBlueNoiseRanks(static_cast<int32_t>(size));
+  const DirectX::Image *pixels = image.GetImage(0, 0, 0);
+  for (uint32_t y = 0; y < size; ++y) {
+    uint8_t *row = pixels->pixels + static_cast<size_t>(y) * pixels->rowPitch;
+    for (uint32_t x = 0; x < size; ++x) {
+      // 順位(0 〜 count-1)を、0〜1 に一様に分布する値へ
+      row[x] = ToByte(static_cast<float>(ranks[static_cast<size_t>(y) * size + x]) / static_cast<float>(count - 1));
+    }
+  }
+  return image;
+}
 
 DirectX::ScratchImage GenerateShape(uint32_t size) {
   return GenerateVolume(size, [](float u, float v, float w) {

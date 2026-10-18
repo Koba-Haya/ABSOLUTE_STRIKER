@@ -50,7 +50,7 @@ cbuffer CloudSeaParam : register(b0) {
     float32_t gLowRatioA;      // うねり 1 層目の倍率(gScale に対する比)。C++ 側の定数と同じ値が入る
     float32_t gLowRatioB;      // うねり 2 層目の倍率
     float32_t gFloorRatio;     // 下の雲層の倍率
-    float32_t gSkyOnly;        // 1 なら、雲のレイマーチを飛ばして空だけ描く(雲をボリューム雲の層が担うとき)
+    float32_t gPadding;
 };
 
 static const uint32_t kCloudSeaOctaves = 4u;
@@ -174,7 +174,7 @@ float32_t3 CloudSeaColor(float32_t3 dir, float32_t3 sunDir, float32_t2 pixel) {
     float32_t3 bg = CloudSeaBackground(dir, sunDir, originY);
     float32_t3 result = bg;
 
-    if (gSkyOnly < 0.5f && dir.y < -kCloudSeaMinLookDown) {
+    if (dir.y < -kCloudSeaMinLookDown) {
         // 雲の柱が存在しうる高さの範囲 [-gThickness, hMax] と、視線が交わる区間 [tTop, tBottom]
         float32_t hMax = gBump + gSwellHeight;
         float32_t tTop = max((hMax - originY) / dir.y, 0.0f);

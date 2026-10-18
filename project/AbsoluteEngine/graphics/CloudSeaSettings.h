@@ -33,9 +33,6 @@ struct CloudSeaSettings {
   float sunAzimuthDeg = 35.0f;   // 太陽の方位(度。+z 方向が 0、+x 方向が正)
   float sunElevationDeg = 25.0f; // 太陽の高さ(度)
 
-  // --- 空だけ描く(雲をボリューム雲の層が担うときの切り替え。シーンが毎フレーム設定する) ---
-  bool skyOnly = false; // true なら、雲のレイマーチを飛ばして、空(グラデーション・太陽・切れ間の下の層)だけ描く
-
   // --- 配置・負荷 ---
   float seaHeight = -35.5f; // 雲海の平均の高さ(ワールド y)。レールの y=0 に対して、自機の 35 ユニット下
   int32_t steps = 14;       // レイマーチのステップ数(多いほど重く、きれい)

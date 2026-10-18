@@ -55,6 +55,12 @@ namespace {
 constexpr float kGameCameraFovY = 0.45f;
 constexpr float kGameCameraNear = 0.1f;
 constexpr float kGameCameraFar = 1000.0f;
+// 調整 UI のスライダーの範囲(新方式の空)
+constexpr float kSeaSkySunAzimuthRange = 180.0f;
+constexpr float kSeaSkySunElevationMin = 5.0f;
+constexpr float kSeaSkySunElevationMax = 80.0f;
+constexpr float kSeaSkyFloorHeightMin = -200.0f;
+constexpr float kSeaSkyFloorHeightMax = -30.0f;
 
 // 自機のモデル(タイトルと同じ竜)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
 constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
@@ -757,19 +763,25 @@ void GameScene::Draw() {
 
   // オブジェクトの描画
   // 背景: 手続き生成の雲海。比較用に、従来のスカイボックスへ切り替えられる
-  const bool seaLayer = seaCloudMode_ == SeaCloudMode::NewMethod;
+  const bool newMethod = seaCloudMode_ == SeaCloudMode::NewMethod;
   if (useCloudSea_) {
-      CloudSeaSettings seaToDraw = cloudSea_;
-      seaToDraw.skyOnly = seaLayer; // 層のときは、空だけ描く(雲は層が描く)
-      renderer->DrawCloudSea(seaToDraw);
+      if (newMethod) {
+          renderer->DrawSeaSky(seaSky_); // 新方式: 空だけ(雲は、下のボリューム雲の層が描く)
+      } else {
+          renderer->DrawCloudSea(cloudSea_); // 旧方式: 空と雲
+      }
   } else {
       skybox_.Draw();
   }
 
-  // ボリューム雲(箱の中の雲)。実際の描画は、物体を描き終えたあと(EndRenderScene)に行われる。毎フレーム依頼する。
-  // 太陽の向きは雲海と同じにして、光の向きをそろえる
+  // ボリューム雲。実際の描画は、物体を描き終えたあと(EndRenderScene)に行われる。毎フレーム依頼する。
+  // 重なるときは奥から手前の順に追加する: 雲海の層(下)→ 箱の雲。太陽の向きは背景と同じにして、光の向きをそろえる
+  const Vector3 sunDirection = newMethod ? seaSky_.SunDirection() : cloudSea_.SunDirection();
+  if (newMethod) {
+      renderer->AddVolumeCloud(volumeCloudSea_, sunDirection, time_);
+  }
   if (useVolumeCloud_) {
-      renderer->SetVolumeCloud(seaLayer ? volumeCloudSea_ : volumeCloud_, cloudSea_.SunDirection(), time_);
+      renderer->AddVolumeCloud(volumeCloud_, sunDirection, time_);
   }
 
   // エディタ上で配置したオブジェクト群の描画
@@ -853,14 +865,31 @@ void GameScene::DrawEditorUI() {
         ImGui::RadioButton("Sea clouds: new method (volume layer)", &seaMode, static_cast<int>(SeaCloudMode::NewMethod));
         ImGui::RadioButton("Sea clouds: old method (height field)", &seaMode, static_cast<int>(SeaCloudMode::OldMethod));
         seaCloudMode_ = static_cast<SeaCloudMode>(seaMode);
-        CloudSeaDebugUi::Draw(cloudSea_);
+        if (seaCloudMode_ == SeaCloudMode::NewMethod) {
+            // 新方式: 空(背景)の設定。雲の設定は、下の「Volume Cloud」で調整する
+            ImGui::SeparatorText("Sea Sky");
+            ImGui::SliderFloat("Sun Azimuth", &seaSky_.sunAzimuthDeg, -kSeaSkySunAzimuthRange, kSeaSkySunAzimuthRange, "%.0f");
+            ImGui::SliderFloat("Sun Elevation", &seaSky_.sunElevationDeg, kSeaSkySunElevationMin, kSeaSkySunElevationMax, "%.0f");
+            ImGui::SliderFloat("Gap Darkness", &seaSky_.gapDarkness, 0.0f, 1.0f, "%.2f");
+            ImGui::SliderFloat("Floor Height", &seaSky_.floorHeight, kSeaSkyFloorHeightMin, kSeaSkyFloorHeightMax, "%.0f");
+        } else {
+            CloudSeaDebugUi::Draw(cloudSea_);
+        }
         ImGui::Separator();
     }
 
     if (ImGui::CollapsingHeader("Volume Cloud")) {
-        ImGui::Checkbox("Use Volume Cloud", &useVolumeCloud_);
-        // 新方式のあいだは、層の設定を調整する(箱の雲は描かない)
-        VolumeCloudSettings &editing = seaCloudMode_ == SeaCloudMode::NewMethod ? volumeCloudSea_ : volumeCloud_;
+        ImGui::Checkbox("Use Volume Cloud (box)", &useVolumeCloud_);
+        // 調整する雲。新方式のときは、雲海の層と箱を選べる(旧方式のときは、箱だけ)
+        const bool canEditSea = seaCloudMode_ == SeaCloudMode::NewMethod;
+        if (canEditSea) {
+            int editTarget = volumeCloudEditSea_ ? 0 : 1;
+            ImGui::RadioButton("Edit: sea layer", &editTarget, 0);
+            ImGui::SameLine();
+            ImGui::RadioButton("Edit: box", &editTarget, 1);
+            volumeCloudEditSea_ = editTarget == 0;
+        }
+        VolumeCloudSettings &editing = (canEditSea && volumeCloudEditSea_) ? volumeCloudSea_ : volumeCloud_;
         VolumeCloudDebugUi::Draw(editing);
         VolumeCloudDebugUi::DrawQuality(Renderer::GetInstance()->GetVolumeCloudQuality(), editing);
         ImGui::Separator();

@@ -149,6 +149,13 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
   srvRangeMask.NumDescriptors = 1;
   srvRangeMask.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
+  // t3: 青色雑音 (PS)
+  D3D12_DESCRIPTOR_RANGE srvRangeBlue{};
+  srvRangeBlue.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+  srvRangeBlue.BaseShaderRegister = 3; // t3
+  srvRangeBlue.NumDescriptors = 1;
+  srvRangeBlue.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
   // --- Root Parameters（フラグに応じて詰める） ---
   D3D12_ROOT_PARAMETER params[16]{};
   UINT numParams = 0;
@@ -215,6 +222,13 @@ bool UnifiedPipeline::Initialize(ID3D12Device *device, IDxcUtils *dxcUtils,
     p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     p.DescriptorTable.pDescriptorRanges = &srvRangeMask;
+    p.DescriptorTable.NumDescriptorRanges = 1;
+  }
+  if (desc.usePSBlueNoise_t3) { // マスクの次
+    auto &p = params[numParams++];
+    p.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    p.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    p.DescriptorTable.pDescriptorRanges = &srvRangeBlue;
     p.DescriptorTable.NumDescriptorRanges = 1;
   }
   if (desc.useVSSkinning_t2) { // Index 9 (Skinningの場合)
@@ -501,6 +515,13 @@ PipelineDesc UnifiedPipeline::MakeCloudSeaDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeSeaSkyDesc() {
+  // 空と同じ全画面パス(深度設定も同じ)で、ピクセルシェーダーだけ雲海の背景にする。b0 は SeaSkyParam
+  PipelineDesc d = MakeSkyDesc();
+  d.psPath = L"resources/engine/shaders/SeaSky.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeSkyboxDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -748,6 +769,7 @@ PipelineDesc UnifiedPipeline::MakeVolumeCloudDesc() {
   d.usePSTextureTable_t0 = true;      // t0: 形のノイズ(3D)
   d.usePSEnvironmentMap_t1 = true;    // t1: 細かい模様(3D)。ルートの枠は環境マップ用のものを借りる
   d.usePSMaskTexture_t2 = true;       // t2: 縮めた距離。ルートの枠はマスク用のものを借りる
+  d.usePSBlueNoise_t3 = true;         // t3: 青色雑音(レイの開始位置のずらし)
   d.usePSWrapSampler_s1 = true;       // s1: 繰り返し
   d.rtvFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // 光はリニア、1 を超えてもよい(HDR)。ブレンドなしで、そのまま書く
   d.dsvFormat = DXGI_FORMAT_UNKNOWN;

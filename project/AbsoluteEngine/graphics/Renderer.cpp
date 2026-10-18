@@ -128,6 +128,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
                                                          UnifiedPipeline::MakeVolumeCloudCompositeDesc()));
   }
 
+  // SeaSky Pipeline(新方式の雲海の背景)
+  {
+    seaSkyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(seaSkyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                           UnifiedPipeline::MakeSeaSkyDesc()));
+  }
+
   // Sprite Pipelines
   {
     PipelineDesc desc = UnifiedPipeline::MakeSpriteDesc();
@@ -352,8 +359,14 @@ void Renderer::Initialize(DirectXCommon *dx) {
   cloudSeaParamCB_ = CreateUploadBuffer(align256(sizeof(CloudSeaParam)));
   cloudSeaParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&cloudSeaParamMapped_));
 
-  volumeCloudParamCB_ = CreateUploadBuffer(align256(sizeof(VolumeCloudParam)));
-  volumeCloudParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&volumeCloudParamMapped_));
+  seaSkyParamCB_ = CreateUploadBuffer(align256(sizeof(SeaSkyParam)));
+  seaSkyParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&seaSkyParamMapped_));
+
+  for (size_t i = 0; i < kMaxVolumeClouds; ++i) {
+    volumeCloudParamCBs_[i] = CreateUploadBuffer(align256(sizeof(VolumeCloudParam)));
+    volumeCloudParamCBs_[i]->Map(0, nullptr, reinterpret_cast<void **>(&volumeCloudParamMapped_[i]));
+  }
+  volumeCloudRequests_.reserve(kMaxVolumeClouds);
 
   transitionParamCB_ = CreateUploadBuffer(align256(sizeof(TransitionParam)));
   transitionParamCB_->Map(0, nullptr, reinterpret_cast<void **>(&transitionParamMapped_));
@@ -882,7 +895,6 @@ void Renderer::DrawCloudSea(const CloudSeaSettings &settings) {
   param->lowRatioA = kCloudSeaLowRatioA;
   param->lowRatioB = kCloudSeaLowRatioB;
   param->floorRatio = kCloudSeaFloorRatio;
-  param->skyOnly = settings.skyOnly ? 1.0f : 0.0f;
 
   // 雲の模様の位置(ノイズ空間 = ワールド座標 * 倍率)を、double で整数部と小数部に分ける。
   // シェーダーは視線上の点をカメラからの相対位置だけで計算するので、ワールド座標が大きくなっても精度が落ちない
@@ -903,124 +915,177 @@ void Renderer::DrawCloudSea(const CloudSeaSettings &settings) {
   cmdList->DrawInstanced(3, 1, 0, 0);
 }
 
-void Renderer::SetVolumeCloud(const VolumeCloudSettings &settings, const Vector3 &sunDirection, float time) {
-  // 品質の自動調整: 直近の GPU の 1 フレームの時間で段を決める。画面遷移の覆いは一時的に重いので、その分は除く
+void Renderer::DrawSeaSky(const SeaSkySettings &settings) {
+  if (!seaSkyPipeline_ || !seaSkyParamMapped_) {
+    return;
+  }
+  auto *cmdList = dx_->GetCommandList();
+  GpuTimer::Scope gpuScope(dx_->GetGpuTimer(), cmdList, "SeaSky");
+
+  const Matrix4x4 invView = Inverse(view_);
+  seaSkyParamMapped_->invViewProj = Inverse(Multiply(view_, proj_));
+  seaSkyParamMapped_->cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+  seaSkyParamMapped_->floorHeight = settings.floorHeight;
+  seaSkyParamMapped_->sunDirection = Normalize(settings.SunDirection());
+  seaSkyParamMapped_->gapDarkness = settings.gapDarkness;
+
+  seaSkyPipeline_->SetPipelineState(cmdList);
+  cmdList->SetGraphicsRootConstantBufferView(0, seaSkyParamCB_->GetGPUVirtualAddress());
+
+  // 頂点バッファなしで 3 頂点描画(大きな三角形 1 つで全画面を覆う)
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawInstanced(3, 1, 0, 0);
+}
+
+void Renderer::AddVolumeCloud(const VolumeCloudSettings &settings, const Vector3 &sunDirection, float time) {
+  if (!settings.enabled || volumeCloudRequests_.size() >= kMaxVolumeClouds) {
+    return;
+  }
+  volumeCloudRequests_.push_back({settings, Normalize(sunDirection), time});
+}
+
+void Renderer::FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudSettings &s, const Vector3 &sunDirection, float time,
+                                     const Matrix4x4 &invViewProj, const Vector3 &cameraPosition, uint32_t sceneWidth,
+                                     uint32_t sceneHeight, int32_t divisor) {
+  // 低解像度の範囲の大きさ(分母で割って、切り上げる)
+  const uint32_t lowWidth = (sceneWidth + static_cast<uint32_t>(divisor) - 1u) / static_cast<uint32_t>(divisor);
+  const uint32_t lowHeight = (sceneHeight + static_cast<uint32_t>(divisor) - 1u) / static_cast<uint32_t>(divisor);
+
+  param.invViewProj = invViewProj;
+  param.cameraPosition = cameraPosition;
+  param.time = time;
+  param.sunDirection = sunDirection;
+  param.extinction = s.density;
+  param.boxCenter = s.center;
+  param.noiseScale = s.noiseScale;
+  param.boxHalfSize = s.halfSize;
+  param.detailScale = s.detailScale;
+  param.windVelocity = s.wind;
+  param.threshold = s.threshold;
+  param.edgeFade = s.edgeFade;
+  param.erosion = s.erosion;
+  param.steps = static_cast<float>(s.steps);
+  param.lightSteps = static_cast<float>(s.lightSteps);
+  param.lightStepLength = s.lightStepLength;
+  param.phaseG = s.phaseG;
+  param.sunIntensity = s.sunIntensity;
+  param.ambientIntensity = s.ambientIntensity;
+  param.fullSize[0] = static_cast<float>(sceneWidth);
+  param.fullSize[1] = static_cast<float>(sceneHeight);
+  param.lowSize[0] = static_cast<float>(lowWidth);
+  param.lowSize[1] = static_cast<float>(lowHeight);
+  param.divisor = static_cast<float>(divisor);
+  param.shapeMode = s.shape == VolumeCloudShape::Layer ? 1.0f : 0.0f;
+  param.layerBottom = s.layerBottom;
+  param.layerTop = s.layerTop;
+  param.maxDistance = s.maxDistance;
+  param.fogDensity = s.fogDensity;
+  param.highlightKnee = s.highlightKnee;
+  param.shadowLift = s.shadowLift;
+}
+
+void Renderer::DrawVolumeCloudPass_() {
+  // 依頼は 1 フレーム分。毎フレーム AddVolumeCloud で渡し直す(シーンが渡さなくなれば、自然に描かれなくなる)。
+  // 描いても描かなくても、この関数の終わりで空にする
+  const size_t count = volumeCloudRequests_.size();
+  const bool ready = count > 0 && volumeCloudDepthPipeline_ && volumeCloudPipeline_ && volumeCloudCompositePipeline_ &&
+                     cloudNoise_ && cloudNoise_->IsInitialized() && renderTexture_ && depthTexture_ && volumeCloudDistanceLow_ &&
+                     volumeCloudColorLow_;
+  if (!ready) {
+    volumeCloudRequests_.clear();
+    return;
+  }
+  auto *cmdList = dx_->GetCommandList();
+
+  // 全体と、パスごとの GPU 時間を測る(区間名: VolumeCloud / VolumeCloud.Depth / .March / .Composite。
+  // 雲が複数あるときは、同じ名前の区間が合計される)
   GpuTimer &gpuTimer = dx_->GetGpuTimer();
+  GpuTimer::Scope totalScope(gpuTimer, cmdList, "VolumeCloud");
+
+  // 品質の自動調整: 直近の GPU の 1 フレームの時間で段を決める(1 フレームに 1 回)。画面遷移の覆いは一時的に重いので、その分は除く
   const auto now = std::chrono::steady_clock::now();
   const float deltaSec = volumeCloudHasLastTime_ ? std::chrono::duration<float>(now - volumeCloudLastTime_).count() : 0.0f;
   volumeCloudLastTime_ = now;
   volumeCloudHasLastTime_ = true;
   volumeCloudQuality_.Update(gpuTimer.GetLastFrameMs("Frame") - gpuTimer.GetLastFrameMs("Transition"), deltaSec);
-  volumeCloud_ = volumeCloudQuality_.Apply(settings);
-  volumeCloudSun_ = Normalize(sunDirection);
-  volumeCloudTime_ = time;
-  volumeCloudPending_ = settings.enabled;
-}
 
-void Renderer::DrawVolumeCloudPass_() {
-  // 依頼は 1 回分。毎フレーム SetVolumeCloud で渡し直す(シーンが渡さなくなれば、自然に描かれなくなる)
-  const bool requested = volumeCloudPending_;
-  volumeCloudPending_ = false;
-  if (!requested || !volumeCloudDepthPipeline_ || !volumeCloudPipeline_ || !volumeCloudCompositePipeline_ ||
-      !volumeCloudParamMapped_ || !cloudNoise_ || !cloudNoise_->IsInitialized() || !renderTexture_ || !depthTexture_ ||
-      !volumeCloudDistanceLow_ || !volumeCloudColorLow_) {
-    return;
+  // 描く値(基準の設定を、品質の段で軽くしたもの)。解像度の分母は、同じフレームの雲で共通にする(いちばん粗い分母に合わせる)
+  std::array<VolumeCloudSettings, kMaxVolumeClouds> effective;
+  int32_t divisor = kVolumeCloudMinResolutionDivisor;
+  for (size_t i = 0; i < count; ++i) {
+    effective[i] = volumeCloudQuality_.Apply(volumeCloudRequests_[i].settings);
+    divisor = (std::max)(divisor, effective[i].resolutionDivisor);
   }
-  auto *cmdList = dx_->GetCommandList();
-
-  // 全体と、パスごとの GPU 時間を測る(区間名: VolumeCloud / VolumeCloud.Depth / .March / .Composite)
-  GpuTimer &gpuTimer = dx_->GetGpuTimer();
-  GpuTimer::Scope totalScope(gpuTimer, cmdList, "VolumeCloud");
-
-  // 低解像度の範囲の大きさ(分母で割って、切り上げる)
-  const VolumeCloudSettings &s = volumeCloud_;
-  const int32_t divisor = std::clamp(s.resolutionDivisor, kVolumeCloudMinResolutionDivisor, kVolumeCloudMaxResolutionDivisor);
+  divisor = std::clamp(divisor, kVolumeCloudMinResolutionDivisor, kVolumeCloudMaxResolutionDivisor);
   const uint32_t lowWidth = (sceneWidth_ + static_cast<uint32_t>(divisor) - 1u) / static_cast<uint32_t>(divisor);
   const uint32_t lowHeight = (sceneHeight_ + static_cast<uint32_t>(divisor) - 1u) / static_cast<uint32_t>(divisor);
 
-  // 3 つのパスが共有する定数バッファ
+  // 雲ごとの定数バッファを埋める(3 つのパスが読む)
   const Matrix4x4 invView = Inverse(view_);
-  VolumeCloudParam *param = volumeCloudParamMapped_;
-  param->invViewProj = Inverse(Multiply(view_, proj_));
-  param->cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
-  param->time = volumeCloudTime_;
-  param->sunDirection = volumeCloudSun_;
-  param->extinction = s.density;
-  param->boxCenter = s.center;
-  param->noiseScale = s.noiseScale;
-  param->boxHalfSize = s.halfSize;
-  param->detailScale = s.detailScale;
-  param->windVelocity = s.wind;
-  param->threshold = s.threshold;
-  param->edgeFade = s.edgeFade;
-  param->erosion = s.erosion;
-  param->steps = static_cast<float>(s.steps);
-  param->lightSteps = static_cast<float>(s.lightSteps);
-  param->lightStepLength = s.lightStepLength;
-  param->phaseG = s.phaseG;
-  param->sunIntensity = s.sunIntensity;
-  param->ambientIntensity = s.ambientIntensity;
-  param->fullSize[0] = static_cast<float>(sceneWidth_);
-  param->fullSize[1] = static_cast<float>(sceneHeight_);
-  param->lowSize[0] = static_cast<float>(lowWidth);
-  param->lowSize[1] = static_cast<float>(lowHeight);
-  param->divisor = static_cast<float>(divisor);
-  param->shapeMode = s.shape == VolumeCloudShape::Layer ? 1.0f : 0.0f;
-  param->layerBottom = s.layerBottom;
-  param->layerTop = s.layerTop;
-  param->maxDistance = s.maxDistance;
-  param->fogDensity = s.fogDensity;
+  const Matrix4x4 invViewProj = Inverse(Multiply(view_, proj_));
+  const Vector3 cameraPosition{invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+  for (size_t i = 0; i < count; ++i) {
+    FillVolumeCloudParam_(*volumeCloudParamMapped_[i], effective[i], volumeCloudRequests_[i].sunDirection,
+                          volumeCloudRequests_[i].time, invViewProj, cameraPosition, sceneWidth_, sceneHeight_, divisor);
+  }
 
   ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
   cmdList->SetDescriptorHeaps(1, heaps);
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-  const D3D12_GPU_VIRTUAL_ADDRESS paramAddress = volumeCloudParamCB_->GetGPUVirtualAddress();
 
-  // 深度を、テクスチャとして読める状態にする(以降の 3 パスすべてが読む)
+  // 深度を、テクスチャとして読める状態にする(以降のパスすべてが読む)
   dx_->EnsureDepthReadable(depthTexture_.get());
 
-  // 描く範囲を、低解像度の大きさにする(パス 1 と 2)
+  // パス 1(フレームに 1 回): 深度を低解像度へ縮める(ブロック内で一番近い深度 -> カメラからの距離)。
+  // 使う項目(カメラ・画面の大きさ・分母)は、どの雲の定数バッファでも同じなので、1 つ目を使う
   dx_->SetViewportAndScissor(lowWidth, lowHeight);
-
-  // パス 1: 深度を低解像度へ縮める(ブロック内で一番近い深度 -> カメラからの距離)
   {
     GpuTimer::Scope scope(gpuTimer, cmdList, "VolumeCloud.Depth");
     dx_->SetRenderTargetColorOnly(volumeCloudDistanceLow_.get());
     volumeCloudDepthPipeline_->SetPipelineState(cmdList);
     // ルートパラメータの並び: 0 = b0、1 = t0(深度)
-    cmdList->SetGraphicsRootConstantBufferView(0, paramAddress);
+    cmdList->SetGraphicsRootConstantBufferView(0, volumeCloudParamCBs_[0]->GetGPUVirtualAddress());
     cmdList->SetGraphicsRootDescriptorTable(1, depthTexture_->GetSrvGpuHandle());
     cmdList->DrawInstanced(3, 1, 0, 0); // 頂点バッファなしで 3 頂点(大きな三角形 1 つで全画面を覆う)
     dx_->TransitionToShaderResource(volumeCloudDistanceLow_.get());
   }
 
-  // パス 2: 雲を低解像度で描く
-  {
-    GpuTimer::Scope scope(gpuTimer, cmdList, "VolumeCloud.March");
-    dx_->SetRenderTargetColorOnly(volumeCloudColorLow_.get());
-    volumeCloudPipeline_->SetPipelineState(cmdList);
-    // ルートパラメータの並び: 0 = b0、1 = t0(形のノイズ)、2 = t1(細かい模様)、3 = t2(縮めた距離)
-    cmdList->SetGraphicsRootConstantBufferView(0, paramAddress);
-    cmdList->SetGraphicsRootDescriptorTable(1, cloudNoise_->GetShapeSrvGpu());
-    cmdList->SetGraphicsRootDescriptorTable(2, cloudNoise_->GetDetailSrvGpu());
-    cmdList->SetGraphicsRootDescriptorTable(3, volumeCloudDistanceLow_->GetSrvGpuHandle());
-    cmdList->DrawInstanced(3, 1, 0, 0);
-    dx_->TransitionToShaderResource(volumeCloudColorLow_.get());
+  // 雲ごとに、パス 2(低解像度で描く)とパス 3(拡大してシーンへ重ねる)。追加した順(奥から手前)に重ねる
+  for (size_t i = 0; i < count; ++i) {
+    const D3D12_GPU_VIRTUAL_ADDRESS paramAddress = volumeCloudParamCBs_[i]->GetGPUVirtualAddress();
+
+    // パス 2: 雲を低解像度で描く(描く範囲を低解像度の大きさへ)
+    {
+      GpuTimer::Scope scope(gpuTimer, cmdList, "VolumeCloud.March");
+      dx_->SetViewportAndScissor(lowWidth, lowHeight);
+      dx_->SetRenderTargetColorOnly(volumeCloudColorLow_.get());
+      volumeCloudPipeline_->SetPipelineState(cmdList);
+      // ルートパラメータの並び: 0 = b0、1 = t0(形のノイズ)、2 = t1(細かい模様)、3 = t2(縮めた距離)、4 = t3(青色雑音)
+      cmdList->SetGraphicsRootConstantBufferView(0, paramAddress);
+      cmdList->SetGraphicsRootDescriptorTable(1, cloudNoise_->GetShapeSrvGpu());
+      cmdList->SetGraphicsRootDescriptorTable(2, cloudNoise_->GetDetailSrvGpu());
+      cmdList->SetGraphicsRootDescriptorTable(3, volumeCloudDistanceLow_->GetSrvGpuHandle());
+      cmdList->SetGraphicsRootDescriptorTable(4, cloudNoise_->GetBlueNoiseSrvGpu());
+      cmdList->DrawInstanced(3, 1, 0, 0);
+      dx_->TransitionToShaderResource(volumeCloudColorLow_.get());
+    }
+
+    // パス 3: 元の解像度へ拡大して、シーンの色へ重ねる(描く範囲を画面全体へ戻す)
+    {
+      GpuTimer::Scope scope(gpuTimer, cmdList, "VolumeCloud.Composite");
+      dx_->ResetViewportAndScissor();
+      dx_->BeginColorPassReadingDepth(renderTexture_.get(), depthTexture_.get());
+      volumeCloudCompositePipeline_->SetPipelineState(cmdList);
+      // ルートパラメータの並び: 0 = b0、1 = t0(低解像度の雲)、2 = t1(縮めた距離)、3 = t2(元の深度)
+      cmdList->SetGraphicsRootConstantBufferView(0, paramAddress);
+      cmdList->SetGraphicsRootDescriptorTable(1, volumeCloudColorLow_->GetSrvGpuHandle());
+      cmdList->SetGraphicsRootDescriptorTable(2, volumeCloudDistanceLow_->GetSrvGpuHandle());
+      cmdList->SetGraphicsRootDescriptorTable(3, depthTexture_->GetSrvGpuHandle());
+      cmdList->DrawInstanced(3, 1, 0, 0);
+    }
   }
 
-  // パス 3: 元の解像度へ拡大して、シーンの色へ重ねる(描く範囲を画面全体へ戻す)
-  {
-    GpuTimer::Scope scope(gpuTimer, cmdList, "VolumeCloud.Composite");
-    dx_->ResetViewportAndScissor();
-    dx_->BeginColorPassReadingDepth(renderTexture_.get(), depthTexture_.get());
-    volumeCloudCompositePipeline_->SetPipelineState(cmdList);
-    // ルートパラメータの並び: 0 = b0、1 = t0(低解像度の雲)、2 = t1(縮めた距離)、3 = t2(元の深度)
-    cmdList->SetGraphicsRootConstantBufferView(0, paramAddress);
-    cmdList->SetGraphicsRootDescriptorTable(1, volumeCloudColorLow_->GetSrvGpuHandle());
-    cmdList->SetGraphicsRootDescriptorTable(2, volumeCloudDistanceLow_->GetSrvGpuHandle());
-    cmdList->SetGraphicsRootDescriptorTable(3, depthTexture_->GetSrvGpuHandle());
-    cmdList->DrawInstanced(3, 1, 0, 0);
-  }
+  volumeCloudRequests_.clear();
 }
 
 void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest) {

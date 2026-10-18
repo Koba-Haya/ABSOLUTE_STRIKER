@@ -19,9 +19,12 @@ public:
   // t0 などの SRV テーブルに設定するための GPU ハンドル
   D3D12_GPU_DESCRIPTOR_HANDLE GetShapeSrvGpu() const { return shape_.GetSrvGpu(); }
   D3D12_GPU_DESCRIPTOR_HANDLE GetDetailSrvGpu() const { return detail_.GetSrvGpu(); }
+  // 青色雑音(2D。レイの開始位置を画素ごとにずらす乱数。タイル可能なので、画素座標を画像の大きさで折り返して引く)
+  D3D12_GPU_DESCRIPTOR_HANDLE GetBlueNoiseSrvGpu() const { return blueNoise_.GetSrvGpu(); }
 
 private:
   TextureResource shape_;
   TextureResource detail_;
+  TextureResource blueNoise_;
   bool initialized_ = false;
 };

@@ -11,6 +11,7 @@ namespace {
 
 constexpr uint32_t kShapeSize = 64;  // 基本の形の 1 辺の画素数(64^3 * 4 バイト = 約 1MB)
 constexpr uint32_t kDetailSize = 32; // 細かい模様の 1 辺の画素数
+constexpr uint32_t kBlueNoiseSize = 64; // 青色雑音の 1 辺の画素数(タイルして繰り返す)
 constexpr uint32_t kChannelCount = 4;
 
 // 確認用: true にすると、生成したノイズの中央のスライスを PNG にして実行フォルダへ書く(見た目の確認専用)
@@ -91,15 +92,17 @@ bool CloudNoiseTextures::Initialize(DirectXCommon *dx) {
   const auto start = std::chrono::steady_clock::now();
   DirectX::ScratchImage shape = CloudNoiseGenerator::GenerateShape(kShapeSize);
   DirectX::ScratchImage detail = CloudNoiseGenerator::GenerateDetail(kDetailSize);
+  DirectX::ScratchImage blueNoise = CloudNoiseGenerator::GenerateBlueNoise(kBlueNoiseSize);
   const auto generated = std::chrono::steady_clock::now();
-  if (shape.GetImageCount() == 0 || detail.GetImageCount() == 0) {
+  if (shape.GetImageCount() == 0 || detail.GetImageCount() == 0 || blueNoise.GetImageCount() == 0) {
     Logger::GetInstance().Log("[CloudNoise] ノイズの生成に失敗しました\n");
     return false;
   }
 
   // 2. GPU のテクスチャを作り、転送の命令を積む
   if (!shape_.CreateFromMetadata(dx, shape, shape.GetMetadata()) ||
-      !detail_.CreateFromMetadata(dx, detail, detail.GetMetadata())) {
+      !detail_.CreateFromMetadata(dx, detail, detail.GetMetadata()) ||
+      !blueNoise_.CreateFromMetadata(dx, blueNoise, blueNoise.GetMetadata())) {
     Logger::GetInstance().Log("[CloudNoise] GPU テクスチャの作成に失敗しました\n");
     return false;
   }
