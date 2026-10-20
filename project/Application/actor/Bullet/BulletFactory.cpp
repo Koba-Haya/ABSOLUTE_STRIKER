@@ -9,6 +9,9 @@
 namespace {
 constexpr const char* kBulletModelPath = "resources/app/bullet/bullet.obj";
 
+// 敵弾の大きさの倍率(1.0 で従来どおり。モデルの表示スケールとコライダー半径の両方に掛ける)
+constexpr float kEnemyBulletScale = 0.5f;
+
 // ホーミング弾の尾の色。背景が青い空なので、水色系ではなく暖色にして目立たせる(加算合成で、芯は白く光る)
 constexpr Vector4 kHomingTrailColor = { 1.0f, 0.55f, 0.15f, 1.0f };
 
@@ -77,7 +80,14 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulle
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> CreateEnemy(const BulletSpec& spec) {
-  return CreateStraight(spec, "EnemyBullet", "EnemyBullet");
+  // 敵弾は見た目と当たり判定を、既定(等倍・半径0.5)より小さくする。
+  // 見た目と当たり判定がずれないよう、同じ倍率で縮める
+  BulletSpec enemySpec = spec;
+  enemySpec.radius = spec.radius * kEnemyBulletScale;
+
+  auto bulletObj = CreateStraight(enemySpec, "EnemyBullet", "EnemyBullet");
+  bulletObj->GetTransform().scale = { kEnemyBulletScale, kEnemyBulletScale, kEnemyBulletScale };
+  return bulletObj;
 }
 
 } // namespace BulletFactory
