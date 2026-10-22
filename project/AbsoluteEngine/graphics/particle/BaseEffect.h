@@ -16,7 +16,8 @@ public:
     bool IsDead() const { return isDead_; }
     void Kill() { isDead_ = true; }
 
-    Transform& GetTransform() { return transform_; }
+    // 読み取り専用で取得する。書き換えは SetTransform 経由にする
+    const Transform& GetTransform() const { return transform_; }
     void SetTransform(const Transform& transform) { transform_ = transform; }
 
 protected:

@@ -190,7 +190,7 @@ void TimelineEditorWindow::DrawTracks() {
         for (size_t i = 0; i < tracks.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
 
-            auto& track = manager_->GetTracksRef()[i];
+            const auto& track = tracks[i]; // 表示のみなので読み取り専用で参照する
             const ImVec2 rowStart = ImGui::GetCursorScreenPos();
             bool trackRemoved = false;
 
@@ -280,10 +280,9 @@ void TimelineEditorWindow::DrawTracks() {
 }
 
 void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
-    auto& tracks = manager_->GetTracksRef();
-    if (trackIndex >= tracks.size()) return;
+    TimelineTrack* track = manager_->GetTrack(trackIndex);
+    if (!track) return;
 
-    auto& track = tracks[trackIndex];
     const float duration = manager_->GetDuration();
     const float pixelsPerSecond = (duration > 0.0f) ? (laneWidth / duration) : 0.0f;
 
@@ -517,7 +516,7 @@ void TimelineEditorWindow::DrawAddEventPopup() {
 
             // Undo用に変更前のスナップショットを保存する（トラック追加等と同じパターン）
             const std::string beforeSnapshot = manager_->SerializeToString();
-            manager_->GetTracksRef()[static_cast<size_t>(addEventTargetTrackIndex_)]
+            manager_->GetTrack(static_cast<size_t>(addEventTargetTrackIndex_))
                 ->AddEvent(std::move(pendingEvent_));
             if (commandManager_) {
                 const std::string afterSnapshot = manager_->SerializeToString();

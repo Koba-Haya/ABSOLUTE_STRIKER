@@ -82,11 +82,22 @@ protected:
   // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
   void UpdateTimeline(float deltaTime);
 
+  // タイムラインの再生を開始する（タイムラインを使わないシーンでは何もしない）
+  void PlayTimeline();
+
   // タイムラインのエディタUIを描画する
   void DrawTimelineEditorUI();
 
 protected:
   void RequestSceneChange(const std::string &sceneId);
+
+  // 画面遷移の進行状況を問い合わせる（読み取り専用）。SceneManager 自体は派生クラスに公開しない
+  // 遷移の進行中か（SceneManager が未設定の場合は false）
+  bool IsSceneTransitioning() const;
+  // 覆いが晴れる途中の進み具合(0-1)。遷移中でない、または SceneManager が未設定なら 1
+  float GetTransitionRevealProgress() const;
+  // 覆いが晴れる区間の長さ（秒）。SceneManager が未設定なら 0
+  float GetTransitionRevealSeconds() const;
 
   // エディタ機能の更新・描画（派生クラスのUpdate/Drawから呼ばれることを想定）
   virtual void UpdateEditor();
@@ -117,22 +128,27 @@ protected:
   // ギズモやクリック判定が画面上の見た目と食い違う不具合になる
   virtual Camera* GetEditorViewCamera() const { return editorCamera_.get(); }
 
-protected:
+  // メンバ変数の宣言順は初期化・破棄の順序を決めるため、アクセス指定子を挟みながら元の順を保つ。
+  // 派生シーンが直接使うものだけ protected に残し、BaseScene 内部だけで使うものは private にする
+private:
   SceneManager *sceneManager_ = nullptr;
-  SceneServices services_{};
+  SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 
   // エンジン・エディタ機能
   std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
+protected:
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
   std::unique_ptr<Camera> editorCamera_; // エディタ用カメラ
+private:
   std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
 
-  PlayMode playMode_ = PlayMode::Edit;
+  PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
   std::string sceneId_ = "";
   std::string backupSceneJson_ = "";
 
   // タイムラインシステム（シーン独立のため BaseScene が所有する）
   // UsesTimeline()がfalseのシーンでは生成されない（nullptrのまま）
+  // 派生クラスからは SetTimelineCamera/UpdateTimeline/PlayTimeline など専用メソッド経由で扱う
   std::unique_ptr<AbsoluteEngine::TimelineManager> timelineManager_;
   std::unique_ptr<AbsoluteEngine::TimelineEditorWindow> timelineEditorWindow_;
 

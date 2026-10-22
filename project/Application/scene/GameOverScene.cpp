@@ -31,18 +31,18 @@ void GameOverScene::Update() {
 
   if (ExhibitionMode::kEnabled) {
     // 展示: 操作を受け付けず、遷移の覆いが晴れてから一定時間たったらタイトルへ戻る
-    const bool isTransitioning = sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+    const bool isTransitioning = IsSceneTransitioning();
     if (!isTransitioning) {
       exhibitionHoldTimer_ += kFrameDeltaSeconds;
       if (exhibitionHoldTimer_ >= ExhibitionMode::kResultHoldSec) {
         RequestSceneChange(SceneId::Title);
       }
     }
-  } else if (services_.input) {
-    if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
+  } else if (GetInput()) {
+    if (GetInput()->TriggerKey(DIK_SPACE) || GetInput()->TriggerKey(DIK_RETURN) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_A)) {
       RequestSceneChange(SceneId::Title);
     }
-    if (services_.input->TriggerKey(DIK_R) || services_.input->WasPadPressed(XINPUT_GAMEPAD_B)) {
+    if (GetInput()->TriggerKey(DIK_R) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_B)) {
       RequestSceneChange(SceneId::Game);
     }
   }

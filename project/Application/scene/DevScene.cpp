@@ -75,7 +75,7 @@ void DevScene::Initialize(const SceneServices &services) {
   }
 
 #ifndef USE_IMGUI
-  playMode_ = PlayMode::Play;
+  SetPlayMode(PlayMode::Play);
 #endif
 }
 
@@ -116,7 +116,7 @@ void DevScene::Update() {
   }
 
   // --- エネミースポーン処理 ---
-  if (playMode_ == PlayMode::Play) {
+  if (GetPlayMode() == PlayMode::Play) {
       int enemyCount = 0;
       for (const auto& obj : rootObjects_) {
           if (obj && obj->GetName() == "Enemy") {
@@ -158,27 +158,27 @@ void DevScene::Update() {
 
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> newObjects;
   
-  if (services_.input) {
+  if (GetInput()) {
       float moveX = 0.0f;
       float moveY = 0.0f;
 
       // キーボード (矢印キーのみ)
-      if (services_.input->PressKey(DIK_UP)) {
+      if (GetInput()->PressKey(DIK_UP)) {
           moveY -= 1.0f;
       }
-      if (services_.input->PressKey(DIK_DOWN)) {
+      if (GetInput()->PressKey(DIK_DOWN)) {
           moveY += 1.0f;
       }
-      if (services_.input->PressKey(DIK_LEFT)) {
+      if (GetInput()->PressKey(DIK_LEFT)) {
           moveX -= 1.0f;
       }
-      if (services_.input->PressKey(DIK_RIGHT)) {
+      if (GetInput()->PressKey(DIK_RIGHT)) {
           moveX += 1.0f;
       }
 
       // ゲームパッド対応 (左スティック)
-      if (services_.input->IsGamepadConnected()) {
-          auto pad = services_.input->GetGamepad();
+      if (GetInput()->IsGamepadConnected()) {
+          auto pad = GetInput()->GetGamepad();
           float padX = pad.lx / 32767.0f;
           float padY = -pad.ly / 32767.0f; // Y軸は上がプラスなので反転
           if (std::abs(padX) > 0.2f) moveX = padX;
@@ -260,9 +260,9 @@ void DevScene::Update() {
 
           // --- 発射入力判定と弾の生成 ---
           fireTimer_ += deltaTime;
-          bool firePressed = services_.input->PressKey(DIK_SPACE);
-          if (services_.input->IsGamepadConnected()) {
-              if (services_.input->IsPadDown(XINPUT_GAMEPAD_A) || services_.input->IsPadDown(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+          bool firePressed = GetInput()->PressKey(DIK_SPACE);
+          if (GetInput()->IsGamepadConnected()) {
+              if (GetInput()->IsPadDown(XINPUT_GAMEPAD_A) || GetInput()->IsPadDown(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
                   firePressed = true;
               }
           }
@@ -558,7 +558,7 @@ void DevScene::Update() {
   EffectManager::GetInstance()->Update(deltaTime, editorCamera_.get());
 
   // ゲームロジックは PlayMode の時のみ更新する
-  if (playMode_ == PlayMode::Play) {
+  if (GetPlayMode() == PlayMode::Play) {
 
 
       // particleEmitter_.Update(deltaTime);

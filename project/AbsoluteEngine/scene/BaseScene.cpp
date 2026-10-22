@@ -72,6 +72,18 @@ void BaseScene::RequestSceneChange(const std::string &sceneId) {
   }
 }
 
+bool BaseScene::IsSceneTransitioning() const {
+  return sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+}
+
+float BaseScene::GetTransitionRevealProgress() const {
+  return sceneManager_ != nullptr ? sceneManager_->GetRevealProgress() : 1.0f;
+}
+
+float BaseScene::GetTransitionRevealSeconds() const {
+  return sceneManager_ != nullptr ? sceneManager_->GetRevealSeconds() : 0.0f;
+}
+
 AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
 #ifdef USE_IMGUI
     if (editorUIManager_) return editorUIManager_->GetCommandManager();
@@ -427,6 +439,11 @@ void BaseScene::SetTimelineSpawnAheadDistance(float distance) {
 void BaseScene::UpdateTimeline(float deltaTime) {
     if (!timelineManager_) return;
     timelineManager_->Update(deltaTime);
+}
+
+void BaseScene::PlayTimeline() {
+    if (!timelineManager_) return;
+    timelineManager_->Play();
 }
 
 void BaseScene::DrawTimelineEditorUI() {

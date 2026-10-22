@@ -247,7 +247,7 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
-  GetMainCamera()->Update(*services_.input);
+  GetMainCamera()->Update(*GetInput());
 
   // プレイヤーを探す（ロードされたデータにあるか）
   playerObj_ = FindPlayerObject_();
@@ -370,7 +370,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // タイトルからゲームシーンに来た時点で自動的にPlayモードへ入る。
   BackupScene();
   SetPlayMode(PlayMode::Play);
-  timelineManager_->Play();
+  PlayTimeline();
 #endif
 
   // ステージ名の板(失敗しても、板が出ないだけで、ゲームは進められる)。
@@ -394,7 +394,7 @@ void GameScene::Finalize() {
 
 void GameScene::BeginIntro_() {
   // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは通常どおり始める)
-  introActive_ = sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+  introActive_ = IsSceneTransitioning();
   if (!introActive_ || GetMainCamera() == nullptr) {
     introActive_ = false;
     return;
@@ -427,13 +427,13 @@ RailCameraComponent *GameScene::FindRailCamera_() const {
 
 void GameScene::UpdateIntro_(float deltaTime) {
   // 覆いが晴れ終わったら、助走を終えて通常の更新へ戻る
-  if (sceneManager_ == nullptr || !sceneManager_->IsTransitioning()) {
+  if (!IsSceneTransitioning()) {
     FinishIntro_();
     return;
   }
 
   const GameIntroPose pose = GameIntroDirector::Evaluate(
-      sceneManager_->GetRevealProgress(), introRailSpeed_, sceneManager_->GetRevealSeconds());
+      GetTransitionRevealProgress(), introRailSpeed_, GetTransitionRevealSeconds());
 
   // 進行方向(カメラの向き)の後ろへ戻した位置へ、カメラと自機を同じだけずらす。
   // 一緒に動かすので、画面の中の自機の位置は変わらず、背景(雲海・グリッド)だけが流れて見える
@@ -630,13 +630,13 @@ void GameScene::FinishIntro_() {
 
 // -----------------------------------------------------------------------
 // GetEditorViewCamera オーバーライド
-// Draw() のカメラ選択分岐（isDebugCamera_ / playMode_ による切り替え）と完全に一致させる。
+// Draw() のカメラ選択分岐（isDebugCamera_ / GetPlayMode() による切り替え）と完全に一致させる。
 // ここがズレると、Viewportに表示されている絵と、ギズモ・クリック判定の座標系が
 // 食い違い、「実際のゲームカメラとは関係ない視点」に見えるバグになる。
 // -----------------------------------------------------------------------
 Camera* GameScene::GetEditorViewCamera() const {
     if (isDebugCamera_) {
-        if (playMode_ == PlayMode::Edit && editorCamera_) {
+        if (GetPlayMode() == PlayMode::Edit && editorCamera_) {
             return editorCamera_.get();
         }
         return debugCamera_.get();
@@ -751,11 +751,11 @@ void GameScene::UpdateMouseCapture_() {
   }
 
   // Development では ImGui のエディタを操作する必要があるため、Escでいつでも解除/再開できる
-  if (services_.input && services_.input->TriggerKey(DIK_ESCAPE)) {
+  if (GetInput() && GetInput()->TriggerKey(DIK_ESCAPE)) {
       mouseCaptureSuspended_ = !mouseCaptureSuspended_;
   }
 
-  const bool isInGame = playMode_ == PlayMode::Play && !isDebugCamera_
+  const bool isInGame = GetPlayMode() == PlayMode::Play && !isDebugCamera_
                      && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss);
   MouseCapture::Apply(isInGame && !mouseCaptureSuspended_);
 }
@@ -825,17 +825,17 @@ void GameScene::SpawnBoss_() {
 }
 
 void GameScene::CheckDebugFlowShortcut_() {
-  if (!kDebugFlowShortcutEnabled || !services_.input) {
+  if (!kDebugFlowShortcutEnabled || !GetInput()) {
     return;
   }
   // すでに終了の要求を出している間は受け付けない(二重に要求しない)
   if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
     return;
   }
-  if (services_.input->TriggerKey(DIK_RETURN)) {
+  if (GetInput()->TriggerKey(DIK_RETURN)) {
     phase_ = GamePhase::Clear;
     RequestSceneChange(SceneId::Clear);
-  } else if (services_.input->TriggerKey(DIK_BACK)) {
+  } else if (GetInput()->TriggerKey(DIK_BACK)) {
     phase_ = GamePhase::GameOver;
     RequestSceneChange(SceneId::GameOver);
   }
@@ -945,14 +945,14 @@ void GameScene::Update() {
 
   // ステージ開始演出の加速の間は、世界の更新(タイムライン、敵、自機、当たり判定)を、1 フレームに複数回回して速くする。
   // 通常は 1 回。エディット中は、速くしない
-  const int worldSteps = playMode_ == PlayMode::Play ? CalcWorldSteps_() : 1;
+  const int worldSteps = GetPlayMode() == PlayMode::Play ? CalcWorldSteps_() : 1;
   for (int i = 0; i < worldSteps; ++i) {
       UpdateEditor();
   }
 
   UpdateMouseCapture_();
 
-  if (playMode_ == PlayMode::Play) {
+  if (GetPlayMode() == PlayMode::Play) {
 #ifdef USE_IMGUI
       bool isDragging = ImGui::GetDragDropPayload() != nullptr;
 #else
@@ -960,17 +960,17 @@ void GameScene::Update() {
 #endif
 
       if (isDebugCamera_) {
-          if (!isDragging) debugCamera_->Update(*services_.input);
+          if (!isDragging) debugCamera_->Update(*GetInput());
       } else {
           // ゲーム（レール）カメラ進行
           CameraContext ctx{};
           ctx.deltaTime = deltaTime;
           GetMainCamera()->SetContext(ctx);
-          if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*services_.input);
+          if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*GetInput());
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (!ExhibitionMode::kEnabled && services_.input && services_.input->TriggerKey(DIK_B)) {
+      if (!ExhibitionMode::kEnabled && GetInput() && GetInput()->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
@@ -1013,7 +1013,7 @@ void GameScene::Update() {
   // シーンの自動セーブ（Editモード専用。Play中に動的スポーンされた敵/弾/ボスを含む
   // 現在の rootObjects_ をそのまま保存してしまうとレベルデータが壊れるため、
   // 実プレイ中（常にPlayMode::Play）は絶対に走らせない）
-  if (playMode_ == PlayMode::Edit) {
+  if (GetPlayMode() == PlayMode::Edit) {
       bool shouldSave = false;
       for (const auto& obj : rootObjects_) {
           if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
@@ -1040,7 +1040,7 @@ void GameScene::Draw() {
   Camera* activeCamera = nullptr;
   if (isDebugCamera_) {
       // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraを使用する
-      if (playMode_ == PlayMode::Edit && editorCamera_) {
+      if (GetPlayMode() == PlayMode::Edit && editorCamera_) {
           renderer->SetCamera(*editorCamera_);
           activeCamera = editorCamera_.get();
       } else {
@@ -1144,14 +1144,14 @@ void GameScene::Draw() {
   renderer->RenderPrimitives();
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
-  if (playMode_ == PlayMode::Play && gameHUD_ && !stageStart_.IsActive()) {
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !stageStart_.IsActive()) {
       gameHUD_->Draw();
   }
 
   Matrix4x4 projInverse;
   if (isDebugCamera_) {
       // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraのプロジェクション逆行列を使用
-      if (playMode_ == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+      if (GetPlayMode() == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
       else projInverse = Inverse(debugCamera_->GetProjectionMatrix());
   } else {
       // Debug Camera OFF: GetMainCamera() のプロジェクション逆行列を使用（タスクD）
@@ -1289,7 +1289,7 @@ void GameScene::DrawEditorUI() {
         CameraContext ctx{};
         ctx.deltaTime = 1.0f / 60.0f;
         GetMainCamera()->SetContext(ctx);
-        if (services_.input) GetMainCamera()->Update(*services_.input);
+        if (GetInput()) GetMainCamera()->Update(*GetInput());
     }
 
     ImGui::End();

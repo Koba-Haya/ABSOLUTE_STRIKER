@@ -27,8 +27,8 @@ public:
     // レールのウェイポイントを設定・取得
     void SetWaypoints(const std::vector<Vector3>& points) { waypoints_ = points; }
     const std::vector<Vector3>& GetWaypoints() const { return waypoints_; }
-    std::vector<Vector3>& GetWaypointsRef() { return waypoints_; }
-    
+
+
     // ウェイポイントの編集機能
     void AddWaypoint(const Vector3& pos);
     void InsertWaypoint(size_t index, const Vector3& pos);

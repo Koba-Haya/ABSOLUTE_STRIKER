@@ -29,9 +29,6 @@ public:
     // イベントリストを取得（読み取り専用）
     const std::vector<std::unique_ptr<ITimelineEvent>>& GetEvents() const { return events_; }
 
-    // イベントリストを取得（書き込み可能）
-    std::vector<std::unique_ptr<ITimelineEvent>>& GetEventsRef() { return events_; }
-
     // -----------------------------------------------------------
     // 時間更新（スイープ判定）
     // -----------------------------------------------------------

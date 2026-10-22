@@ -76,7 +76,7 @@ public:
     // その場で即時発生（発生頻度とは別）
     void Burst(uint32_t count, const Vector3& parentTranslate = { 0,0,0 });
 
-    Params& GetParams() { return params_; }
+    // 発生パラメータを取得する（読み取り専用）。変更は Initialize で渡し直す
     const Params& GetParams() const { return params_; }
 
 private:
