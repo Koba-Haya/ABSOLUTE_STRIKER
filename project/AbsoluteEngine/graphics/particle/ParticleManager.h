@@ -69,7 +69,9 @@ public:
     // - name: グループ名（ユーザーが付けるキー）
     // - texturePath: TextureManagerで読むファイルパス
     // - maxInstances: StructuredBuffer の最大要素数
-    bool CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances);
+    // - softAlpha: true にすると「柔らかいアルファ」のグループになる(霧・雲など、縁がなだらかに重なって見えるもの)。
+    //   Draw の filter で、通常のグループ(加算などで描く)と別のタイミング・別のブレンドで描き分けられる
+    bool CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha = false);
 
     // パーティクルをグループに発生させる（Emitterから呼ぶ想定）
     // endScale を渡すと、寿命の間に scale から endScale へ大きさを変える(煙が広がるなど)。省略時は一定
@@ -83,10 +85,12 @@ public:
     // Draw: グループごとに DrawIndexedInstanced
     // depthTest: true なら深度テストあり(書き込みなし)で描く。他の 3D オブジェクトとの前後関係が正しく出る。
     //            Alpha ブレンドのみ対応(他のブレンドでは無視される)。既定の false は従来どおり深度を見ない
-    void Draw(BlendMode blendMode = BlendMode::Alpha, bool depthTest = false);
+    // filter: 描くグループの選び方。既定はすべて(従来どおり)。
+    //         「柔らかいアルファ」のグループだけ別に描きたいときは、通常の Draw に NormalOnly、柔らかいほうに SoftAlphaOnly を渡す
+    void Draw(BlendMode blendMode = BlendMode::Alpha, bool depthTest = false, ParticleDrawFilter filter = ParticleDrawFilter::All);
 
     // Called by Renderer
-    void DrawInternal(ID3D12GraphicsCommandList* cmdList);
+    void DrawInternal(ID3D12GraphicsCommandList* cmdList, ParticleDrawFilter filter = ParticleDrawFilter::All);
 
     // パラメータ
     void SetAccelerationField(const AccelerationField& field) { accelerationField_ = field; }
@@ -141,7 +145,8 @@ private:
               instanceSrv(std::move(other.instanceSrv)),
               instanceSrvGpu(other.instanceSrvGpu),
               materialCB(std::move(other.materialCB)),
-              materialMapped(other.materialMapped) {
+              materialMapped(other.materialMapped),
+              softAlpha(other.softAlpha) {
             other.textureSrvGpu = {};
             other.maxInstances = 0;
             other.instanceLimit = 0;
@@ -177,6 +182,9 @@ private:
         // Material (b0)
         ComPtr<ID3D12Resource> materialCB;
         ParticleMaterialData* materialMapped = nullptr;
+
+        // 「柔らかいアルファ」のグループか(Draw の filter で選ぶ)。メンバ宣言の順は、上のムーブコンストラクタの初期化の順と合わせる
+        bool softAlpha = false;
     };
 
     DirectXCommon* dx_ = nullptr;

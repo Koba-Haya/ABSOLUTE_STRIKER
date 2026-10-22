@@ -182,6 +182,19 @@ uint32_t ModelResource::GetIndexCount() const { return pImpl_->indexCount; }
 
 const ModelData* ModelResource::GetModelData() const { return pImpl_->modelData.get(); }
 
+bool ModelResource::UpdateVertices(const VertexData *vertices, uint32_t count) {
+  if (!pImpl_->vb || vertices == nullptr || count != pImpl_->vertexCount) {
+    return false;
+  }
+  void *mapped = nullptr;
+  if (FAILED(pImpl_->vb->Map(0, nullptr, &mapped))) {
+    return false;
+  }
+  std::memcpy(mapped, vertices, sizeof(VertexData) * count);
+  pImpl_->vb->Unmap(0, nullptr);
+  return true;
+}
+
 std::vector<Vector3> ModelResource::GetVertexPositions() const {
   std::vector<Vector3> positions;
   if (!pImpl_->modelData) return positions;

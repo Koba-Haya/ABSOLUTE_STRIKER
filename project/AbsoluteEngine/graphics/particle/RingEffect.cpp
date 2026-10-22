@@ -34,14 +34,19 @@ void RingEffect::Update(float deltaTime, const Camera* camera) {
     float t = age_ / lifetime_;
     // 時間経過で拡大し、透明になる
     ringParams_.outerRadius = 1.0f + (maxOuterRadius_ - 1.0f) * t;
-    float alpha = 1.0f - t;
-    ringParams_.colorInner.w = alpha;
-    ringParams_.colorOuter.w = alpha;
+    alpha_ = 1.0f - t;
+    ringParams_.colorInner.w = alpha_;
+    ringParams_.colorOuter.w = alpha_;
 
     ring_.Update(Renderer::GetInstance()->GetDX()->GetDevice(), ringParams_);
 
-    // ビルボード行列の計算
     Matrix4x4 viewMatrix = camera ? camera->GetViewMatrix() : MakeIdentity4x4();
+    Matrix4x4 projMatrix = camera ? camera->GetProjectionMatrix() : MakeIdentity4x4();
+    ApplyTransform_(viewMatrix, projMatrix);
+}
+
+void RingEffect::ApplyTransform_(const Matrix4x4& viewMatrix, const Matrix4x4& projMatrix) {
+    // ビルボード行列の計算
     Matrix4x4 billBoardMat = viewMatrix;
     billBoardMat.m[3][0] = 0.0f;
     billBoardMat.m[3][1] = 0.0f;
@@ -56,13 +61,15 @@ void RingEffect::Update(float deltaTime, const Camera* camera) {
     Matrix4x4 scaleMat = MakeScaleMatrix(transform_.scale);
     Matrix4x4 worldMat = Multiply(scaleMat, billBoardMat);
 
-    Matrix4x4 projMatrix = camera ? camera->GetProjectionMatrix() : MakeIdentity4x4();
     ring_.SetTransform(worldMat, viewMatrix, projMatrix);
-    ring_.SetMaterial({1.0f, 1.0f, 1.0f, alpha}, MakeIdentity4x4());
+    ring_.SetMaterial({1.0f, 1.0f, 1.0f, alpha_}, MakeIdentity4x4());
 }
 
 void RingEffect::Draw() {
     if (texture_) {
-        Renderer::GetInstance()->DrawRing(&ring_, texture_->GetSrvGpu());
+        // 描画の時点のカメラ(Renderer が持つ行列)で、向きと位置を計算し直す
+        auto* renderer = Renderer::GetInstance();
+        ApplyTransform_(renderer->GetViewMatrix(), renderer->GetProjectionMatrix());
+        renderer->DrawRing(&ring_, texture_->GetSrvGpu());
     }
 }

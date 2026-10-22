@@ -36,10 +36,10 @@ public:
 private:
     void UpdatePhase();
     void UpdateAttack(float deltaTime);
-    // 自機のちょっと前に留まりつつ左右上下にゆっくり揺れる（レール終端に鎮座して見えないようにする）
+    // カメラ(=レール)の前方に留まりつつ左右上下にゆっくり揺れる。自機の位置には影響されない
     void UpdateMovement(float deltaTime);
 
-    // アクティブシーンから自機のGameObjectを探す（Fire*/UpdateMovementで共用）
+    // アクティブシーンから自機のGameObjectを探す（Fire*で使用）
     std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer() const;
 
     // 自機へ向かう単発弾を1発発射する

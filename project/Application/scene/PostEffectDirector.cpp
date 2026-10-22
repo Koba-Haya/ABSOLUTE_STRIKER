@@ -1,5 +1,6 @@
 #include "PostEffectDirector.h"
 #include "Renderer.h"
+#include <algorithm> // std::clamp
 #include <cstdlib> // rand()
 
 namespace {
@@ -8,6 +9,10 @@ constexpr float kCameraShakeDuration    = 0.3f;
 constexpr float kCameraShakeIntensity   = 0.2f;
 constexpr float kHitDistortionDuration  = 0.25f;
 constexpr float kHitDistortionIntensity = 0.06f;
+// 加速中のブラーの、最大の強さ(RadialBlur の幅。ヒット時の歪み 0.06 より弱くして、少しだけ掛ける)
+constexpr float kSpeedBlurIntensity     = 0.03f;
+// これ以下の強さのブラーは、掛けない(わずかなブラーのために、ポストエフェクトを切り替えないようにする)
+constexpr float kSpeedBlurMin           = 0.01f;
 constexpr float kBossIntroDuration      = 1.2f;
 constexpr float kPlayerHitDuration      = 0.3f;
 constexpr float kWaveSpawnDuration      = 0.5f;
@@ -91,6 +96,10 @@ void PostEffectDirector::Update(float deltaTime, float totalTime, const FrameSta
   // --- 優先度チェーン（ヘッダのコメント参照） ---
   Renderer::PostProcessMode nextMode = Renderer::PostProcessMode::Normal;
   if (hitDistortion_.IsActive()) {
+    nextMode = Renderer::PostProcessMode::RadialBlur;
+  } else if (state.speedBlur > kSpeedBlurMin) {
+    // 加速中のブラー: ブースト量に比例した強さの RadialBlur(ヒット時の歪みと同じモード。ヒット中は、そちらを優先する)
+    renderer->SetRadialBlurParam(state.speedBlurCenterUv, kSpeedBlurIntensity * std::clamp(state.speedBlur, 0.0f, 1.0f));
     nextMode = Renderer::PostProcessMode::RadialBlur;
   } else if (playerHitVignette_.IsActive()) {
     nextMode = Renderer::PostProcessMode::Vignette;

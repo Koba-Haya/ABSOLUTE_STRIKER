@@ -172,16 +172,21 @@ public:
   // 設定や現在の段の確認用(調整 UI が使う)
   VolumeCloudQuality &GetVolumeCloudQuality() { return volumeCloudQuality_; }
   // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
+  // filter: 描くグループの選び方(既定はすべて)
   void DrawParticles(ParticleManager *pm,
                      BlendMode blendMode = BlendMode::Alpha,
-                     bool depthTest = false);
+                     bool depthTest = false,
+                     ParticleDrawFilter filter = ParticleDrawFilter::All);
   // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
   void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha);
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
   void DrawGrid(float size, int divisions, const Vector4 &color);
   void RenderPrimitives();
   // エフェクト用描画メソッド（中身はDrawModelとほぼ同じだがパイプラインが違う）
-  void DrawEffectModel(ModelInstance *model);
+  // writeDepth: true のとき、深度バッファへ書き込む(アルファが 0.5 以下の画素は捨てるので、文字や模様の形のまま書かれる)。
+  //             ボリューム雲のように、深度を見て後から描かれるものが、このモデルの手前だけに描かれるようになる。
+  //             半透明のエフェクトの後ろを透けさせたいときは false のまま使う
+  void DrawEffectModel(ModelInstance *model, bool writeDepth = false);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ
@@ -314,6 +319,7 @@ private:
   TransformCB *primitiveTransformMapped_ = nullptr;
 
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
+  std::unique_ptr<UnifiedPipeline> effectDepthPipeline_; // エフェクト用(深度を書き込む版。DrawEffectModel の writeDepth)
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;

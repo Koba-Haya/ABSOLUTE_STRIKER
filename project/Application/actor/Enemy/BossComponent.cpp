@@ -23,9 +23,10 @@ constexpr float kSpreadAngleDeg = 12.0f;
 
 constexpr float kSpinSpeed = 0.6f; // rad/sec
 
-// 自機のちょっと前に留まる距離・左右上下の揺れ幅と速さ
-// （レール終端に鎮座して見えないよう、常に自機基準の近い位置に追従させる）
-constexpr float kHoverDistanceFromPlayer = 14.0f;
+// カメラの前方に留まる距離・左右上下の揺れ幅と速さ
+// 基準はカメラ(=レール上の位置)であり、自機の動きには影響されない。
+// 従来(自機の前方14)と見た目の位置が変わらないよう、自機のカメラ前方距離(22)+14 = 36 にしている
+constexpr float kHoverDistanceFromCamera = 36.0f;
 constexpr float kWeaveAmplitudeX = 6.0f;  // 左右の振れ幅
 constexpr float kWeaveAmplitudeY = 3.0f;  // 上下の振れ幅
 constexpr float kWeaveSpeedX = 0.5f;      // rad/sec
@@ -73,12 +74,12 @@ void BossComponent::UpdateMovement(float deltaTime) {
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return;
     auto* camera = scene->GetMainCamera();
-    auto playerObj = FindPlayer();
-    if (!camera || !playerObj) return;
+    if (!camera) return;
 
     weaveTimer_ += deltaTime;
 
-    const Vector3 playerPos = playerObj->GetTransform().translate;
+    // 位置の基準はカメラの目の位置。カメラはレールに沿って動くので、ボスもレールに追従する
+    const Vector3 basePos = camera->GetEye();
     const Vector3 forward = camera->GetForward();
     const Vector3 right    = camera->GetRight();
     const Vector3 up       = camera->GetActualUp();
@@ -87,9 +88,9 @@ void BossComponent::UpdateMovement(float deltaTime) {
     const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;
 
     owner_->GetTransform().translate = {
-        playerPos.x + forward.x * kHoverDistanceFromPlayer + right.x * weaveX + up.x * weaveY,
-        playerPos.y + forward.y * kHoverDistanceFromPlayer + right.y * weaveX + up.y * weaveY,
-        playerPos.z + forward.z * kHoverDistanceFromPlayer + right.z * weaveX + up.z * weaveY
+        basePos.x + forward.x * kHoverDistanceFromCamera + right.x * weaveX + up.x * weaveY,
+        basePos.y + forward.y * kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
+        basePos.z + forward.z * kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
     };
 }
 

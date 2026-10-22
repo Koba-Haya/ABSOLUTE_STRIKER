@@ -7,6 +7,7 @@
 #include "Vector.h"
 
 struct ModelData;
+struct VertexData;
 struct SubMeshRange;
 class TextureResource;
 class DirectXCommon;
@@ -28,6 +29,12 @@ public:
   bool Initialize(const CreateInfo &ci);
 
   const ModelData* GetModelData() const;
+
+  // 頂点バッファの内容を書き換える。毎フレーム形が変わるメッシュ(砕けて飛ぶ破片など)用。
+  // 頂点の数は、作ったとき(Initialize)と同じでなければならない(違うときは何もせず false を返す)。
+  // 位置の更新だけでなく、法線や UV も書き換えられる。インデックスは変わらない
+  // vertices: 新しい頂点(count 個)。count: 頂点の数
+  bool UpdateVertices(const VertexData *vertices, uint32_t count);
 
   // 全メッシュの頂点位置(モデル空間)を返す。モデルの大きさ・中心・端の位置を調べる用途(Assimp の型に依存しない)
   std::vector<Vector3> GetVertexPositions() const;

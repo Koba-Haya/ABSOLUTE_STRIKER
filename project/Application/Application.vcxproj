@@ -202,6 +202,14 @@
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
     <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
     <ClCompile Include="scene\GameIntroDirector.cpp" />
+    <ClCompile Include="scene\StageStartDirector.cpp" />
+    <ClCompile Include="scene\StageNameBoard.cpp" />
+    <ClCompile Include="scene\VoronoiFracture.cpp" />
+    <ClCompile Include="scene\StageNameFragments.cpp" />
+    <ClCompile Include="scene\StageNameClouds.cpp" />
+    <ClCompile Include="scene\StageNamePath.cpp" />
+    <ClCompile Include="scene\StageImpactEffects.cpp" />
+    <ClCompile Include="scene\SpeedStreaks.cpp" />
     <ClCompile Include="scene\ResultBackdrop.cpp" />
     <ClCompile Include="scene\ResultBanner.cpp" />
     <ClCompile Include="scene\HitEffectSpawner.cpp" />
@@ -247,6 +255,15 @@
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
     <ClInclude Include="scene\VolumeCloudDebugUi.h" />
     <ClInclude Include="scene\GameIntroDirector.h" />
+    <ClInclude Include="scene\StageStartDirector.h" />
+    <ClInclude Include="scene\StageNameBoard.h" />
+    <ClInclude Include="scene\VoronoiFracture.h" />
+    <ClInclude Include="scene\StageNameFragments.h" />
+    <ClInclude Include="scene\StageNameClouds.h" />
+    <ClInclude Include="scene\StageNamePath.h" />
+    <ClInclude Include="scene\BasisMatrix.h" />
+    <ClInclude Include="scene\StageImpactEffects.h" />
+    <ClInclude Include="scene\SpeedStreaks.h" />
     <ClInclude Include="scene\ResultBackdrop.h" />
     <ClInclude Include="scene\ResultBanner.h" />
     <ClInclude Include="scene\HitEffectSpawner.h" />
@@ -263,6 +280,7 @@
     <ClInclude Include="scene\SceneTransitionTable.h" />
     <ClInclude Include="scene\SceneIds.h" />
     <ClInclude Include="scene\ExhibitionMode.h" />
+    <ClInclude Include="scene\StageStartDemoMode.h" />
     <ClInclude Include="scene\TitleScene.h" />
     <ClInclude Include="scene\title\TitleDirector.h" />
   </ItemGroup>
