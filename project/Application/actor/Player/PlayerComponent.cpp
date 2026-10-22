@@ -96,8 +96,9 @@ void PlayerComponent::Update(float deltaTime) {
   const bool isPlaying = scene->GetPlayMode() == PlayMode::Play;
 
   // マウスはPlayモードでカーソルを閉じ込めている間だけ照準に使う
-  // 展示中は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
-  const PlayerInputState in = ExhibitionMode::kEnabled ? PlayerInputState{} : PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
+  // 展示中と、操作のロック中(ステージ開始演出)は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
+  const bool ignoreInput = ExhibitionMode::kEnabled || inputLocked_;
+  const PlayerInputState in = ignoreInput ? PlayerInputState{} : PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
 
   MoveCursor_(in, deltaTime);
 

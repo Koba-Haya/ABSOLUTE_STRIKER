@@ -52,7 +52,7 @@ void ParticleManager::Finalize() {
     dx_ = nullptr;
 }
 
-bool ParticleManager::CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances) {
+bool ParticleManager::CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha) {
     assert(dx_);
     assert(device_);
     assert(maxInstances > 0);
@@ -61,10 +61,12 @@ bool ParticleManager::CreateParticleGroup(const std::string& name, const std::st
         // シーン切り替え等ですでに同名のグループが存在する場合は、
         // アサートで落とさずにパーティクルをリセットして再利用する
         ClearParticleGroup(name);
+        groups_.at(name).softAlpha = softAlpha;
         return true;
     }
 
     ParticleGroup g{};
+    g.softAlpha = softAlpha;
     g.maxInstances = maxInstances;
     g.instanceLimit = maxInstances;
     g.activeInstanceCount = 0;
@@ -240,11 +242,11 @@ void ParticleManager::Update(float deltaTime) {
     }
 }
 
-void ParticleManager::Draw(BlendMode blendMode, bool depthTest) {
-    Renderer::GetInstance()->DrawParticles(this, blendMode, depthTest);
+void ParticleManager::Draw(BlendMode blendMode, bool depthTest, ParticleDrawFilter filter) {
+    Renderer::GetInstance()->DrawParticles(this, blendMode, depthTest, filter);
 }
 
-void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList) {
+void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList, ParticleDrawFilter filter) {
     assert(dx_);
     assert(cmdList);
     EnsureQuadGeometry_();
@@ -260,6 +262,10 @@ void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList) {
     for (auto& kv : groups_) {
         ParticleGroup& g = kv.second;
         if (g.activeInstanceCount == 0) {
+            continue;
+        }
+        // グループの選び方: 「柔らかいアルファ」の印で、描くかどうかを決める
+        if ((filter == ParticleDrawFilter::NormalOnly && g.softAlpha) || (filter == ParticleDrawFilter::SoftAlphaOnly && !g.softAlpha)) {
             continue;
         }
 

@@ -16,9 +16,15 @@
 #include "HitEffectSpawner.h"
 #include "PostEffectDirector.h"
 #include "ScoreTracker.h"
+#include "StageStartDirector.h"
+#include "StageNameBoard.h"
+#include "StageImpactEffects.h"
+#include "SpeedStreaks.h"
 #include <memory>
 #include <vector>
 #include <string>
+
+class RailCameraComponent;
 
 enum class GamePhase {
   InProgress,
@@ -75,6 +81,8 @@ private:
   void CheckGameEnd_();
   // 展示: 覆いが晴れたらすぐ、クリア / ゲームオーバーを交互に要求する(操作は受け付けない)
   void UpdateExhibitionFlow_(float deltaTime);
+  // スタート演出のデモ: 演出が終わってから一定時間後に、タイトルへ戻る遷移を要求する(操作は受け付けない)
+  void UpdateStageStartDemoFlow_(float deltaTime);
   // 開発用: プレイせずに、タイトル -> ゲーム -> クリア / ゲームオーバー -> タイトルの流れを確認するためのショートカット
   void CheckDebugFlowShortcut_();
   void UpdateHud_();
@@ -86,6 +94,28 @@ private:
   void UpdateIntro_(float deltaTime);
   // イントロを終える。カメラと自機を、基準の位置と画角へ正確に戻す
   void FinishIntro_();
+  // --- ステージ開始演出(イントロのあと、プレイが始まるまで。俯瞰へ引き、戻りながら自機がステージ名の板を突き破る) ---
+  // 時間を進め、ステージ名の板の出し入れ、板を割る時刻の判定、操作のロック解除を行う。
+  // カメラの俯瞰のずれは、ここでは変えない(描画の間だけ Draw が重ねる)。
+  // 俯瞰へ引く・保つ間(世界は止まる)の自機のアニメーションも、ここで進める
+  void UpdateStageStart_(float deltaTime);
+  // ステージ名の板の通り道を決め、最初の位置へ置く。
+  // 通り道: 俯瞰のカメラの正面(画面の上寄り) -> 竜の上を弧を描いて飛び越える -> 竜が板を割る時刻に通る、レール上の位置の前
+  void PlaceStageNameBoard_();
+  // 今の段階での、板の衝撃点の位置(ワールド)。俯瞰へ引く・保つ間はカメラの正面、戻る間は弧の上、着いたあとは竜の前
+  Vector3 CalcStageNamePosition_() const;
+  // レールカメラのコンポーネントを探す(無ければ nullptr)
+  RailCameraComponent *FindRailCamera_() const;
+  // ブースト量(0 〜 1)から、世界の速さの倍率(1 以上)を求める
+  float WorldSpeedScale_(float boost) const;
+  // 今フレームに世界の更新を回す回数。ブーストで速さの倍率が 1 を超える間は、複数回になる(小数の部分は次のフレームへ持ち越す)
+  int CalcWorldSteps_();
+  // 画面に映すカメラのずれ。俯瞰のずれに、ブーストによる画角の広がりを重ねたもの
+  StageStartPose GetStageStartViewPose_() const;
+  // 自機の操作をロック / 解除する(自機が見つからないときは何もしない)
+  void SetPlayerInputLocked_(bool locked);
+  // 自機のモデルだけ更新する(アニメーションを進める)。入力・射撃を含む PlayerComponent は更新しない
+  void UpdatePlayerModelOnly_(float deltaTime);
 
   // --- Draw の各段階 ---
   void DrawDebugRail_(Renderer* renderer) const;
@@ -97,6 +127,8 @@ private:
   bool showDebugRail_ = false;
   bool showDebugGrid_ = false; // 地面のグリッド線(デバッグ用)
   float exhibitionHoldTimer_ = 0.0f; // 展示: 通常の更新に入ってからの経過(秒)
+  float stageStartDemoTimer_ = 0.0f; // スタート演出のデモ: 演出が終わってからの経過(秒)
+  bool stageStartDemoReturnRequested_ = false; // スタート演出のデモ: タイトルへの遷移を要求済みなら true
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
   bool mouseCaptureSuspended_ = false; // Escで一時的にマウスの閉じ込めを解除している間 true
 
@@ -138,6 +170,26 @@ private:
   Vector3 introBasePlayerPosition_{0.0f, 0.0f, 0.0f};
   Vector3 introBasePlayerRotation_{0.0f, 0.0f, 0.0f}; // 助走の基準の、自機の向き(昇りの機首上げの前の値)
   float introRailSpeed_ = 0.0f;               // 助走の速さに使う、レールの進む速さ
+
+  // ステージ開始演出の状態。カメラの基準は、上のイントロの基準(introBaseEye_ など)と共通
+  StageStartDirector stageStart_;
+  StageStartSettings stageStartSettings_; // このステージの設定(ステージが増えたら、ステージごとの値へ差し替える)
+  StageNameBoard stageNameBoard_;          // ステージ名の板(俯瞰の間、自機の前に出す)
+  StageNameStyle stageNameStyle_ = StageNameStyle::Clouds; // ステージ名の見せ方(ステージごとの素材へ差し替える)
+  StageCloudSettings stageCloudSettings_;         // 雲の見せ方の設定(メイン文字。パフの間隔・大きさ、光の筋の幅、霧になる速さなど)
+  StageCloudSettings stageSubtitleCloudSettings_ = MakeSubtitleCloudSettings(); // 雲の見せ方の設定(サブタイトル。小さいパフ)
+  StageNameBoardSettings stageNameBoardSettings_; // 板の配置の設定(これもステージごとの値へ差し替える)
+  FractureSettings stageNameFractureSettings_;    // 板の割れ方の設定(種の数、衝撃点への集まり具合など)
+  FragmentSettings stageNameFragmentSettings_;    // 破片の設定(厚み、飛ぶ速さ、回転、重力、寿命など)
+  Vector3 stageNameHoldPosition_{0.0f, 0.0f, 0.0f}; // 俯瞰を保つ間の、板の位置(弧の始点)
+  Vector3 stageNameAnchor_{0.0f, 0.0f, 0.0f};       // 竜が板に触れる位置(弧の終点。板が最後に留まる位置)
+  Vector3 stageNameForward_{0.0f, 0.0f, 1.0f};      // 板が向く基準の進行方向(板は、この水平な向きの逆を向く)
+  float worldStepAccumulator_ = 0.0f;               // 世界の更新回数の、小数の部分の持ち越し(CalcWorldSteps_)
+  StageImpactEffects stageImpact_;                  // 突き破った瞬間の衝撃(白いフラッシュ)
+  StageImpactSettings stageImpactSettings_;         // 衝撃の設定(ステージごとの値へ差し替えられる)
+  SpeedStreaks speedStreaks_;                       // 加速の間の速度線
+  SpeedStreakSettings speedStreakSettings_;         // 速度線の設定(濃さ、伸び方)
+  bool showDebugFracture_ = false;                // 板の分割の輪郭線を描く(確認用。分割の形を調整するときだけ true にする)
 
   GamePhase phase_ = GamePhase::InProgress;
 

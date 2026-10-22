@@ -34,6 +34,11 @@ public:
   // 回避行動（バレルロール）中は無敵
   bool IsInvincible() const { return dodgeTimer_ > 0.0f; }
 
+  // 操作のロック。true の間は、キー・パッド・マウスのどれも受け付けない(何も操作していない状態にする)。
+  // ステージ開始演出の間、自機が演出どおりに飛ぶよう、シーンが使う
+  void SetInputLocked(bool locked) { inputLocked_ = locked; }
+  bool IsInputLocked() const { return inputLocked_; }
+
   // カーソル（照準）のスクリーン座標を取得
   const Vector2& GetCursorPos() const { return cursorPos_; }
 
@@ -59,6 +64,7 @@ private:
   void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& handPos);
   void FireNormalBullet_(BaseScene* scene, const Vector3& handPos);
 
+  bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ
 

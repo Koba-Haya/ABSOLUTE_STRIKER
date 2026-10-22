@@ -8,14 +8,15 @@
 //
 // 優先度（高い順）:
 //   1. RadialBlur            : 雑魚敵ヒット時の画面歪み
-//   2. Vignette              : プレイヤー被弾時の画面フラッシュ
-//   3. GaussianFilter        : ボス出現演出
-//   4. Random                : キルストリーク演出
-//   5. BoxFilter             : 敵出現（新ウェーブ）時のフォーカスぼかし
-//   6. DepthBasedOutline     : ロックオン中
-//   7. Grayscale             : プレイヤー瀕死（HP<=1）
-//   8. LuminanceBasedOutline : ボス戦中
-//   9. Normal
+//   2. RadialBlur            : 加速中の画面のブラー(ステージ開始演出の突き破りへ向けた加速。強さは FrameState::speedBlur)
+//   3. Vignette              : プレイヤー被弾時の画面フラッシュ
+//   4. GaussianFilter        : ボス出現演出
+//   5. Random                : キルストリーク演出
+//   6. BoxFilter             : 敵出現（新ウェーブ）時のフォーカスぼかし
+//   7. DepthBasedOutline     : ロックオン中
+//   8. Grayscale             : プレイヤー瀕死（HP<=1）
+//   9. LuminanceBasedOutline : ボス戦中
+//  10. Normal
 class PostEffectDirector {
 public:
   // 毎フレームの状態（チェーンの常時系エフェクトと被弾検知に使う）
@@ -24,6 +25,8 @@ public:
     bool isLockingMode = false;   // ロックオン長押し中か
     int  playerHp = 0;            // プレイヤーの現在HP
     bool isBossPhase = false;     // ボス戦中か
+    float speedBlur = 0.0f;       // 加速中のブラーの強さ(0 〜 1。0 でブラーなし)。ステージ開始演出のブースト量を渡す
+    Vector2 speedBlurCenterUv{ 0.5f, 0.5f }; // 加速のブラーの中心(スクリーン座標 UV 0〜1。自機のいる辺り)
   };
 
   // タイマーを進め、今フレームの PostProcessMode を確定する。

@@ -217,6 +217,14 @@ void Renderer::Initialize(DirectXCommon *dx) {
     effectPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(effectPipeline_->Initialize(device, utils, compiler,
                                            includeHandler, desc));
+    {
+      // 深度を書き込む版。他は同じ(アルファブレンドと、アルファ 0.5 以下を捨てる処理は、そのまま)
+      PipelineDesc depthDesc = desc;
+      depthDesc.depthWrite = true;
+      effectDepthPipeline_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(effectDepthPipeline_->Initialize(device, utils, compiler,
+                                                  includeHandler, depthDesc));
+    }
     PipelineDesc ringDesc = UnifiedPipeline::MakeRingDesc();
     ringPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ringPipeline_->Initialize(device, utils, compiler,
@@ -1108,7 +1116,7 @@ void Renderer::DrawVolumeCloudPass_() {
   volumeCloudRequests_.clear();
 }
 
-void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest) {
+void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest, ParticleDrawFilter filter) {
   if (!pm)
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -1116,7 +1124,7 @@ void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool dept
                                   ? particlePipelineAlphaDepth_.get()
                                   : GetParticlePipeline_(blendMode);
   pipeline->SetPipelineState(cmdList);
-  pm->DrawInternal(cmdList);
+  pm->DrawInternal(cmdList, filter);
 }
 
 void Renderer::InitializePlanarReflection(uint32_t width, uint32_t height) {
@@ -1313,7 +1321,7 @@ void Renderer::RenderPrimitives() {
   primitiveDrawer_->Reset(); // 描画後にリセット
 }
 
-void Renderer::DrawEffectModel(ModelInstance *instance) {
+void Renderer::DrawEffectModel(ModelInstance *instance, bool writeDepth) {
   if (!instance || !instance->GetResource())
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -1328,8 +1336,8 @@ void Renderer::DrawEffectModel(ModelInstance *instance) {
     cbTrans->WorldInverseTranspose = Transpose(Inverse(instance->GetWorld()));
   }
 
-  // エフェクト用パイプラインをセット
-  effectPipeline_->SetPipelineState(cmdList);
+  // エフェクト用パイプラインをセット(深度を書き込むかどうかで切り替える)
+  (writeDepth ? effectDepthPipeline_ : effectPipeline_)->SetPipelineState(cmdList);
 
   // 頂点バッファ
   D3D12_VERTEX_BUFFER_VIEW vbv{};
