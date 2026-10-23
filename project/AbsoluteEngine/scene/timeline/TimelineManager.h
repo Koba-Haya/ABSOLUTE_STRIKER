@@ -123,6 +123,14 @@ public:
         return index < tracks_.size() ? tracks_[index].get() : nullptr;
     }
 
+    // イベントの発火時刻（秒）を取得する。どのトラックのイベントかを探すため、イベントだけ分かれば呼べる
+    // どのトラックにも無ければ false を返し、outTime は変更しない
+    bool GetEventTriggerTime(const ITimelineEvent* event, float& outTime) const;
+
+    // イベントの発火時刻（秒）を変更する。所属トラックが昇順の並びを保つ
+    // どのトラックにも無ければ false。変更したら、データ変更としてダーティフラグを立てる
+    bool SetEventTriggerTime(const ITimelineEvent* event, float triggerTime);
+
     // -----------------------------------------------------------
     // イベント選択状態管理（タスク14）
     // -----------------------------------------------------------

@@ -56,7 +56,7 @@ protected:
   bool* GetDebugCameraFlag() override { return &isDebugCamera_; }
 
   // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
-  Camera* GetEditorViewCamera() const override;
+  const Camera* GetEditorViewCamera() const override;
 
 private:
   // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。

@@ -48,7 +48,7 @@ std::string FormationSpawnEvent::GetLabel() const {
 }
 
 void FormationSpawnEvent::Fire() {
-    // 既にスポーン済みの場合はスキップ（二重スポーン防止。TimelineTrackのisFired_が主ガードだが
+    // 既にスポーン済みの場合はスキップ（二重スポーン防止。TimelineTrackの発火済み管理が主ガードだが
     // SpawnEventと同様に念のためのガードも入れておく）
     if (!spawnedObjects_.empty()) {
         return;

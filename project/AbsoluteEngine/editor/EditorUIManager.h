@@ -29,6 +29,10 @@ public:
   // 毎フレームのUI描画
   void DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera = nullptr);
 
+  // エディタ用カメラの位置・回転を編集する入力欄を描画する（呼び出し側の ImGui ウィンドウの中に並べる）
+  // 状態を持たないため static。USE_IMGUI が無いビルドでは何もしない
+  static void DrawCameraControls(EditorCamera& camera);
+
   // Viewportへのドラッグ＆ドロップ受付（画像描画後に手動で呼ぶ）
   void HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
 

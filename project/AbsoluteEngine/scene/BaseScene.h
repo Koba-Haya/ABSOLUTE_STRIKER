@@ -1,9 +1,11 @@
 #pragma once
 #include <string>
+#include <functional>
 #include <memory>
 #include <vector>
 
 #include "SceneServices.h"
+#include "Vector.h"
 #include "timeline/TimelineManager.h"
 #include "timeline/TimelineEditorWindow.h"
 
@@ -46,6 +48,13 @@ public:
   // 派生クラスでオーバーライドすることで、Application固有の処理（コールバック注入など）を追加できる（DI）
   virtual void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { rootObjects_.push_back(obj); }
   void ClearRootObjects() { rootObjects_.clear(); }
+  // 指定したオブジェクトをシーンから取り除く（含まれていなければ何もしない）
+  // GetRootObjects() の巡回中は呼ばないこと（巡回中に削除するとイテレータが無効になる）。
+  // 巡回中に消したいものは、いったん集めておき、巡回の後で呼ぶ
+  void RemoveRootObject(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
+  // 条件に合うオブジェクトをまとめて取り除く。shouldRemove は各オブジェクトに対して1回ずつ呼ばれる
+  // 条件の中でシーンのオブジェクト一覧を変更しないこと
+  void RemoveRootObjectsIf(const std::function<bool(const std::shared_ptr<AbsoluteEngine::GameObject>&)>& shouldRemove);
 
   // アクティブシーンへのグローバルアクセス
   static BaseScene* GetActiveScene() { return activeScene_; }
@@ -126,20 +135,40 @@ protected:
   // 派生クラス（GameScene等）は実際に画面に描画しているカメラ（Draw()内の分岐）と
   // 必ず一致させるようオーバーライドすること。ここが描画カメラとズレると、
   // ギズモやクリック判定が画面上の見た目と食い違う不具合になる
-  virtual Camera* GetEditorViewCamera() const { return editorCamera_.get(); }
+  // 既定は editorCamera_（EditorCamera の完全な型が必要なため、実装は .cpp に置く）
+  // 行列の取得にしか使わないため const で返す
+  virtual const Camera* GetEditorViewCamera() const;
 
-  // メンバ変数の宣言順は初期化・破棄の順序を決めるため、アクセス指定子を挟みながら元の順を保つ。
-  // 派生シーンが直接使うものだけ protected に残し、BaseScene 内部だけで使うものは private にする
+  // エディタ用カメラを読み取り専用で取得する（行列の取得、描画への受け渡しなど）
+  // 生成前（Initialize 前）は nullptr。保持せず、使うたびに取得すること（シーン破棄後は無効になる）
+  const AbsoluteEngine::EditorCamera* GetEditorCamera() const { return editorCamera_.get(); }
+
+  // エディタ用カメラの投影を、定数の画角・クリップ面と「現在の画面のアスペクト比」で作り直す
+  // Initialize で呼ばれる。画面のアスペクト比が変わる場合は、その後にも呼んで投影を更新する
+  void RefreshEditorCameraProjection();
+
+  // エディタ用カメラの位置・回転の入力欄を、呼び出し側の ImGui ウィンドウの中に描画する
+  // カメラが未生成なら何も描かず false を返す（呼び出し側が代替表示を出せるようにする）
+  bool DrawEditorCameraControls();
+
+  // エディタ用カメラにシェイク（位置のずれ）を与え、行列へ反映する。ずれを解除するときは {0,0,0} を渡す
+  // 毎フレーム、描画に渡す前に呼ぶ（SetShakeOffset と UpdateMatrix の呼び忘れ・順序間違いを防ぐ）
+  void SetEditorCameraShake(const Vector3 &offset);
+
+  // メンバ変数は全て private。派生クラスには、上の専用メソッド（GetInput、GetRootObjects など）だけを公開する。
+  // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: timelineEditorWindow_ は timelineManager_ を参照する）を
+  // 崩さないよう、順序を変えないこと
 private:
   SceneManager *sceneManager_ = nullptr;
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 
   // エンジン・エディタ機能
   std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
-protected:
+  // シーン直下のオブジェクト一覧。派生クラスからは GetRootObjects()（読み取り）、AddRootObject（追加）、
+  // RemoveRootObject / RemoveRootObjectsIf（削除）経由で扱う
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
-  std::unique_ptr<Camera> editorCamera_; // エディタ用カメラ
-private:
+  // エディタ用カメラ（常に EditorCamera として生成する）。派生クラスからは GetEditorCamera() などの専用メソッド経由で扱う
+  std::unique_ptr<AbsoluteEngine::EditorCamera> editorCamera_;
   std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
 
   PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う

@@ -242,7 +242,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // SpawnManager 経由で生成した敵は Spawn 時にコールバックを登録するが、
   // JSON/エディタからロードした敵にはその処理が走らないため、ここで補完する。
   // -----------------------------------------------------------------------
-  for (const auto& obj : rootObjects_) {
+  for (const auto& obj : GetRootObjects()) {
       RegisterEnemyCallbacks(obj);
   }
 
@@ -262,7 +262,7 @@ void GameScene::Initialize(const SceneServices &services) {
       auto playerModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
       playerModelComp->LoadModel("resources/app/player/player.obj");
       playerObj_->AddComponent(std::move(playerModelComp));
-      rootObjects_.push_back(playerObj_);
+      AddRootObject(playerObj_);
   }
   
   // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
@@ -304,7 +304,7 @@ void GameScene::Initialize(const SceneServices &services) {
 
   // デフォルトのライトを探す
   bool hasLight = false;
-  for (const auto& obj : rootObjects_) {
+  for (const auto& obj : GetRootObjects()) {
       if (obj && obj->GetComponent<AbsoluteEngine::LightNodeComponent>()) {
           hasLight = true;
           break;
@@ -318,12 +318,12 @@ void GameScene::Initialize(const SceneServices &services) {
       lightComp->color = { 1.0f, 1.0f, 1.0f };
       lightComp->intensity = 1.0f;
       initialDirLight->AddComponent(std::move(lightComp));
-      rootObjects_.push_back(initialDirLight);
+      AddRootObject(initialDirLight);
   }
 
   // レールカメラを探す
   bool hasRailCamera = false;
-  for (const auto& obj : rootObjects_) {
+  for (const auto& obj : GetRootObjects()) {
       if (obj && obj->GetComponent<RailCameraComponent>()) {
           hasRailCamera = true;
           break;
@@ -333,7 +333,7 @@ void GameScene::Initialize(const SceneServices &services) {
       auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
       auto rComp = std::make_unique<RailCameraComponent>();
       railCamObj->AddComponent(std::move(rComp));
-      rootObjects_.push_back(railCamObj);
+      AddRootObject(railCamObj);
   }
 
   {
@@ -348,7 +348,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // LoadEditorScene() 後に rootObjects_ を走査して RailCameraComponent を探し、
   // BaseScene 経由でタイムラインと紐付ける
   // -----------------------------------------------------------------------
-  for (const auto& obj : rootObjects_) {
+  for (const auto& obj : GetRootObjects()) {
       if (!obj) continue;
       auto* railComp = obj->GetComponent<RailCameraComponent>();
       if (railComp) {
@@ -417,7 +417,7 @@ void GameScene::BeginIntro_() {
 }
 
 RailCameraComponent *GameScene::FindRailCamera_() const {
-  for (const auto &obj : rootObjects_) {
+  for (const auto &obj : GetRootObjects()) {
     if (auto *rail = obj ? obj->GetComponent<RailCameraComponent>() : nullptr) {
       return rail;
     }
@@ -634,10 +634,10 @@ void GameScene::FinishIntro_() {
 // ここがズレると、Viewportに表示されている絵と、ギズモ・クリック判定の座標系が
 // 食い違い、「実際のゲームカメラとは関係ない視点」に見えるバグになる。
 // -----------------------------------------------------------------------
-Camera* GameScene::GetEditorViewCamera() const {
+const Camera* GameScene::GetEditorViewCamera() const {
     if (isDebugCamera_) {
-        if (GetPlayMode() == PlayMode::Edit && editorCamera_) {
-            return editorCamera_.get();
+        if (GetPlayMode() == PlayMode::Edit && GetEditorCamera()) {
+            return GetEditorCamera();
         }
         return debugCamera_.get();
     }
@@ -704,7 +704,7 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> GameScene::FindPlayerObject_() const {
-  for (const auto& obj : rootObjects_) {
+  for (const auto& obj : GetRootObjects()) {
       if (!obj) continue;
       if (obj->GetName() == "Player" || obj->GetName() == "player" || obj->GetComponent<PlayerComponent>()) {
           return obj;
@@ -736,7 +736,7 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
   if (playerObj_) {
       if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
           state.hasPlayer     = true;
-          state.isLockingMode = pComp->lockon_.IsLockingMode();
+          state.isLockingMode = pComp->GetLockOn().IsLockingMode();
           state.playerHp      = pComp->GetHp();
       }
   }
@@ -784,7 +784,7 @@ void GameScene::RemoveExpiredObjects_() {
       }
       return false;
   };
-  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), isExpired), rootObjects_.end());
+  RemoveRootObjectsIf(isExpired);
 }
 
 void GameScene::SpawnBoss_() {
@@ -821,7 +821,7 @@ void GameScene::SpawnBoss_() {
   bossObj->AddComponent(std::move(colliderComp));
   bossObj->SetTag("Boss");
 
-  rootObjects_.push_back(bossObj);
+  AddRootObject(bossObj);
 }
 
 void GameScene::CheckDebugFlowShortcut_() {
@@ -883,7 +883,7 @@ void GameScene::CheckGameEnd_() {
   }
 
   if (phase_ == GamePhase::Boss) {
-      const bool bossAlive = std::any_of(rootObjects_.begin(), rootObjects_.end(),
+      const bool bossAlive = std::any_of(GetRootObjects().begin(), GetRootObjects().end(),
           [](const auto& obj) { return obj && obj->GetComponent<BossComponent>(); });
       if (!bossAlive) {
           phase_ = GamePhase::Clear;
@@ -904,10 +904,10 @@ void GameScene::UpdateHud_() {
       return;
   }
 
-  const bool isLockingMode = pComp->lockon_.IsLockingMode();
+  const bool isLockingMode = pComp->GetLockOn().IsLockingMode();
 
   gameHUD_->Update(pComp->GetHp(), pComp->GetMaxHp(),
-                   pComp->lockon_.GetLockedScreenPositions(GetMainCamera()), isLockingMode,
+                   pComp->GetLockOn().GetLockedScreenPositions(GetMainCamera()), isLockingMode,
                    pComp->GetCursorPos(), hudCam,
                    pComp->GetNearReticleWorldPos(), pComp->GetMidReticleWorldPos(), pComp->GetFarReticleWorldPos());
 }
@@ -987,7 +987,7 @@ void GameScene::Update() {
 
       // ボスフェーズ移行
       float railProgress = 0.0f;
-      for (const auto& obj : rootObjects_) {
+      for (const auto& obj : GetRootObjects()) {
           if (auto comp = obj->GetComponent<RailCameraComponent>()) {
               railProgress = comp->GetProgress();
               break;
@@ -1015,7 +1015,7 @@ void GameScene::Update() {
   // 実プレイ中（常にPlayMode::Play）は絶対に走らせない）
   if (GetPlayMode() == PlayMode::Edit) {
       bool shouldSave = false;
-      for (const auto& obj : rootObjects_) {
+      for (const auto& obj : GetRootObjects()) {
           if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
               if (rComp->ConsumeModifiedFlag()) {
                   shouldSave = true;
@@ -1037,12 +1037,12 @@ void GameScene::Draw() {
   const ScopedStageStartCameraOffset stageStartView(stageStart_.IsActive() && !isDebugCamera_ ? GetMainCamera() : nullptr,
                                                     GetStageStartViewPose_());
 
-  Camera* activeCamera = nullptr;
+  const Camera* activeCamera = nullptr;
   if (isDebugCamera_) {
       // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraを使用する
-      if (GetPlayMode() == PlayMode::Edit && editorCamera_) {
-          renderer->SetCamera(*editorCamera_);
-          activeCamera = editorCamera_.get();
+      if (GetPlayMode() == PlayMode::Edit && GetEditorCamera()) {
+          renderer->SetCamera(*GetEditorCamera());
+          activeCamera = GetEditorCamera();
       } else {
           renderer->SetCamera(*debugCamera_);
           activeCamera = debugCamera_.get();
@@ -1083,7 +1083,7 @@ void GameScene::Draw() {
   }
 
   // エディタ上で配置したオブジェクト群の描画
-  for (auto& obj : rootObjects_) {
+  for (auto& obj : GetRootObjects()) {
       if (obj) obj->Draw();
   }
 
@@ -1119,7 +1119,7 @@ void GameScene::Draw() {
 
   // --- デバッグラインの描画 ---
   if (showDebugRail_) {
-      for (const auto& obj : rootObjects_) {
+      for (const auto& obj : GetRootObjects()) {
           if (auto* rComp = obj->GetComponent<RailCameraComponent>()) {
               rComp->DrawDebugLine(renderer);
               break;
@@ -1151,7 +1151,7 @@ void GameScene::Draw() {
   Matrix4x4 projInverse;
   if (isDebugCamera_) {
       // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraのプロジェクション逆行列を使用
-      if (GetPlayMode() == PlayMode::Edit && editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+      if (GetPlayMode() == PlayMode::Edit && GetEditorCamera()) projInverse = Inverse(GetEditorCamera()->GetProjectionMatrix());
       else projInverse = Inverse(debugCamera_->GetProjectionMatrix());
   } else {
       // Debug Camera OFF: GetMainCamera() のプロジェクション逆行列を使用（タスクD）
@@ -1230,7 +1230,7 @@ void GameScene::DrawEditorUI() {
 
     // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
     if (phase_ == GamePhase::Boss) {
-        for (const auto& obj : rootObjects_) {
+        for (const auto& obj : GetRootObjects()) {
             if (!obj) continue;
             if (auto* bComp = obj->GetComponent<BossComponent>()) {
                 const char* phaseName = "1";
@@ -1254,7 +1254,7 @@ void GameScene::DrawEditorUI() {
     
     if (showDebugRail_) {
         RailCameraComponent* rComp = nullptr;
-        for (const auto& obj : rootObjects_) {
+        for (const auto& obj : GetRootObjects()) {
             if (auto comp = obj->GetComponent<RailCameraComponent>()) {
                 rComp = comp;
                 break;
@@ -1280,7 +1280,7 @@ void GameScene::DrawEditorUI() {
     ImGui::Checkbox("Show Rail Debug Line", &showDebugRail_);
     ImGui::Checkbox("Show Debug Grid", &showDebugGrid_);
     if (ImGui::Button("Reset Rail Camera")) {
-        for (const auto& obj : rootObjects_) {
+        for (const auto& obj : GetRootObjects()) {
             if (auto rComp = obj->GetComponent<RailCameraComponent>()) {
                 rComp->ResetProgress();
                 break;
@@ -1294,4 +1294,4 @@ void GameScene::DrawEditorUI() {
 
     ImGui::End();
 #endif
-}
+}
