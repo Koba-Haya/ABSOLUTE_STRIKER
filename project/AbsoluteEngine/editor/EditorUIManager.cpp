@@ -1036,13 +1036,16 @@ void EditorUIManager::DrawTimelineEventInspector() {
     bool deactivatedAfterEdit = false;
 
     // --- 発火時刻 (Time) ---
-    ImGui::Text("Time: %.3f s", selectedEvent->triggerTime_);
-    ImGui::SameLine();
-    // DragFloatで直接編集可能にする
-    float triggerTime = selectedEvent->triggerTime_;
-    ImGui::SetNextItemWidth(100.0f);
-    if (ImGui::DragFloat("##TriggerTime", &triggerTime, 0.01f, 0.0f, timelineManager_->GetDuration(), "%.3f s")) {
-        selectedEvent->triggerTime_ = triggerTime;
+    // 発火時刻はトラックが管理している。どのトラックにも無い（通常は起きない）場合は欄を出さない
+    float triggerTime = 0.0f;
+    if (timelineManager_->GetEventTriggerTime(selectedEvent, triggerTime)) {
+        ImGui::Text("Time: %.3f s", triggerTime);
+        ImGui::SameLine();
+        // DragFloatで直接編集可能にする。変更はトラック経由で行い、イベントの並び順をトラックが保つ
+        ImGui::SetNextItemWidth(100.0f);
+        if (ImGui::DragFloat("##TriggerTime", &triggerTime, 0.01f, 0.0f, timelineManager_->GetDuration(), "%.3f s")) {
+            timelineManager_->SetEventTriggerTime(selectedEvent, triggerTime);
+        }
     }
     activated |= ImGui::IsItemActivated();
     deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
@@ -1087,6 +1090,22 @@ void EditorUIManager::DrawTimelineEventInspector() {
 }
 #endif
 
+
+void EditorUIManager::DrawCameraControls(EditorCamera& camera) {
+#ifdef USE_IMGUI
+  // 入力欄が操作されたときだけカメラへ書き戻す
+  Vector3 position = camera.GetTranslate();
+  if (ImGui::DragFloat3("Camera Pos", &position.x, 0.1f)) {
+    camera.SetTranslate(position);
+  }
+  Vector3 rotation = camera.GetRotation();
+  if (ImGui::DragFloat3("Camera Rot(Pitch,Yaw,Roll)", &rotation.x, 0.05f)) {
+    camera.SetRotation(rotation);
+  }
+#else
+  (void)camera;
+#endif
+}
 
 void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
 #ifdef USE_IMGUI

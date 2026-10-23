@@ -116,8 +116,20 @@ public:
     // トラックリストを取得する（読み取り専用）
     const std::vector<std::unique_ptr<TimelineTrack>>& GetTracks() const { return tracks_; }
 
-    // トラックリストを取得する（書き込み可能、エディタUI用）
-    std::vector<std::unique_ptr<TimelineTrack>>& GetTracksRef() { return tracks_; }
+    // 指定インデックスのトラックを書き込み可能な形で取得する（エディタUI用）
+    // トラックの追加・削除はAddTrack/RemoveTrackに限定し、リスト自体は公開しない
+    // 範囲外のインデックスの場合は nullptr を返す（所有権は渡さない）
+    TimelineTrack* GetTrack(size_t index) {
+        return index < tracks_.size() ? tracks_[index].get() : nullptr;
+    }
+
+    // イベントの発火時刻（秒）を取得する。どのトラックのイベントかを探すため、イベントだけ分かれば呼べる
+    // どのトラックにも無ければ false を返し、outTime は変更しない
+    bool GetEventTriggerTime(const ITimelineEvent* event, float& outTime) const;
+
+    // イベントの発火時刻（秒）を変更する。所属トラックが昇順の並びを保つ
+    // どのトラックにも無ければ false。変更したら、データ変更としてダーティフラグを立てる
+    bool SetEventTriggerTime(const ITimelineEvent* event, float triggerTime);
 
     // -----------------------------------------------------------
     // イベント選択状態管理（タスク14）

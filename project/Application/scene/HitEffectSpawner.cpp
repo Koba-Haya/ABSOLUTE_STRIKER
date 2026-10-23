@@ -13,6 +13,12 @@
 #include <algorithm>
 #include <cstdlib>
 
+namespace {
+// 爆発の光の寿命(秒)と、生成直後の強さ
+constexpr float kExplosionLightLifeTime = 0.5f;
+constexpr float kExplosionLightMaxIntensity = 20.0f;
+} // namespace
+
 void HitEffectSpawner::Initialize() {
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
   resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
@@ -50,10 +56,7 @@ void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
   lightNodeComp->radius = 30.0f;
   lightNodeComp->decay = 1.0f;
   lightObj->AddComponent(std::move(lightNodeComp));
-  auto lightComp = std::make_unique<ExplosionLightComponent>();
-  lightComp->maxIntensity_ = 20.0f;
-  lightComp->lifeTime_ = 0.5f;
-  lightObj->AddComponent(std::move(lightComp));
+  lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
   scene.AddRootObject(lightObj);
 
   // 4. 旧型スケールアニメーションのヒットエフェクト（後方互換）

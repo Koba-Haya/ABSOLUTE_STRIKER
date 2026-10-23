@@ -113,7 +113,7 @@ void TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
             // トラックが無ければデフォルトトラックを自動作成する（Undo対応）
             const std::string beforeSnapshot = manager_->SerializeToString();
             auto track = std::make_unique<TimelineTrack>();
-            track->trackName_ = "Main";
+            track->SetName("Main");
             manager_->AddTrack(std::move(track));
             if (commandManager_) {
                 const std::string afterSnapshot = manager_->SerializeToString();
@@ -190,13 +190,13 @@ void TimelineEditorWindow::DrawTracks() {
         for (size_t i = 0; i < tracks.size(); ++i) {
             ImGui::PushID(static_cast<int>(i));
 
-            auto& track = manager_->GetTracksRef()[i];
+            const auto& track = tracks[i]; // 表示のみなので読み取り専用で参照する
             const ImVec2 rowStart = ImGui::GetCursorScreenPos();
             bool trackRemoved = false;
 
             // --- ラベル列（トラック名 + 削除/イベント追加ボタン） ---
             ImGui::BeginGroup();
-            ImGui::TextUnformatted(track->trackName_.c_str());
+            ImGui::TextUnformatted(track->GetName().c_str());
             ImGui::SameLine();
             if (ImGui::SmallButton("x")) {
                 // Undo用に変更前のスナップショットを保存する
@@ -257,7 +257,7 @@ void TimelineEditorWindow::DrawTracks() {
             // Undo用に変更前のスナップショットを保存する
             const std::string beforeSnapshot = manager_->SerializeToString();
             auto track = std::make_unique<TimelineTrack>();
-            track->trackName_ = newTrackName_;
+            track->SetName(newTrackName_);
             manager_->AddTrack(std::move(track));
             // 変更後のスナップショットを保存し、Undo/Redoコマンドを発行する
             if (commandManager_) {
@@ -280,10 +280,9 @@ void TimelineEditorWindow::DrawTracks() {
 }
 
 void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
-    auto& tracks = manager_->GetTracksRef();
-    if (trackIndex >= tracks.size()) return;
+    TimelineTrack* track = manager_->GetTrack(trackIndex);
+    if (!track) return;
 
-    auto& track = tracks[trackIndex];
     const float duration = manager_->GetDuration();
     const float pixelsPerSecond = (duration > 0.0f) ? (laneWidth / duration) : 0.0f;
 
@@ -301,17 +300,15 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
     const float cursorX = laneBgMin.x + currentTime * pixelsPerSecond;
     drawList->AddLine({ cursorX, laneBgMin.y }, { cursorX, laneBgMax.y }, IM_COL32(255, 220, 0, 255), 2.0f);
 
-    const auto& events = track->GetEvents();
+    const size_t eventCount = track->GetEventCount();
     const ImU32 trackColor = GetTrackColor(trackIndex);
 
     // --- 同時刻（近接）に複数イベントが重なる場合の検出 ---
-    // triggerTime_順に並べ、ピクセル距離が閾値未満のものを1つのクラスタとしてまとめ、
+    // 発火時刻順に並べ、ピクセル距離が閾値未満のものを1つのクラスタとしてまとめ、
     // クラスタ内では横方向に少しずつオフセットして完全な重なり・クリック不能化を防ぐ
-    std::vector<size_t> order(events.size());
-    for (size_t i = 0; i < events.size(); ++i) order[i] = i;
-    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
-        return events[a]->triggerTime_ < events[b]->triggerTime_;
-    });
+    // （トラックのイベントは発火時刻の昇順に並んでいるため、インデックス順がそのまま時刻順になる）
+    std::vector<size_t> order(eventCount);
+    for (size_t i = 0; i < eventCount; ++i) order[i] = i;
 
     constexpr float kClusterPixelThreshold = 16.0f; // これ未満の間隔は「重なっている」とみなす
     constexpr float kClusterSpacing = 14.0f;         // 重なり回避のための横オフセット幅
@@ -321,7 +318,7 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
         std::vector<size_t> current;
         float lastX = -1e9f;
         for (size_t idx : order) {
-            const float x = events[idx]->triggerTime_ * pixelsPerSecond;
+            const float x = track->GetTriggerTime(idx) * pixelsPerSecond;
             if (!current.empty() && (x - lastX) < kClusterPixelThreshold) {
                 current.push_back(idx);
             } else {
@@ -333,7 +330,7 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
         if (!current.empty()) clusters.push_back(current);
     }
 
-    std::vector<float> offsetX(events.size(), 0.0f);
+    std::vector<float> offsetX(eventCount, 0.0f);
     for (const auto& cluster : clusters) {
         if (cluster.size() <= 1) continue;
         for (size_t k = 0; k < cluster.size(); ++k) {
@@ -346,9 +343,10 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
     const float kDiamondHalfW = 9.0f;  // ひし形の半幅（水平方向）
     const float kDiamondHalfH = 10.0f; // ひし形の半高（垂直方向）
 
-    for (size_t j = 0; j < events.size(); ++j) {
-        const auto& event = events[j];
-        const float baseX = laneBgMin.x + event->triggerTime_ * pixelsPerSecond;
+    for (size_t j = 0; j < eventCount; ++j) {
+        ITimelineEvent* event = track->GetEvent(j);
+        const float triggerTime = track->GetTriggerTime(j);
+        const float baseX = laneBgMin.x + triggerTime * pixelsPerSecond;
         const float eventX = baseX + offsetX[j];
         const float centerY = laneBgMin.y + kTrackHeight * 0.5f;
 
@@ -359,7 +357,7 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
         const ImVec2 ptLeft  = { eventX - kDiamondHalfW, centerY };
 
         // 選択状態に応じて色を変える（選択中は常にゴールドで強調、通常時はトラックごとの固定色）
-        const bool isSelected = (manager_->GetSelectedEvent() == event.get());
+        const bool isSelected = (manager_->GetSelectedEvent() == event);
         const ImU32 fillColor = isSelected
             ? IM_COL32(255, 180, 50, 240)   // 選択中: ゴールド
             : trackColor;                    // 通常: トラックごとの固定パレット色
@@ -385,7 +383,7 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
 
         // 左クリックでイベントを選択する（タスク13: selectedEvent_に通知）
         if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
-            manager_->SetSelectedEvent(event.get());
+            manager_->SetSelectedEvent(event);
         }
 
         // ホバー時にツールチップを表示する。重なりクラスタに属する場合は全メンバーを一覧表示する
@@ -395,13 +393,13 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
             });
             ImGui::BeginTooltip();
             if (clusterIt != clusters.end()) {
-                ImGui::Text("%zu events overlapping ~%.2fs", clusterIt->size(), event->triggerTime_);
+                ImGui::Text("%zu events overlapping ~%.2fs", clusterIt->size(), triggerTime);
                 ImGui::Separator();
                 for (size_t idx : *clusterIt) {
-                    ImGui::Text("%.2fs - %s", events[idx]->triggerTime_, events[idx]->GetLabel().c_str());
+                    ImGui::Text("%.2fs - %s", track->GetTriggerTime(idx), track->GetEvent(idx)->GetLabel().c_str());
                 }
             } else {
-                ImGui::Text("%.2fs - %s", event->triggerTime_, event->GetLabel().c_str());
+                ImGui::Text("%.2fs - %s", triggerTime, event->GetLabel().c_str());
             }
             ImGui::EndTooltip();
         }
@@ -411,11 +409,11 @@ void TimelineEditorWindow::DrawTrackLane(size_t trackIndex, float laneWidth) {
             ImGui::OpenPopup(("EventCtx_" + std::to_string(trackIndex) + "_" + std::to_string(j)).c_str());
         }
         if (ImGui::BeginPopup(("EventCtx_" + std::to_string(trackIndex) + "_" + std::to_string(j)).c_str())) {
-            ImGui::Text("%s @ %.2fs", event->GetLabel().c_str(), event->triggerTime_);
+            ImGui::Text("%s @ %.2fs", event->GetLabel().c_str(), triggerTime);
             ImGui::Separator();
             if (ImGui::MenuItem("削除")) {
                 // 削除前に選択状態をクリアする（ダングリングポインタ防止: タスク14）
-                manager_->ClearSelectedEventIfMatch(event.get());
+                manager_->ClearSelectedEventIfMatch(event);
                 removeIndex = j;
             }
             ImGui::EndPopup();
@@ -513,12 +511,10 @@ void TimelineEditorWindow::DrawAddEventPopup() {
         if (addEventTargetTrackIndex_ >= 0 &&
             addEventTargetTrackIndex_ < static_cast<int>(manager_->GetTracks().size())) {
 
-            pendingEvent_->triggerTime_ = addEventTime_;
-
             // Undo用に変更前のスナップショットを保存する（トラック追加等と同じパターン）
             const std::string beforeSnapshot = manager_->SerializeToString();
-            manager_->GetTracksRef()[static_cast<size_t>(addEventTargetTrackIndex_)]
-                ->AddEvent(std::move(pendingEvent_));
+            manager_->GetTrack(static_cast<size_t>(addEventTargetTrackIndex_))
+                ->AddEvent(std::move(pendingEvent_), addEventTime_);
             if (commandManager_) {
                 const std::string afterSnapshot = manager_->SerializeToString();
                 auto cmd = std::make_shared<TimelineCommand>(

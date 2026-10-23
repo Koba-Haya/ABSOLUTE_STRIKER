@@ -153,14 +153,35 @@ void TimelineManager::RemoveTrack(size_t index) {
 
     // 削除前にトラック内の全イベントをRewindし、
     // 選択中イベントがこのトラックに含まれている場合はnullptrにクリアする（タスク14）
-    const auto& events = tracks_[index]->GetEvents();
-    for (const auto& ev : events) {
-        ClearSelectedEventIfMatch(ev.get());
+    const TimelineTrack& track = *tracks_[index];
+    for (size_t i = 0; i < track.GetEventCount(); ++i) {
+        ClearSelectedEventIfMatch(track.GetEvent(i));
     }
     tracks_[index]->RewindAll();
     tracks_.erase(tracks_.begin() + static_cast<ptrdiff_t>(index));
     // トラック削除はデータ変更なのでダーティフラグを立てる
     isDirty_ = true;
+}
+
+bool TimelineManager::GetEventTriggerTime(const ITimelineEvent* event, float& outTime) const {
+    for (const auto& track : tracks_) {
+        const size_t index = track->FindEventIndex(event);
+        if (index != TimelineTrack::kEventNotFound) {
+            outTime = track->GetTriggerTime(index);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool TimelineManager::SetEventTriggerTime(const ITimelineEvent* event, float triggerTime) {
+    for (auto& track : tracks_) {
+        if (track->SetEventTriggerTime(event, triggerTime)) {
+            isDirty_ = true;
+            return true;
+        }
+    }
+    return false;
 }
 
 // -----------------------------------------------------------

@@ -17,7 +17,8 @@ public:
   ~PlayerComponent() override = default;
 
 
-  LockOnSystem lockon_; // 外部からアクセス可能にする
+  // ロックオンの状態を読み取り専用で取得する（HUD の表示など）。ロックの操作は PlayerComponent の中だけで行う
+  const LockOnSystem& GetLockOn() const { return lockon_; }
 
   void Initialize();
   void Update(float deltaTime) override;
@@ -48,6 +49,8 @@ public:
   const Vector3& GetFarReticleWorldPos()  const { return farReticleWorldPos_; }
 
 private:
+  LockOnSystem lockon_;
+
   // Update の各段階。呼び出し順は Update() を参照。
   void MoveCursor_(const PlayerInputState& in, float deltaTime);
   void UpdateBank_(const Vector2& moveDir, float deltaTime);

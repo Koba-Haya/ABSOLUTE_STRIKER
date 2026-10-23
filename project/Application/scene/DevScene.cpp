@@ -68,14 +68,14 @@ void DevScene::Initialize(const SceneServices &services) {
       modelComp1->LoadModel("resources/app/cube/cube.obj");
       obj1->AddComponent(std::move(modelComp1));
       obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
-      rootObjects_.push_back(obj1);
+      AddRootObject(obj1);
       
       // 初期状態を保存しておく
       SaveEditorScene();
   }
 
 #ifndef USE_IMGUI
-  playMode_ = PlayMode::Play;
+  SetPlayMode(PlayMode::Play);
 #endif
 }
 
@@ -116,9 +116,9 @@ void DevScene::Update() {
   }
 
   // --- エネミースポーン処理 ---
-  if (playMode_ == PlayMode::Play) {
+  if (GetPlayMode() == PlayMode::Play) {
       int enemyCount = 0;
-      for (const auto& obj : rootObjects_) {
+      for (const auto& obj : GetRootObjects()) {
           if (obj && obj->GetName() == "Enemy") {
               enemyCount++;
           }
@@ -151,34 +151,34 @@ void DevScene::Update() {
               newEnemy->AddComponent(std::move(colliderComp));
               
               newEnemy->AddComponent(std::make_unique<EnemyComponent>());
-              rootObjects_.push_back(newEnemy);
+              AddRootObject(newEnemy);
           }
       }
   }
 
   std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> newObjects;
   
-  if (services_.input) {
+  if (GetInput()) {
       float moveX = 0.0f;
       float moveY = 0.0f;
 
       // キーボード (矢印キーのみ)
-      if (services_.input->PressKey(DIK_UP)) {
+      if (GetInput()->PressKey(DIK_UP)) {
           moveY -= 1.0f;
       }
-      if (services_.input->PressKey(DIK_DOWN)) {
+      if (GetInput()->PressKey(DIK_DOWN)) {
           moveY += 1.0f;
       }
-      if (services_.input->PressKey(DIK_LEFT)) {
+      if (GetInput()->PressKey(DIK_LEFT)) {
           moveX -= 1.0f;
       }
-      if (services_.input->PressKey(DIK_RIGHT)) {
+      if (GetInput()->PressKey(DIK_RIGHT)) {
           moveX += 1.0f;
       }
 
       // ゲームパッド対応 (左スティック)
-      if (services_.input->IsGamepadConnected()) {
-          auto pad = services_.input->GetGamepad();
+      if (GetInput()->IsGamepadConnected()) {
+          auto pad = GetInput()->GetGamepad();
           float padX = pad.lx / 32767.0f;
           float padY = -pad.ly / 32767.0f; // Y軸は上がプラスなので反転
           if (std::abs(padX) > 0.2f) moveX = padX;
@@ -200,8 +200,8 @@ void DevScene::Update() {
       reticlePos_.y = std::clamp(reticlePos_.y, 0.0f, 720.0f);
 
       // --- スナップエイムと即着弾(ヒットスキャン)の実装 ---
-      if (editorCamera_) {
-          Matrix4x4 viewProj = Multiply(editorCamera_->GetViewMatrix(), editorCamera_->GetProjectionMatrix());
+      if (GetEditorCamera()) {
+          Matrix4x4 viewProj = Multiply(GetEditorCamera()->GetViewMatrix(), GetEditorCamera()->GetProjectionMatrix());
           
           Vector3 bestEnemyPos = {0,0,0};
           bool enemyFound = false;
@@ -209,7 +209,7 @@ void DevScene::Update() {
           float minDistSq = 150.0f * 150.0f; // スナップ判定半径の二乗
           Vector2 bestEnemyScreen;
 
-          for(const auto& obj : rootObjects_) {
+          for(const auto& obj : GetRootObjects()) {
               if (obj && obj->GetName() == "Enemy") {
                   bool isDead = false;
                   for (const auto& comp : obj->GetComponents()) {
@@ -260,9 +260,9 @@ void DevScene::Update() {
 
           // --- 発射入力判定と弾の生成 ---
           fireTimer_ += deltaTime;
-          bool firePressed = services_.input->PressKey(DIK_SPACE);
-          if (services_.input->IsGamepadConnected()) {
-              if (services_.input->IsPadDown(XINPUT_GAMEPAD_A) || services_.input->IsPadDown(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
+          bool firePressed = GetInput()->PressKey(DIK_SPACE);
+          if (GetInput()->IsGamepadConnected()) {
+              if (GetInput()->IsPadDown(XINPUT_GAMEPAD_A) || GetInput()->IsPadDown(XINPUT_GAMEPAD_RIGHT_SHOULDER)) {
                   firePressed = true;
               }
           }
@@ -274,8 +274,8 @@ void DevScene::Update() {
                   targetPos = bestEnemyPos;
               } else {
                   // レティクル方向へ飛ばす（ScreenPointToRay相当）
-                  Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
-                  Matrix4x4 projMat = editorCamera_->GetProjectionMatrix();
+                  Matrix4x4 viewMat = GetEditorCamera()->GetViewMatrix();
+                  Matrix4x4 projMat = GetEditorCamera()->GetProjectionMatrix();
                   float ndcX = (reticlePos_.x / 1280.0f) * 2.0f - 1.0f;
                   float ndcY = 1.0f - (reticlePos_.y / 720.0f) * 2.0f;
                   Matrix4x4 invViewProj = Inverse(Multiply(viewMat, projMat));
@@ -296,7 +296,7 @@ void DevScene::Update() {
 
               // 発射位置（Playerの位置）
               Vector3 spawnPos = {0,0,0};
-              for(const auto& obj : rootObjects_) {
+              for(const auto& obj : GetRootObjects()) {
                   if (obj && obj->GetName() == "Player") {
                       spawnPos = obj->GetTransform().translate;
                       break;
@@ -321,7 +321,7 @@ void DevScene::Update() {
               comp->Initialize(velocity);
               bullet->AddComponent(std::move(comp));
 
-              rootObjects_.push_back(bullet);
+              AddRootObject(bullet);
           }
       }
 
@@ -397,17 +397,7 @@ void DevScene::Update() {
   ImGui::SeparatorText("Transform");
   ImGui::DragFloat3("Sphere Pos", &transform_.translate.x, 0.1f);
   ImGui::DragFloat3("Human Pos", &transformHuman_.translate.x, 0.1f);
-  auto* editorCamera = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
-  if (editorCamera) {
-      Vector3 camPos = editorCamera->GetTranslate();
-      if (ImGui::DragFloat3("Camera Pos", &camPos.x, 0.1f)) {
-          editorCamera->SetTranslate(camPos);
-      }
-      Vector3 camRot = editorCamera->GetRotation();
-      if (ImGui::DragFloat3("Camera Rot(Pitch,Yaw,Roll)", &camRot.x, 0.05f)) {
-          editorCamera->SetRotation(camRot);
-      }
-  } else {
+  if (!DrawEditorCameraControls()) {
       ImGui::DragFloat3("Camera Pos (Not Linked)", &cameraTransform_.translate.x, 0.1f);
   }
   ImGui::End();
@@ -420,8 +410,9 @@ void DevScene::Update() {
 #endif
 
   // --- 弾の寿命チェックと敵の当たり判定 ---
-  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
-      auto& obj = *it;
+  // 巡回中に一覧を変更するとイテレータが無効になるため、消す弾はいったん集めて巡回の後で取り除く
+  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> bulletsToRemove;
+  for (const auto& obj : GetRootObjects()) {
       if (obj && obj->GetName() == "Bullet") {
           // 寿命(Active状態)の確認
           bool isActive = true;
@@ -436,7 +427,7 @@ void DevScene::Update() {
           }
 
           if (!isActive) {
-              it = rootObjects_.erase(it);
+              bulletsToRemove.push_back(obj);
               continue;
           }
 
@@ -445,7 +436,7 @@ void DevScene::Update() {
           Vector3 bPos = obj->GetTransform().translate;
           float hitRadius = 1.5f;
 
-          for (const auto& eObj : rootObjects_) {
+          for (const auto& eObj : GetRootObjects()) {
               if (eObj && eObj->GetName() == "Enemy") {
                   bool isDead = false;
                   for (const auto& comp : eObj->GetComponents()) {
@@ -479,8 +470,8 @@ void DevScene::Update() {
                       hitDistortionTimer_ = 0.0f;
                       hitDistortionIntensity_ = 0.05f;
                       
-                      Matrix4x4 viewMat = editorCamera_->GetViewMatrix();
-                      Matrix4x4 projMat = editorCamera_->GetProjectionMatrix();
+                      Matrix4x4 viewMat = GetEditorCamera()->GetViewMatrix();
+                      Matrix4x4 projMat = GetEditorCamera()->GetProjectionMatrix();
                       Matrix4x4 viewProj = Multiply(viewMat, projMat);
                       Vector3 screenPos = TransformPoint(targetEnemyPos, viewProj);
                       radialBlurCenter_ = { screenPos.x * 0.5f + 0.5f, -screenPos.y * 0.5f + 0.5f };
@@ -494,10 +485,9 @@ void DevScene::Update() {
                       lightNodeComp->radius = 30.0f;
                       lightNodeComp->decay = 1.0f;
                       lightObj->AddComponent(std::move(lightNodeComp));
-                      auto lightComp = std::make_unique<ExplosionLightComponent>();
-                      lightComp->maxIntensity_ = 20.0f;
-                      lightComp->lifeTime_ = 0.5f;
-                      lightObj->AddComponent(std::move(lightComp));
+                      constexpr float kExplosionLightLifeTime = 0.5f;
+                      constexpr float kExplosionLightMaxIntensity = 20.0f;
+                      lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
                       newObjects.push_back(lightObj);
 
                       // 敵をディゾルブ消滅させる
@@ -514,51 +504,41 @@ void DevScene::Update() {
           }
 
           if (hit) {
-              it = rootObjects_.erase(it);
-              continue;
+              bulletsToRemove.push_back(obj);
           }
       }
-      ++it;
+  }
+  for (const auto& bullet : bulletsToRemove) {
+      RemoveRootObject(bullet);
   }
 
   // ディゾルブ完了のEnemyや寿命切れのライト削除
-  for (auto it = rootObjects_.begin(); it != rootObjects_.end(); ) {
-      auto& obj = *it;
-      bool shouldDelete = false;
+  RemoveRootObjectsIf([](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+      if (!obj) return false;
 
-      if (obj) {
-          if (obj->GetName() == "Enemy") {
-              auto dissolveComp = obj->GetComponent<AbsoluteEngine::DissolveComponent>();
-              if (dissolveComp && dissolveComp->enable && dissolveComp->threshold >= 1.0f) {
-                  shouldDelete = true;
-              }
-          } else if (obj->GetName() == "ExplosionLight") {
-              for (const auto& comp : obj->GetComponents()) {
-                  if (comp->GetTypeName() == "ExplosionLightComponent") {
-                      auto lComp = static_cast<ExplosionLightComponent*>(comp.get());
-                      if (lComp->IsDead()) {
-                          shouldDelete = true;
-                      }
-                      break;
-                  }
+      if (obj->GetName() == "Enemy") {
+          auto dissolveComp = obj->GetComponent<AbsoluteEngine::DissolveComponent>();
+          return dissolveComp && dissolveComp->enable && dissolveComp->threshold >= 1.0f;
+      }
+      if (obj->GetName() == "ExplosionLight") {
+          for (const auto& comp : obj->GetComponents()) {
+              if (comp->GetTypeName() == "ExplosionLightComponent") {
+                  return static_cast<ExplosionLightComponent*>(comp.get())->IsDead();
               }
           }
       }
-
-      if (shouldDelete) {
-          it = rootObjects_.erase(it);
-      } else {
-          ++it;
-      }
-  }
+      return false;
+  });
 
   // 新規オブジェクトの追加
-  rootObjects_.insert(rootObjects_.end(), newObjects.begin(), newObjects.end());
+  for (const auto& newObject : newObjects) {
+      AddRootObject(newObject);
+  }
 
-  EffectManager::GetInstance()->Update(deltaTime, editorCamera_.get());
+  EffectManager::GetInstance()->Update(deltaTime, GetEditorCamera());
 
   // ゲームロジックは PlayMode の時のみ更新する
-  if (playMode_ == PlayMode::Play) {
+  if (GetPlayMode() == PlayMode::Play) {
 
 
       // particleEmitter_.Update(deltaTime);
@@ -586,19 +566,16 @@ void DevScene::Draw() {
   renderer->BeginRenderScene();
 
   // --- カメラ・ライト設定（オフスクリーンパス前に確定させる） ---
-  if (editorCamera_) {
-    if (auto edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get())) {
-        edCam->SetShakeOffset(cameraShakeOffset_);
-        edCam->UpdateMatrix();
-    }
-    renderer->SetCamera(*editorCamera_);
+  if (GetEditorCamera()) {
+    SetEditorCameraShake(cameraShakeOffset_);
+    renderer->SetCamera(*GetEditorCamera());
   }
   renderer->SetEnvironmentMap(skybox_.GetTexture());
   // --- ライトの適用 ---
   ApplyEditorLightsToRenderer(renderer);
 
   // --- エディタ上で配置したオブジェクト群の描画 ---
-  for (auto& obj : rootObjects_) {
+  for (auto& obj : GetRootObjects()) {
     obj->Draw();
   }
 
@@ -635,7 +612,7 @@ void DevScene::Draw() {
 
   // --- ポストプロセスの適用 ---
   Matrix4x4 projInverse;
-  if (editorCamera_) projInverse = Inverse(editorCamera_->GetProjectionMatrix());
+  if (GetEditorCamera()) projInverse = Inverse(GetEditorCamera()->GetProjectionMatrix());
   renderer->EndRenderScene(projInverse);
 }
 
@@ -732,7 +709,7 @@ void DevScene::InitResources_() {
   dirLightComp->color = { 1.0f, 1.0f, 1.0f };
   dirLightComp->intensity = 1.0f;
   initialDirLight->AddComponent(std::move(dirLightComp));
-  rootObjects_.push_back(initialDirLight);
+  AddRootObject(initialDirLight);
 
   auto initialPointLight = std::make_shared<AbsoluteEngine::GameObject>("Point Light");
   initialPointLight->GetTransform().translate = { 0.0f, 2.0f, -2.0f };
@@ -742,7 +719,7 @@ void DevScene::InitResources_() {
   pointLightComp->intensity = 1.0f;
   pointLightComp->radius = 10.0f;
   initialPointLight->AddComponent(std::move(pointLightComp));
-  rootObjects_.push_back(initialPointLight);
+  AddRootObject(initialPointLight);
 
   // オフスクリーンテスト初期化
   Renderer::GetInstance()->InitializePostProcess(1280, 720);
@@ -754,7 +731,7 @@ void DevScene::InitCamera_() {
   transformSimpleSkin_.translate = {3, 0, 0};
   transformHuman_.translate = {6, 0, 0};
   transformAnimCube_.translate = {-3, 0, 0};
-  if (editorCamera_) editorCamera_->SetPerspective(0.45f, Renderer::GetInstance()->GetAspectRatio(), 0.1f, 1000.0f);
+  RefreshEditorCameraProjection();
 }
 
 void DevScene::SpawnHitEffect(const Vector3 &pos) {

@@ -342,8 +342,8 @@ void TitleScene::Update() {
     if (!startRequested_ && time_ >= ExhibitionMode::kTitleWaitSec) {
       RequestStart();
     }
-  } else if (services_.input) {
-    if (services_.input->TriggerKey(DIK_SPACE) || services_.input->TriggerKey(DIK_RETURN) || services_.input->WasPadPressed(XINPUT_GAMEPAD_A)) {
+  } else if (GetInput()) {
+    if (GetInput()->TriggerKey(DIK_SPACE) || GetInput()->TriggerKey(DIK_RETURN) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_A)) {
       RequestStart();
     }
   }

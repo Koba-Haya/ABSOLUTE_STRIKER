@@ -16,11 +16,19 @@
 #include "timeline/PrefabRegistry.h"
 // タイムラインイベントプレビュー用（タスク16）
 #include "timeline/SpawnEvent.h"
+#include <algorithm>
 #include <filesystem>
 
 #ifdef USE_IMGUI
 #include <imgui.h>
 #endif
+
+namespace {
+// エディタ用カメラの投影パラメータ（アスペクト比は Renderer の現在値を使う）
+constexpr float kEditorCameraFovY = 0.45f;
+constexpr float kEditorCameraNear = 0.1f;
+constexpr float kEditorCameraFar = 1000.0f;
+} // namespace
 
 BaseScene* BaseScene::activeScene_ = nullptr;
 
@@ -39,7 +47,7 @@ void BaseScene::Initialize(const SceneServices &services) {
     // カメラの初期化（ゲーム中も使用するためマクロ外で生成）
     editorCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();
     editorCamera_->Initialize();
-    editorCamera_->SetPerspective(0.45f, 16.0f / 9.0f, 0.1f, 1000.0f);
+    RefreshEditorCameraProjection();
 
     // タイムライン機能を使うシーンのみ TimelineManager/TimelineEditorWindow を生成する
     if (UsesTimeline()) {
@@ -66,10 +74,53 @@ void BaseScene::Initialize(const SceneServices &services) {
 #endif
 }
 
+void BaseScene::RemoveRootObject(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
+  rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
+}
+
+void BaseScene::RemoveRootObjectsIf(
+    const std::function<bool(const std::shared_ptr<AbsoluteEngine::GameObject>&)>& shouldRemove) {
+  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), shouldRemove), rootObjects_.end());
+}
+
+const Camera* BaseScene::GetEditorViewCamera() const {
+  return editorCamera_.get();
+}
+
+void BaseScene::RefreshEditorCameraProjection() {
+  if (!editorCamera_) return;
+  editorCamera_->SetPerspective(kEditorCameraFovY, Renderer::GetInstance()->GetAspectRatio(),
+                                kEditorCameraNear, kEditorCameraFar);
+}
+
+bool BaseScene::DrawEditorCameraControls() {
+  if (!editorCamera_) return false;
+  AbsoluteEngine::EditorUIManager::DrawCameraControls(*editorCamera_);
+  return true;
+}
+
+void BaseScene::SetEditorCameraShake(const Vector3 &offset) {
+  if (!editorCamera_) return;
+  editorCamera_->SetShakeOffset(offset);
+  editorCamera_->UpdateMatrix();
+}
+
 void BaseScene::RequestSceneChange(const std::string &sceneId) {
   if (sceneManager_) {
     sceneManager_->RequestChange(sceneId);
   }
+}
+
+bool BaseScene::IsSceneTransitioning() const {
+  return sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+}
+
+float BaseScene::GetTransitionRevealProgress() const {
+  return sceneManager_ != nullptr ? sceneManager_->GetRevealProgress() : 1.0f;
+}
+
+float BaseScene::GetTransitionRevealSeconds() const {
+  return sceneManager_ != nullptr ? sceneManager_->GetRevealSeconds() : 0.0f;
 }
 
 AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
@@ -275,11 +326,11 @@ void BaseScene::DrawEditorUI() {
     // DrawUI()自体は常に呼ぶ（Editモード限定にすると、Playモード中に編集ツール一式ごと
     // ゲーム画面まで消えてしまう）。
     if (editorUIManager_ && editorCamera_) {
-        auto* edCam = dynamic_cast<AbsoluteEngine::EditorCamera*>(editorCamera_.get());
+        AbsoluteEngine::EditorCamera* edCam = editorCamera_.get();
         // ギズモ・マウスピッキングは「実際に画面に描画されているカメラ」の行列を使う
         // （常にeditorCamera_を使うと、Debug Camera OFF時にGameCamera(レールカメラ)で
         //   描画されている絵とギズモ/クリック判定がズレて、意味不明な視点に見える不具合になる）
-        Camera* viewCam = GetEditorViewCamera();
+        const Camera* viewCam = GetEditorViewCamera();
         if (!viewCam) viewCam = editorCamera_.get();
         editorUIManager_->DrawUI(rootObjects_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
 
@@ -427,6 +478,11 @@ void BaseScene::SetTimelineSpawnAheadDistance(float distance) {
 void BaseScene::UpdateTimeline(float deltaTime) {
     if (!timelineManager_) return;
     timelineManager_->Update(deltaTime);
+}
+
+void BaseScene::PlayTimeline() {
+    if (!timelineManager_) return;
+    timelineManager_->Play();
 }
 
 void BaseScene::DrawTimelineEditorUI() {

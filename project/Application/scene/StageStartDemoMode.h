@@ -9,7 +9,7 @@
 // 通常の開発・プレイでは false にする
 namespace StageStartDemoMode {
 
-constexpr bool kEnabled = true;
+constexpr bool kEnabled = false;
 
 // スタート演出が終わってから、タイトルへの遷移を要求するまでの時間(秒)
 constexpr float kReturnToTitleDelaySec = 1.0f;
