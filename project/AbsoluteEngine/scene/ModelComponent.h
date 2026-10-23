@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "../graphics/3d/model/ModelInstance.h"
+#include "../graphics/3d/model/Animation.h"
 #include "Type/Vector.h"
 #include <string>
 #include <memory>
@@ -47,6 +48,16 @@ public:
 
     ModelInstance* GetModelInstance() const { return modelInstance_.get(); }
 
+    // モデルのファイル内のアニメーションを、名前で選んで再生する(アニメーションが 1 ファイルに複数入っているモデル用)。
+    // 読み込みは初めて呼ばれたときに 1 回だけ行う。モデル未読み込み、または名前が無いときは、ログを出して何もしない。
+    // blendSeconds > 0 なら、いまのポーズから、その秒数でクロスフェードする
+    void PlayAnimation(const std::string& animationName, bool loop = true, float blendSeconds = 0.0f);
+    // ループしないアニメーションが最後まで再生されたか(ModelInstance::IsAnimationFinished と同じ)
+    bool IsAnimationFinished() const;
+
+    // ボーンの「今の」ワールド座標を返す(Transform と FitToWingspan の補正を反映する)。ボーンが無ければ false
+    bool TryGetBoneWorldPosition(const std::string& boneName, Vector3& out) const;
+
     // 読み込んだモデルの翼幅(x 方向の幅)が wingspan になるよう拡大し、バウンディングボックスの中心を
     // オブジェクトの位置に合わせる。Transform の scale / rotate / translate とは別に、モデルの空間で掛かる補正。
     // モデルを差し替えても大きさと中心がそろう。モデルが読み込まれていなければ何もしない。
@@ -74,6 +85,9 @@ public:
     void Draw() override;
 
 private:
+    // FitToWingspan の補正と Transform を合わせた、今のワールド行列(Draw と TryGetBoneWorldPosition で共通)
+    Matrix4x4 ComputeWorldMatrix_() const;
+
     std::string modelPath_;
     std::string texturePath_;
     std::unique_ptr<ModelInstance> modelInstance_;
@@ -82,6 +96,8 @@ private:
     // 記録されたテクスチャアップロードコマンドが参照するリソースが消え、
     // D3D12 ERROR: OBJECT_DELETED_WHILE_STILL_IN_USE でクラッシュするため。
     std::unique_ptr<ModelInstance> pendingDestroyModelInstance_;
+    // modelPath_ のファイルに入っているアニメーションの集合(PlayAnimation で初めて必要になったときに読む)
+    std::shared_ptr<const AnimationSet> animationSet_;
     float environmentCoefficient_ = 0.0f;
     Vector4 color_{1.0f, 1.0f, 1.0f, 1.0f};
     // FitToWingspan の補正(モデル空間)。既定は補正なし

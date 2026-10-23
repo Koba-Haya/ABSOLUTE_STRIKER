@@ -15,9 +15,7 @@
 #include "Application/ScreenSize.h"
 #include "../Bullet/BulletFactory.h"
 #include "Logger.h"
-
-// 武器（右手に持たせる仮モデル）の右手ボーン名
-static const char* const kRightHandBoneName = "mixamorig:RightHand";
+#include "PlayerModelDefs.h"
 
 // 照準点（世界で狙う1点）：カメラからカーソルレイ上に kAimDistance 進んだ点
 static constexpr float kAimDistance = 80.0f; // カメラから照準点までの距離（m）
@@ -61,25 +59,15 @@ void PlayerComponent::Initialize() {
   dodgeTimer_ = 0.0f;
   dodgeCooldownTimer_ = 0.0f;
   dodgeRollSign_ = 1.0f;
+  animator_.Reset();
 
-  // 武器モデル（仮：cube.objを武器として持たせる）の生成
-  if (!weaponModel_) {
-      auto* am = AbsoluteEngine::AssetManager::GetInstance();
-      auto weaponRes = am->Load<ModelResource>("resources/app/cube/cube.obj");
-      if (weaponRes) {
-          weaponModel_ = std::make_unique<ModelInstance>();
-          ModelInstance::CreateInfo ci{};
-          ci.resource = weaponRes;
-          // 明るく目立つ色にする（レールシューティングでカメラが自機から離れているため、
-          // 地味な灰色だと視認しづらい）
-          ci.baseColor = { 0.95f, 0.25f, 0.15f, 1.0f };
-          weaponModel_->Initialize(ci);
-      }
-  }
 }
 
 void PlayerComponent::Update(float deltaTime) {
   if (!owner_) return;
+
+  // 蝶のアニメーションの切り替え(被弾のよろめきと、羽ばたきへの復帰)。入力やカメラの有無に関係なく進める
+  animator_.Update(owner_->GetComponent<AbsoluteEngine::ModelComponent>());
   auto scene  = BaseScene::GetActiveScene();
   if (!scene) return;
   auto* input  = scene->GetInput();
@@ -121,7 +109,7 @@ void PlayerComponent::Update(float deltaTime) {
   UpdateBodyTransform_(*camera, cursorRayDir, dodgeRollOffset, deltaTime);
 
   // 発射基点は1フレーム内で1回だけ求め、レティクル配置と弾の発射で同じ値を使う
-  const Vector3 muzzlePos = GetHandPosition_();
+  const Vector3 muzzlePos = GetMuzzlePosition_();
   UpdateReticles_(*camera, cursorRayDir, muzzlePos);
 
   // ロックオン・弾発射はPlayMode::Playのときのみ処理する
@@ -278,34 +266,32 @@ void PlayerComponent::UpdateReticles_(const GameCamera& camera, const Vector3& c
   farReticleWorldPos_  = place(kFarReticleRatio);
 }
 
-Vector3 PlayerComponent::GetHandPosition_() const {
-  Vector3 handPos = owner_->GetTransform().translate;
+Vector3 PlayerComponent::GetMuzzlePosition_() const {
+  // 自機の中心を既定値にして、モデルに muzzle ボーン(頭の先)があれば、その「今の」ワールド位置にする
+  Vector3 muzzlePos = owner_->GetTransform().translate;
   if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-      if (auto* instance = modelComp->GetModelInstance()) {
-          Matrix4x4 handWorld = instance->GetBoneWorldMatrix(kRightHandBoneName);
-          handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
-      }
+      modelComp->TryGetBoneWorldPosition(PlayerModel::kMuzzleBone, muzzlePos);
   }
-  return handPos;
+  return muzzlePos;
 }
 
 void PlayerComponent::UpdateFire_(const PlayerInputState& in, BaseScene* scene,
-                                  const GameCamera& camera, const Vector3& handPos) {
+                                  const GameCamera& camera, const Vector3& muzzlePos) {
   if (!in.fireReleased) return;
 
-  EmitMuzzleFlash_(handPos);
+  EmitMuzzleFlash_(muzzlePos);
 
   if (lockon_.IsLockingMode()) {
       // ロックオンモード → ホーミング弾（ベジェ曲線）を全ターゲットに発射
-      FireHomingBullets_(scene, camera, handPos);
+      FireHomingBullets_(scene, camera, muzzlePos);
   } else {
-      FireNormalBullet_(scene, handPos);
+      FireNormalBullet_(scene, muzzlePos);
   }
   lockon_.Initialize();
 }
 
-// 手からのマズルフラッシュ（パーティクル）
-void PlayerComponent::EmitMuzzleFlash_(const Vector3& handPos) const {
+// 発射位置(頭の先)からのマズルフラッシュ（パーティクル）
+void PlayerComponent::EmitMuzzleFlash_(const Vector3& muzzlePos) const {
   static std::mt19937 muzzleRng(std::random_device{}());
   std::uniform_real_distribution<float> muzzleDist(-1.0f, 1.0f);
   for (int i = 0; i < 6; ++i) {
@@ -318,13 +304,13 @@ void PlayerComponent::EmitMuzzleFlash_(const Vector3& handPos) const {
       // 元の scale 0.3 / lifeTime 0.15 だと画面上でほぼ視認できなかった。
       // 視認性を上げるためスケールと寿命を引き上げる。
       ParticleManager::GetInstance()->Emit(
-          "default", handPos, vel,
+          "default", muzzlePos, vel,
           Vector3{ 0.6f, 0.6f, 0.6f }, Vector3{ 0, 0, 0 }, 0.3f,
           Vector4{ 1.0f, 0.9f, 0.4f, 1.0f });
   }
 }
 
-void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& handPos) {
+void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos) {
   const auto& targets = lockon_.GetLockedTargets();
   if (targets.empty()) return;
 
@@ -339,13 +325,13 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
       if (!target) continue;
 
       const Vector3 p2Initial = target->GetTransform().translate;
-      const Vector3 midPoint  = { (handPos.x + p2Initial.x) * 0.5f, (handPos.y + p2Initial.y) * 0.5f, (handPos.z + p2Initial.z) * 0.5f };
+      const Vector3 midPoint  = { (muzzlePos.x + p2Initial.x) * 0.5f, (muzzlePos.y + p2Initial.y) * 0.5f, (muzzlePos.z + p2Initial.z) * 0.5f };
 
       const float sideOffset = sideDist(rng);
       const float upOffset   = upDist(rng);
 
       HomingBulletSpec spec;
-      spec.startPos   = handPos;
+      spec.startPos   = muzzlePos;
       spec.controlPos = {
           midPoint.x + right.x * sideOffset,
           midPoint.y + upOffset,
@@ -361,14 +347,14 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
 // 通常弾：発射基点から「遠レティクル（= 照準点）」へ向けて発射する。
 // 遠レティクルは UpdateReticles_ で発射基点と同じ値から求めているため、
 // 近・中レティクルも必ずこの弾道上に載る。
-void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& handPos) {
+void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos) {
   if (shootCooldown_ > 0.0f) return;
   shootCooldown_ = kNormalShootInterval;
 
   Vector3 aimDir = {
-      farReticleWorldPos_.x - handPos.x,
-      farReticleWorldPos_.y - handPos.y,
-      farReticleWorldPos_.z - handPos.z
+      farReticleWorldPos_.x - muzzlePos.x,
+      farReticleWorldPos_.y - muzzlePos.y,
+      farReticleWorldPos_.z - muzzlePos.z
   };
   const float aimLen = std::sqrt(aimDir.x * aimDir.x + aimDir.y * aimDir.y + aimDir.z * aimDir.z);
   if (aimLen > kMinAimDistance) {
@@ -379,7 +365,7 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& handPos
   }
 
   BulletSpec spec;
-  spec.position = handPos;
+  spec.position = muzzlePos;
   spec.velocity = {
       aimDir.x * kNormalBulletSpeed,
       aimDir.y * kNormalBulletSpeed,
@@ -389,28 +375,9 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& handPos
   scene->AddRootObject(BulletFactory::CreatePlayerNormal(spec));
 }
 
-void PlayerComponent::Draw() {
-  if (!owner_ || !weaponModel_) return;
-
-  auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>();
-  if (!modelComp) return;
-  auto* instance = modelComp->GetModelInstance();
-  if (!instance) return;
-
-  // 武器（仮モデル）を毎フレーム右手ボーンに追従させる。
-  // GetBoneWorldMatrix()が返す行列は、Mixamoリグのボーン階層に蓄積された
-  // （スキニング目的の）非常に小さいスケール成分を含んでおり、そのまま使うと
-  // 武器がほぼ見えないサイズまで縮んでしまう（座標自体は正しいため気づきにくい）。
-  // そのため位置（平行移動成分）だけを取り出し、スケールは自前で組み直す。
-  Matrix4x4 handWorld = instance->GetBoneWorldMatrix(kRightHandBoneName);
-  Vector3 handPos = { handWorld.m[3][0], handWorld.m[3][1], handWorld.m[3][2] };
-  Matrix4x4 finalWorld = MakeAffineMatrix({ 0.3f, 0.3f, 0.3f }, Quaternion{ 0.0f, 0.0f, 0.0f, 1.0f }, handPos);
-  weaponModel_->SetWorld(finalWorld);
-  weaponModel_->Draw();
-}
-
 void PlayerComponent::TakeDamage(int damage) {
   hp_ -= damage;
+  if (damage > 0) animator_.NotifyHit(); // 被弾のよろめきを再生させる(切り替えは次の Update)
   if (hp_ < 0) hp_ = 0;
 }
 

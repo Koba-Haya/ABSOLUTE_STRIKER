@@ -50,6 +50,7 @@
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AnimationManager.h"
+#include "../actor/Player/PlayerModelDefs.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "graphics/particle/EffectManager.h"
@@ -145,7 +146,7 @@ constexpr float kSeaSkySunElevationMax = 80.0f;
 constexpr float kSeaSkyFloorHeightMin = -200.0f;
 constexpr float kSeaSkyFloorHeightMax = -30.0f;
 
-// 自機のモデル(タイトルと同じ竜)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
+// 自機のモデル(蝶。ボーン付きで、羽ばたきなどのアニメーションが入っている)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
 constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
 constexpr float kPlayerWingspan = 3.7f;
 
@@ -276,8 +277,8 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   // -----------------------------------------------------------------------
-  // 自機のモデルを、タイトルと同じ竜に差し替える。
-  // resources/editor/scenes/Game.json 上は旧 player.obj のままでも、実行時に必ず竜にする。
+  // 自機のモデルを、蝶に差し替える。
+  // resources/editor/scenes/Game.json 上が別のモデルを指していても、実行時に必ず蝶にする。
   // 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)
   // -----------------------------------------------------------------------
   {
@@ -293,6 +294,8 @@ void GameScene::Initialize(const SceneServices &services) {
           playerModelComp->LoadModel(kPlayerModelPath);
       }
       playerModelComp->FitToWingspan(kPlayerWingspan);
+      // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
+      playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
   }
 
   playerScope.reset(); // プレイヤー周りの区間の終わり

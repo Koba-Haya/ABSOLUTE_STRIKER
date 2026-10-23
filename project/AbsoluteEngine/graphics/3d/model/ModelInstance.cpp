@@ -212,6 +212,14 @@ Matrix4x4 ModelInstance::GetBoneWorldMatrix(const std::string &boneName) const {
   return Multiply(joint.skeletonSpaceMatrix, world_);
 }
 
+bool ModelInstance::TryGetBoneModelMatrix(const std::string &boneName, Matrix4x4 &out) const {
+  if (!pImpl_->skeleton) return false;
+  auto it = pImpl_->skeleton->jointMap.find(boneName);
+  if (it == pImpl_->skeleton->jointMap.end()) return false;
+  out = pImpl_->skeleton->joints[it->second].skeletonSpaceMatrix;
+  return true;
+}
+
 template<typename T>
 T CalculateValue(const std::vector<Keyframe<T>>& keyframes, float time) {
   assert(!keyframes.empty());
@@ -255,6 +263,11 @@ void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loo
   pImpl_->currentAnimation = animation;
   pImpl_->animationTime = 0.0f;
   pImpl_->animationLoop = loop;
+}
+
+bool ModelInstance::IsAnimationFinished() const {
+  const auto &animation = pImpl_->currentAnimation;
+  return animation && !pImpl_->animationLoop && pImpl_->animationTime >= animation->duration;
 }
 
 void ModelInstance::UpdateAnimation(float deltaTime) {

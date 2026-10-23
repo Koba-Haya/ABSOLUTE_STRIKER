@@ -12,7 +12,7 @@
 // 注意: 保持した分のメモリを常時使う。読み込みはメインスレッドで同期的に行う(タイトルの起動が少し伸びる)。
 namespace GameAssetPaths {
 // ゲームシーンとこのクラスで共有する資産のパス。両者で食い違うとキャッシュに当たらないため、ここに集約する
-constexpr const char *kPlayerModel = "resources/app/player/dragon/dragon.obj";
+constexpr const char *kPlayerModel = "resources/app/butterfly/butterfly.gltf";
 constexpr const char *kSkyboxDds = "resources/app/dds/dds.dds";
 constexpr const char *kDissolveNoise = "resources/noise/noise0.png";
 constexpr const char *kDefaultParticleTexture = "resources/app/particle/circle.png";

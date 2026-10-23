@@ -85,12 +85,20 @@ public:
   // blendDuration > 0 の場合、現在再生中のポーズから新しいアニメーションへ
   // blendDuration秒かけてクロスフェード（Lerp/Slerp補間）しながら遷移する。
   void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true, float blendDuration = 0.0f);
+  // 再生中のアニメーションが最後まで再生されたか。ループしないアニメーションが終わったときだけ true
+  // (ループ再生中や、何も再生していないときは false)。次のアニメーションへ切り替える合図に使う
+  bool IsAnimationFinished() const;
   
   SkinCluster* GetSkinCluster() const;
   Skeleton* GetSkeleton() const;
 
   // 指定したボーン名の現在のワールド行列を取得する。ボーンが存在しない場合はモデルのワールド行列を返す。
   Matrix4x4 GetBoneWorldMatrix(const std::string &boneName) const;
+
+  // 指定したボーンの、モデル空間(ワールド行列を掛ける前)の行列を取得する。ボーンが存在しなければ false。
+  // GetBoneWorldMatrix は「最後に SetWorld した行列」を使うので 1 フレーム遅れるが、
+  // こちらは、呼び出し側が「今の」ワールド行列を掛けて使える(ModelComponent::TryGetBoneWorldPosition)
+  bool TryGetBoneModelMatrix(const std::string &boneName, Matrix4x4 &out) const;
 
   unsigned long long GetMaterialCBAddress() const;
   unsigned long long GetTransformCBAddress() const;
