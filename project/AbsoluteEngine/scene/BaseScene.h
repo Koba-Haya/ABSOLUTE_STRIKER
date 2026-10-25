@@ -43,6 +43,12 @@ public:
   PlayMode GetPlayMode() const { return playMode_; }
   void SetPlayMode(PlayMode mode) { playMode_ = mode; }
 
+  // 世界(タイムライン、オブジェクトの更新、衝突判定)の時間の速さ。1 で通常、0 で停止(その間、世界の更新は行わない)、
+  // 0 より大きく 1 より小さいとスローモーション。死亡演出のヒットストップとスローモーションに使う。
+  // プレイ中の更新にだけ効く(エディットモードのタイムラインのプレビューには掛からない)。0 未満は 0 にそろえる
+  void SetWorldTimeScale(float scale) { worldTimeScale_ = scale < 0.0f ? 0.0f : scale; }
+  float GetWorldTimeScale() const { return worldTimeScale_; }
+
   const std::vector<std::shared_ptr<AbsoluteEngine::GameObject>>& GetRootObjects() const { return rootObjects_; }
   // タイムラインのSpawnEventなど、あらゆる箇所からのオブジェクト追加を一元管理できるよう virtual 化する
   // 派生クラスでオーバーライドすることで、Application固有の処理（コールバック注入など）を追加できる（DI）
@@ -172,6 +178,7 @@ private:
   std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
 
   PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
+  float worldTimeScale_ = 1.0f;        // 世界の時間の速さ(SetWorldTimeScale)
   std::string sceneId_ = "";
   std::string backupSceneJson_ = "";
 

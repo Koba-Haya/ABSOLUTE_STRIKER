@@ -1,28 +1,26 @@
 #include "HitEffectSpawner.h"
 #include "BaseScene.h"
-#include "Renderer.h"
-#include "Method.h"
 #include "ParticleManager.h"
-#include "particle/GPUParticleManager.h"
 #include "graphics/particle/EffectManager.h"
 #include "graphics/particle/RingEffect.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "component/ExplosionLightComponent.h"
-#include <algorithm>
 #include <cstdlib>
 
 namespace {
-// 爆発の光の寿命(秒)と、生成直後の強さ
+// 爆発の光の寿命(秒)と、生成直後の強さ・届く半径。
+// 体当たりの敵が自機のそばで自爆したとき、蝶がオレンジに塗られて見づらかったので、
+// 強さを 20 から 10、半径を 30 から 15 に、それぞれ半分にした(さらに調整するなら、この 2 つ)
 constexpr float kExplosionLightLifeTime = 0.5f;
-constexpr float kExplosionLightMaxIntensity = 20.0f;
+constexpr float kExplosionLightMaxIntensity = 10.0f;
+constexpr float kExplosionLightRadius = 15.0f;
 } // namespace
 
 void HitEffectSpawner::Initialize() {
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
-  resEffect_ = am->Load<ModelResource>("resources/app/particle/particle.obj");
-  texRing_   = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
+  texRing_ = am->Load<TextureResource>("resources/app/textures/gradationLine.png");
 }
 
 // DevScene の実装を移植。
@@ -39,9 +37,6 @@ void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
           Vector3{ 1.5f, 1.5f, 1.5f }, Vector3{ 0, 0, 0 }, 0.7f, Vector4{ 1, 1, 1, 1 });
   }
 
-  // 1.5. GPU Particle（加点要素）: 敵撃破のたびに並列化されたEmit CSでバーストを発生させる
-  GPUParticleManager::GetInstance()->EmitBurst(pos, 20);
-
   // 2. リングエフェクト
   if (texRing_) {
       EffectManager::GetInstance()->AddEffect(std::make_unique<RingEffect>(texRing_, pos));
@@ -53,37 +48,9 @@ void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
   auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
   lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
   lightNodeComp->color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光
-  lightNodeComp->radius = 30.0f;
+  lightNodeComp->radius = kExplosionLightRadius;
   lightNodeComp->decay = 1.0f;
   lightObj->AddComponent(std::move(lightNodeComp));
   lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
   scene.AddRootObject(lightObj);
-
-  // 4. 旧型スケールアニメーションのヒットエフェクト（後方互換）
-  ScaleEffect ef;
-  ef.instance.Initialize({ resEffect_, {1, 1, 1, 1}, 0 });
-  ef.position = pos;
-  ef.frame = 0.0f;
-  ef.isActive = true;
-  scaleEffects_.push_back(std::move(ef));
-}
-
-void HitEffectSpawner::Update() {
-  for (auto& ef : scaleEffects_) {
-      if (!ef.isActive) continue;
-      ef.frame += 1.0f;
-      float t = ef.frame / ef.maxFrame;
-      float scaleVal = t * 4.0f;
-      ef.instance.SetWorld(MakeAffineMatrix(Vector3{scaleVal, scaleVal, scaleVal}, Vector3{0.0f, 0.0f, 0.0f}, ef.position));
-      ef.instance.SetColor({1.0f, 0.5f, 0.0f, 1.0f - t});
-      if (ef.frame >= ef.maxFrame) ef.isActive = false;
-  }
-  scaleEffects_.erase(std::remove_if(scaleEffects_.begin(), scaleEffects_.end(),
-      [](const ScaleEffect& e) { return !e.isActive; }), scaleEffects_.end());
-}
-
-void HitEffectSpawner::Draw(Renderer* renderer) {
-  for (auto& ef : scaleEffects_) {
-      renderer->DrawEffectModel(&ef.instance);
-  }
 }

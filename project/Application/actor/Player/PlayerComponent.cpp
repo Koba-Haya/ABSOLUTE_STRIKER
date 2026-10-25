@@ -14,7 +14,6 @@
 #include "ReticleAim.h"
 #include "Application/ScreenSize.h"
 #include "../Bullet/BulletFactory.h"
-#include "Logger.h"
 #include "PlayerModelDefs.h"
 
 // 照準点（世界で狙う1点）：カメラからカーソルレイ上に kAimDistance 進んだ点
@@ -59,6 +58,7 @@ void PlayerComponent::Initialize() {
   dodgeTimer_ = 0.0f;
   dodgeCooldownTimer_ = 0.0f;
   dodgeRollSign_ = 1.0f;
+  dying_ = false;
   animator_.Reset();
 
 }
@@ -68,6 +68,9 @@ void PlayerComponent::Update(float deltaTime) {
 
   // 蝶のアニメーションの切り替え(被弾のよろめきと、羽ばたきへの復帰)。入力やカメラの有無に関係なく進める
   animator_.Update(owner_->GetComponent<AbsoluteEngine::ModelComponent>());
+
+  // 死亡演出中は、位置と向きを PlayerDeathDirector が決めるので、追従・発射・ロックオンを行わない
+  if (dying_) return;
   auto scene  = BaseScene::GetActiveScene();
   if (!scene) return;
   auto* input  = scene->GetInput();
@@ -376,6 +379,7 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzleP
 }
 
 void PlayerComponent::TakeDamage(int damage) {
+  if (IsDead()) return; // すでに死んでいる。重ねてダメージを受けない
   hp_ -= damage;
   if (damage > 0) animator_.NotifyHit(); // 被弾のよろめきを再生させる(切り替えは次の Update)
   if (hp_ < 0) hp_ = 0;
@@ -391,10 +395,5 @@ void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" ||
         other->GetName().find("Boss")  != std::string::npos || other->GetTag() == "Boss") {
         TakeDamage(1);
-        // 【調査用の一時ログ】「HPが見えないまま急に死ぬ」現象の原因特定用。
-        // どの相手との接触で何回ダメージが入ったかをフレーム単位で記録する。
-        // 原因が分かったら削除する。
-        Logger::GetInstance().Log("[PlayerDamage] hit by name=%s tag=%s -> hp=%d/%d",
-            other->GetName().c_str(), other->GetTag().c_str(), hp_, maxHp_);
     }
 }

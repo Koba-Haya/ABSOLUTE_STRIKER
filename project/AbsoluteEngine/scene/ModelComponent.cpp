@@ -43,12 +43,15 @@ void ModelComponent::LoadModel(const std::string& path) {
     ModelInstance::CreateInfo ci{};
     ci.resource = res;
     ci.baseColor = {color_.x, color_.y, color_.z, color_.w};
-    ci.lightingMode = 1;
+    ci.lightingMode = lightingMode_;
     ci.environmentCoefficient = environmentCoefficient_;
     modelInstance_->Initialize(ci);
     
     if (!texturePath_.empty()) {
         LoadTexture(texturePath_);
+    }
+    if (dissolveMask_) {
+        modelInstance_->SetDissolveMaskTexture(dissolveMask_);
     }
 }
 
@@ -69,6 +72,13 @@ void ModelComponent::FitToWingspan(float wingspan) {
     fitCenter_ = {(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f};
     const float width = hi.x - lo.x;
     fitScale_ = width > kMinFitWidth ? wingspan / width : 1.0f;
+}
+
+void ModelComponent::LoadDissolveMask(const std::string& path) {
+    dissolveMask_ = AssetManager::GetInstance()->Load<TextureResource>(path);
+    if (modelInstance_ && dissolveMask_) {
+        modelInstance_->SetDissolveMaskTexture(dissolveMask_);
+    }
 }
 
 void ModelComponent::LoadTexture(const std::string& path) {

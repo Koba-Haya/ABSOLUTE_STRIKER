@@ -198,7 +198,9 @@
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
+    <ClCompile Include="scene\PlayerDeathDirector.cpp" />
     <ClCompile Include="actor\Player\PlayerAnimator.cpp" />
+    <ClCompile Include="actor\Player\WingShatter.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
     <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
@@ -252,7 +254,9 @@
     <ClInclude Include="ScreenSize.h" />
     <ClInclude Include="actor\Bullet\BulletFactory.h" />
     <ClInclude Include="actor\Player\PlayerInput.h" />
+    <ClInclude Include="scene\PlayerDeathDirector.h" />
     <ClInclude Include="actor\Player\PlayerAnimator.h" />
+    <ClInclude Include="actor\Player\WingShatter.h" />
     <ClInclude Include="actor\Player\PlayerModelDefs.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />

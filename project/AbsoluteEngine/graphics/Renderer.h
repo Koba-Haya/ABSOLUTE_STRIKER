@@ -206,7 +206,10 @@ public:
     Random
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle = {});
+  // Vignette(画面の周囲を、色に寄せる)。周囲ほど暗く(= 色に近く)なる。色は黒、強さは 1 の既定(従来どおりの暗転)
   void SetVignetteParam(float scale, float powValue);
+  // 色と強さ付き。周囲を color へ寄せる(黒なら暗転、赤なら赤い枠)。strength は 0(効果なし)〜 1(最大)
+  void SetVignetteParam(float scale, float powValue, const Vector3& color, float strength);
   void SetBoxFilterParam(int32_t k);
   void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
   void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
@@ -343,6 +346,7 @@ private:
     float scale;
     float powValue;
     float pad[2];
+    float tint[4]; // 周囲を寄せる色(rgb)と、効果の強さ(w)
   };
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;

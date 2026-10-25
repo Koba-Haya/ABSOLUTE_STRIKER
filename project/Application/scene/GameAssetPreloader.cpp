@@ -13,7 +13,6 @@
 namespace {
 // 先読みする資産のうち、ゲームシーン専用で他のクラス内にパスが書かれているもの。
 // (HitEffectSpawner と、Game.json から参照されるプレハブ用の立方体)
-constexpr const char *kHitEffectModel = "resources/app/particle/particle.obj";
 constexpr const char *kHitEffectRingTexture = "resources/app/textures/gradationLine.png";
 constexpr const char *kPrefabCubeModel = "resources/app/cube/cube.obj";
 constexpr const char *kPrefabCubeTexture = "resources/app/cube/white100x100.png";
@@ -41,7 +40,6 @@ void GameAssetPreloader::Preload() {
 
   // モデル
   Hold(g_models, am->Load<ModelResource>(GameAssetPaths::kPlayerModel));
-  Hold(g_models, am->Load<ModelResource>(kHitEffectModel));
   Hold(g_models, am->Load<ModelResource>(kPrefabCubeModel));
 
   // テクスチャ

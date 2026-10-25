@@ -38,6 +38,7 @@ struct ModelInstance::Impl {
   std::unique_ptr<Skeleton> skeleton;
   std::unique_ptr<SkinCluster> skinCluster;
   std::shared_ptr<TextureResource> overrideTexture;
+  std::shared_ptr<TextureResource> dissolveMaskTexture; // このインスタンス専用のディゾルブのマスク(null なら共有)
 };
 
 ModelInstance::ModelInstance() : pImpl_(std::make_unique<Impl>()) {}
@@ -134,6 +135,14 @@ void ModelInstance::SetDissolveParam(bool enable, float threshold, float edgeRan
 
 void ModelInstance::SetOverrideTexture(std::shared_ptr<TextureResource> tex) {
   pImpl_->overrideTexture = tex;
+}
+
+void ModelInstance::SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex) {
+  pImpl_->dissolveMaskTexture = tex;
+}
+
+TextureResource* ModelInstance::GetDissolveMaskTexture() const {
+  return pImpl_->dissolveMaskTexture.get();
 }
 
 TextureResource* ModelInstance::GetOverrideTexture() const {

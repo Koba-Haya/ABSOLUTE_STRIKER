@@ -11,6 +11,14 @@ struct Skeleton;
 struct SkinCluster;
 class TextureResource;
 
+// 照明モード(ModelInstance::CreateInfo::lightingMode / SetLightingMode。Object3d.PS.hlsl の enableLighting と対応)
+namespace ModelLightingMode {
+constexpr int32_t kUnlit = 0;        // 照明なし(テクスチャの色をそのまま出す)
+constexpr int32_t kLambert = 1;      // Lambert(光が当たらない側は真っ黒)
+constexpr int32_t kHalfLambert = 2;  // Half-Lambert
+constexpr int32_t kThinSurface = 3;  // 薄い面(Half-Lambert + 環境光。蝶の翅など、両面が見えるもの)
+} // namespace ModelLightingMode
+
 class ModelInstance {
 public:
   struct CreateInfo {
@@ -77,6 +85,11 @@ public:
 
   void SetOverrideTexture(std::shared_ptr<TextureResource> tex);
   TextureResource* GetOverrideTexture() const;
+
+  // このインスタンスだけが使うディゾルブのマスク(null なら、Renderer が共有で持つマスクを使う)。
+  // マスクはモデルの UV で引かれるので、モデル専用の朽ち方(例: 翅の外側から内側へ)を、専用のマスクで作れる
+  void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex);
+  TextureResource* GetDissolveMaskTexture() const;
 
   void Draw();
   void DrawSkeleton();

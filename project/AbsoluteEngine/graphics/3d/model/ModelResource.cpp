@@ -195,6 +195,19 @@ bool ModelResource::UpdateVertices(const VertexData *vertices, uint32_t count) {
   return true;
 }
 
+bool ModelResource::UpdateIndices(const uint32_t *indices, uint32_t count) {
+  if (!pImpl_->ib || indices == nullptr || count != pImpl_->indexCount) {
+    return false;
+  }
+  void *mapped = nullptr;
+  if (FAILED(pImpl_->ib->Map(0, nullptr, &mapped))) {
+    return false;
+  }
+  std::memcpy(mapped, indices, sizeof(uint32_t) * count);
+  pImpl_->ib->Unmap(0, nullptr);
+  return true;
+}
+
 std::vector<Vector3> ModelResource::GetVertexPositions() const {
   std::vector<Vector3> positions;
   if (!pImpl_->modelData) return positions;

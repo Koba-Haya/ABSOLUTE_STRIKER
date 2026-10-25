@@ -5,7 +5,6 @@
 #include "DirectXResourceUtils.h"
 #include "ModelManager.h"
 #include "ParticleManager.h"
-#include "particle/GPUParticleManager.h"
 #include "Input.h"
 #include "../camera/RailCameraComponent.h"
 #include "Spline.h"
@@ -51,6 +50,8 @@
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AnimationManager.h"
 #include "../actor/Player/PlayerModelDefs.h"
+#include "AbsoluteEngine/scene/DissolveComponent.h"
+#include "Input.h"
 #include "AbsoluteEngine/scene/LightNodeComponent.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "graphics/particle/EffectManager.h"
@@ -149,6 +150,11 @@ constexpr float kSeaSkyFloorHeightMax = -30.0f;
 // 自機のモデル(蝶。ボーン付きで、羽ばたきなどのアニメーションが入っている)と、その大きさ。翼幅(モデルの x 方向の幅)がこの値になるよう拡大する(ワールドの単位)
 constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
 constexpr float kPlayerWingspan = 3.7f;
+
+// 死亡演出のスキップに使う入力(発射ボタン(Space・パッド A・マウス左)とは別のキーにして、連打による誤スキップを避ける)。
+// キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
+constexpr BYTE kDeathSkipKey = DIK_0;
+constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
 
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
 // SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
@@ -294,6 +300,19 @@ void GameScene::Initialize(const SceneServices &services) {
           playerModelComp->LoadModel(kPlayerModelPath);
       }
       playerModelComp->FitToWingspan(kPlayerWingspan);
+      // 死亡の崩壊(ディゾルブ)に使う、蝶専用のマスクと、ディゾルブの制御用のコンポーネント(普通は無効。死亡演出が制御する)
+      playerModelComp->LoadDissolveMask(GameAssetPaths::kPlayerDissolveMask);
+      // 崩壊で翅が裂けて飛び散る破片。分け方と描画用のモデルは重いので、シーンの開始時に作る(翅の描画から消した三角形も、ここで元に戻る)
+      {
+          auto* assets = AbsoluteEngine::AssetManager::GetInstance();
+          wingShatter_.Initialize(playerModelComp, assets->Load<TextureResource>(GameAssetPaths::kPlayerAtlas),
+                                  assets->Load<TextureResource>(GameAssetPaths::kPlayerDissolveMask));
+      }
+      // 蝶の翅は薄く、両面が見える。Lambert のままだと、光の当たらない側(裏面、影の側)が真っ黒になるので、環境光つきの薄い面にする
+      playerModelComp->SetLightingMode(ModelLightingMode::kThinSurface);
+      if (!playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+          playerObj_->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
+      }
       // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
       playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
   }
@@ -393,6 +412,8 @@ void GameScene::Initialize(const SceneServices &services) {
 
 void GameScene::Finalize() {
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
+  // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
+  wingShatter_.Reset();
 }
 
 void GameScene::BeginIntro_() {
@@ -690,18 +711,12 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
         hitEffects_.Spawn(*this, hitPos);
 
-        // カメラシェイク・画面歪み（RadialBlur の中心は敵のスクリーン座標）
-        postEffects_.OnEnemyDestroyed(WorldToScreenUv_(hitPos));
+        // スコア加算
+        scoreTracker_.OnEnemyKilled();
 
-        // スコア加算。キルストリークに到達したら演出を発火
-        if (scoreTracker_.OnEnemyKilled()) {
-            postEffects_.OnKillStreak();
-        }
-
-        // 編隊トラッキング：編隊が全滅したら強化版の撃破エフェクト
-        // （通常撃破時のEmitBurst(pos, 20)より大幅増量）
-        if (formationComp && scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId()) > 0) {
-            GPUParticleManager::GetInstance()->EmitBurst(hitPos, 60, 0.6f);
+        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する(戻り値の初期メンバー数は、いまは使わない)
+        if (formationComp) {
+            scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId());
         }
     };
 }
@@ -722,15 +737,6 @@ Camera* GameScene::GetGameplayCamera_() const {
       : static_cast<Camera*>(GetMainCamera());
 }
 
-Vector2 GameScene::WorldToScreenUv_(const Vector3& worldPos) const {
-  Camera* cam = GetGameplayCamera_();
-  if (!cam) return { 0.5f, 0.5f };
-
-  const Matrix4x4 vp = Multiply(cam->GetViewMatrix(), cam->GetProjectionMatrix());
-  const Vector3 ndc = TransformPoint(worldPos, vp);
-  return { ndc.x * 0.5f + 0.5f, -ndc.y * 0.5f + 0.5f };
-}
-
 void GameScene::UpdatePostEffects_(float deltaTime) {
   PostEffectDirector::FrameState state;
   state.isBossPhase = phase_ == GamePhase::Boss;
@@ -739,11 +745,10 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
   if (playerObj_) {
       if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
           state.hasPlayer     = true;
-          state.isLockingMode = pComp->GetLockOn().IsLockingMode();
           state.playerHp      = pComp->GetHp();
       }
   }
-  postEffects_.Update(deltaTime, time_, state);
+  postEffects_.Update(deltaTime, state);
 }
 
 void GameScene::UpdateMouseCapture_() {
@@ -791,9 +796,6 @@ void GameScene::RemoveExpiredObjects_() {
 }
 
 void GameScene::SpawnBoss_() {
-  // 【調査用の一時ログ】原因が分かったら削除する。
-  Logger::GetInstance().Log("[BossPhase] start");
-
   // ボス出現演出（PostEffect加点要素: GaussianFilter）
   postEffects_.OnBossIntro();
 
@@ -839,8 +841,8 @@ void GameScene::CheckDebugFlowShortcut_() {
     phase_ = GamePhase::Clear;
     RequestSceneChange(SceneId::Clear);
   } else if (GetInput()->TriggerKey(DIK_BACK)) {
-    phase_ = GamePhase::GameOver;
-    RequestSceneChange(SceneId::GameOver);
+    // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
+    KillPlayer_();
   }
 }
 
@@ -876,12 +878,82 @@ void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
   RequestSceneChange(SceneId::Title);
 }
 
+void GameScene::KillPlayer_() {
+  if (!playerObj_) return;
+  if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+      pComp->TakeDamage(pComp->GetMaxHp());
+  }
+}
+
+void GameScene::BeginDying_() {
+  phase_ = GamePhase::Dying;
+
+  PlayerDeathStart start;
+  float railSpeed = 0.0f;
+  if (const auto* rail = FindRailCamera_()) {
+      railSpeed = rail->GetSpeed();
+  }
+  if (playerObj_) {
+      start.position = playerObj_->GetTransform().translate;
+      start.rotate = playerObj_->GetTransform().rotate;
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          pComp->SetDying(true); // 追従・発射・ロックオンを止める(アニメーションの切り替えだけ進む)
+      }
+  }
+  if (auto* camera = GetMainCamera()) {
+      start.forward = Normalize(camera->GetForward());
+  }
+  start.railSpeed = railSpeed;
+  deathDirector_.Begin(deathSettings_, start);
+}
+
+void GameScene::UpdateDying_(float deltaTime) {
+  // スキップ: 0 キーかパッドの Start。展示中は受け付けない
+  bool skipRequested = false;
+  if (GetInput()) {
+      skipRequested = GetInput()->TriggerKey(kDeathSkipKey) || GetInput()->WasPadPressed(kDeathSkipPadButton);
+  }
+  deathDirector_.Update(deltaTime, !ExhibitionMode::kEnabled, skipRequested);
+
+  // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション)
+  SetWorldTimeScale(deathDirector_.GetWorldTimeScale());
+
+  // 崩壊が始まる瞬間に、蝶をきりもみへ切り替える(スキップで飛んだときも 1 回出る)
+  if (deathDirector_.ConsumeCrumbleStart() && playerObj_) {
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          pComp->PlayDeathTumble();
+      }
+  }
+
+  // Cover へ入ったら、ゲームオーバーへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う。演出クラスは、遷移の間も進み続ける
+  if (deathDirector_.ConsumeCoverStart()) {
+      phase_ = GamePhase::GameOver;
+      RequestSceneChange(SceneId::GameOver);
+  }
+}
+
+void GameScene::ApplyDeathPose_() {
+  if (!playerObj_ || !deathDirector_.IsActive()) return;
+  const PlayerDeathPose pose = deathDirector_.GetPlayerPose();
+  playerObj_->GetTransform().translate = pose.position;
+  playerObj_->GetTransform().rotate = pose.rotate;
+
+  // 蝶の朽ち方(ディゾルブ)。ModelComponent が、毎フレームこの値を描画に渡す
+  if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+      const PlayerDeathDissolve state = deathDirector_.GetDissolve();
+      dissolve->enable = state.enabled;
+      dissolve->threshold = state.threshold;
+      dissolve->edgeRange = state.edgeRange;
+      dissolve->edgeColor = state.edgeColor;
+  }
+}
+
 void GameScene::CheckGameEnd_() {
   if (playerObj_) {
       auto pComp = playerObj_->GetComponent<PlayerComponent>();
-      if (pComp && pComp->IsDead()) {
-          phase_ = GamePhase::GameOver;
-          RequestSceneChange(SceneId::GameOver);
+      // HP が 0 になったら、死亡演出を始める。すでに演出中・終了の要求済みのときは、始めない
+      if (pComp && pComp->IsDead() && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss)) {
+          BeginDying_();
       }
   }
 
@@ -943,6 +1015,11 @@ void GameScene::Update() {
       }
   }
 
+  // 死亡演出(実時間)。世界の時間の速さを、ここで決めてから、世界を更新する
+  if (deathDirector_.IsActive()) {
+      UpdateDying_(deltaTime);
+  }
+
   // ポストエフェクトの調停（Editモードでもタイマーは進める）
   UpdatePostEffects_(deltaTime);
 
@@ -983,10 +1060,12 @@ void GameScene::Update() {
       RemoveExpiredObjects_();
 
       // パーティクルの更新（爆発エフェクト等）
-      ParticleManager::GetInstance()->Update(deltaTime);
+      // 世界の時間の速さに合わせる(ヒットストップで止まり、スローモーションで遅くなる)
+      const float worldDeltaTime = deltaTime * GetWorldTimeScale();
+      ParticleManager::GetInstance()->Update(worldDeltaTime);
 
       // EffectManagerの更新（RingEffectなど）
-      EffectManager::GetInstance()->Update(deltaTime, GetGameplayCamera_());
+      EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
 
       // ボスフェーズ移行
       float railProgress = 0.0f;
@@ -1009,7 +1088,11 @@ void GameScene::Update() {
           CheckDebugFlowShortcut_();
       }
       CheckGameEnd_();
-      hitEffects_.Update();
+      ApplyDeathPose_();
+      // 崩壊の破片(解放、移動)。蝶の今のポーズ・位置を使うので、位置を決めたあとに進める
+      if (deathDirector_.IsActive()) {
+          wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity());
+      }
       UpdateHud_();
   }
 
@@ -1090,13 +1173,15 @@ void GameScene::Draw() {
       if (obj) obj->Draw();
   }
 
+  // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
+  wingShatter_.Draw(deathDirector_.GetDissolve());
+
   // ステージ名の板(ステージ開始演出の間だけ、透明度が 0 より大きくなる)
   stageNameBoard_.Draw(renderer);
   if (showDebugFracture_) {
       stageNameBoard_.DrawDebugCells(renderer);
   }
 
-  hitEffects_.Draw(renderer);
 
   // EffectManager（RingEffect等）の描画
   EffectManager::GetInstance()->Draw();
@@ -1147,7 +1232,7 @@ void GameScene::Draw() {
   renderer->RenderPrimitives();
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !stageStart_.IsActive()) {
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !stageStart_.IsActive() && !deathDirector_.IsActive()) {
       gameHUD_->Draw();
   }
 

@@ -336,6 +336,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (vignetteParamMapped_) {
     vignetteParamMapped_->scale = 16.0f;
     vignetteParamMapped_->powValue = 0.8f;
+    vignetteParamMapped_->tint[0] = 0.0f; // 既定は黒の暗転(強さ 1)
+    vignetteParamMapped_->tint[1] = 0.0f;
+    vignetteParamMapped_->tint[2] = 0.0f;
+    vignetteParamMapped_->tint[3] = 1.0f;
   }
 
   boxFilterParamCB_ = CreateUploadBuffer(align256(sizeof(BoxFilterParam)));
@@ -700,8 +704,10 @@ void Renderer::DrawModel(ModelInstance *instance) {
     cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
   }
   
-  // t2: マスクテクスチャ (Dissolve用)
-  if (dissolveMaskTexture_) {
+  // t2: マスクテクスチャ (Dissolve用)。インスタンス専用のマスクがあればそれ、なければ共有のマスク
+  if (TextureResource* instanceMask = instance->GetDissolveMaskTexture()) {
+    cmdList->SetGraphicsRootDescriptorTable(8, instanceMask->GetSrvGpu());
+  } else if (dissolveMaskTexture_) {
     cmdList->SetGraphicsRootDescriptorTable(8, dissolveMaskTexture_->GetSrvGpu());
   }
 
@@ -1659,9 +1665,17 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
 }
 
 void Renderer::SetVignetteParam(float scale, float powValue) {
+  SetVignetteParam(scale, powValue, Vector3{0.0f, 0.0f, 0.0f}, 1.0f);
+}
+
+void Renderer::SetVignetteParam(float scale, float powValue, const Vector3& color, float strength) {
   if (vignetteParamMapped_) {
     vignetteParamMapped_->scale = scale;
     vignetteParamMapped_->powValue = powValue;
+    vignetteParamMapped_->tint[0] = color.x;
+    vignetteParamMapped_->tint[1] = color.y;
+    vignetteParamMapped_->tint[2] = color.z;
+    vignetteParamMapped_->tint[3] = strength;
   }
 }
 

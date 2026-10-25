@@ -5,12 +5,11 @@ void ScoreTracker::RegisterFormationMember(int formationId) {
   ++formationTotal_[formationId];
 }
 
-bool ScoreTracker::OnEnemyKilled() {
+void ScoreTracker::OnEnemyKilled() {
   // 編隊メンバーかどうかに関わらず、1体倒すごとに基礎点を加算する。
   // 編隊全滅時のボーナスは OnFormationMemberKilled 側でこれとは別に上乗せする。
   score_ += kScorePerKill;
   ++killCount_;
-  return killCount_ % kKillStreakInterval == 0;
 }
 
 int ScoreTracker::OnFormationMemberKilled(int formationId) {

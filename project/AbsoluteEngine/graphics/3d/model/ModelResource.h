@@ -36,6 +36,11 @@ public:
   // vertices: 新しい頂点(count 個)。count: 頂点の数
   bool UpdateVertices(const VertexData *vertices, uint32_t count);
 
+  // 三角形の番号(インデックスバッファ)の内容を書き換える。一部の三角形を描かないようにする(番号を潰す)用途。
+  // 番号の数は、作ったときと同じでなければならない(違うときは何もせず false を返す)。
+  // 注意: モデルのリソースは、同じファイルを読むすべての場所で共有される。書き換えたら、使い終わったときに元へ戻すこと
+  bool UpdateIndices(const uint32_t *indices, uint32_t count);
+
   // 全メッシュの頂点位置(モデル空間)を返す。モデルの大きさ・中心・端の位置を調べる用途(Assimp の型に依存しない)
   std::vector<Vector3> GetVertexPositions() const;
 

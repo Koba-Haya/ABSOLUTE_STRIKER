@@ -27,7 +27,15 @@ public:
 
   std::string GetTypeName() const override { return "PlayerComponent"; }
 
+  // ダメージを受ける。すでに死んでいる(HP 0)ときは無視する(死亡演出中に、重ねて呼ばれても、被弾の演出や二重の死亡が起きない)
   void TakeDamage(int damage);
+
+  // 死亡演出中か。true の間は、カーソル追従・発射・ロックオンを止め、位置と向きは死亡演出(PlayerDeathDirector)が決める。
+  // アニメーションの切り替え(PlayerAnimator)だけは進める
+  void SetDying(bool dying) { dying_ = dying; }
+  bool IsDying() const { return dying_; }
+  // 蝶を、きりもみ(Tumble)で落ち始めさせる(死亡演出の、崩壊が始まる瞬間に呼ぶ)
+  void PlayDeathTumble() { animator_.NotifyDeath(); }
   bool IsDead() const;
   int GetHp() const { return hp_; }
   int GetMaxHp() const { return maxHp_; }
@@ -68,6 +76,7 @@ private:
   void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
   void FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos);
 
+  bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ

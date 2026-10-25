@@ -42,6 +42,16 @@ public:
 
     void LoadModel(const std::string& path);
     void LoadTexture(const std::string& path);
+    // このモデル専用のディゾルブのマスクを読み込む(モデルの UV で引かれる)。LoadModel() で作り直しても保持される
+    void LoadDissolveMask(const std::string& path);
+
+    // 照明モード(ModelLightingMode)。既定は Lambert。LoadModel() で作り直しても保持される
+    void SetLightingMode(int32_t mode) {
+        lightingMode_ = mode;
+        if (modelInstance_) {
+            modelInstance_->SetLightingMode(mode);
+        }
+    }
 
     const std::string& GetModelPath() const { return modelPath_; }
     const std::string& GetTexturePath() const { return texturePath_; }
@@ -57,6 +67,9 @@ public:
 
     // ボーンの「今の」ワールド座標を返す(Transform と FitToWingspan の補正を反映する)。ボーンが無ければ false
     bool TryGetBoneWorldPosition(const std::string& boneName, Vector3& out) const;
+
+    // モデル空間からワールドへの、今の行列(Transform と FitToWingspan の補正を反映する)。CPU でスキニングした頂点を、ワールドへ移すのに使う
+    Matrix4x4 GetWorldMatrix() const { return owner_ ? ComputeWorldMatrix_() : MakeIdentity4x4(); }
 
     // 読み込んだモデルの翼幅(x 方向の幅)が wingspan になるよう拡大し、バウンディングボックスの中心を
     // オブジェクトの位置に合わせる。Transform の scale / rotate / translate とは別に、モデルの空間で掛かる補正。
@@ -98,7 +111,10 @@ private:
     std::unique_ptr<ModelInstance> pendingDestroyModelInstance_;
     // modelPath_ のファイルに入っているアニメーションの集合(PlayAnimation で初めて必要になったときに読む)
     std::shared_ptr<const AnimationSet> animationSet_;
+    // このモデル専用のディゾルブのマスク(空なら、共有のマスクを使う)
+    std::shared_ptr<TextureResource> dissolveMask_;
     float environmentCoefficient_ = 0.0f;
+    int32_t lightingMode_ = ModelLightingMode::kLambert; // 照明モード(SetLightingMode)
     Vector4 color_{1.0f, 1.0f, 1.0f, 1.0f};
     // FitToWingspan の補正(モデル空間)。既定は補正なし
     Vector3 fitCenter_{0.0f, 0.0f, 0.0f};

@@ -104,6 +104,12 @@ struct PixelShaderOutput
     float4 color : SV_TARGET0;
 };
 
+// 照明モード(Material の enableLighting)。0 = 照明なし、1 = Lambert、それ以外 = Half-Lambert。
+// 3 = 薄い面(蝶の翅など)。Half-Lambert に、光の当たらない側でも真っ黒にならないよう、環境光を足す
+static const int LIGHTING_MODE_THIN_SURFACE = 3;
+// 薄い面の環境光の強さ(面の色に掛ける)。光が当たらない側(翅の裏、影の側)の最低限の明るさ
+static const float THIN_SURFACE_AMBIENT = 0.45f;
+
 static float3 ComputeDiffuse(float3 N, float3 Ldir, int lightingMode)
 {
     float ndotl = dot(N, Ldir);
@@ -266,6 +272,12 @@ PixelShaderOutput main(VertexShaderOutput input)
     }
 
     float3 finalRGB = diffuseSum + specularSum;
+
+    // 薄い面は、光の当たらない側も、環境光でうっすら見えるようにする
+    if (gMaterial.enableLighting == LIGHTING_MODE_THIN_SURFACE)
+    {
+        finalRGB += gMaterial.color.rgb * textureColor.rgb * THIN_SURFACE_AMBIENT;
+    }
     
     // ===== 環境マッピング (反射) =====
     if (gMaterial.enableLighting != 0 && gMaterial.environmentCoefficient > 0.0f)
