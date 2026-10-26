@@ -837,18 +837,20 @@ void GameScene::CheckDebugFlowShortcut_() {
 }
 
 void GameScene::UpdateExhibitionFlow_(float deltaTime) {
-  // すでに終了の要求を出している間は何もしない(二重に要求しない)
+  // 死亡演出の最中や、終了の要求を出している間は何もしない(二重に死なせない)
   if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
     return;
   }
-  // 覆いが晴れてから(通常の更新に入ってから)の時間を数え、一定時間たったら終わらせる
+  // スタート演出の最中は数えない(終わってから、kGameHoldSec 秒たったら、自機を死なせる)
+  if (stageStart_.IsActive()) {
+    return;
+  }
   exhibitionHoldTimer_ += deltaTime;
   if (exhibitionHoldTimer_ < ExhibitionMode::kGameHoldSec) {
     return;
   }
-  const std::string &nextSceneId = ExhibitionMode::NextGameEndSceneId();
-  phase_ = (nextSceneId == SceneId::Clear) ? GamePhase::Clear : GamePhase::GameOver;
-  RequestSceneChange(nextSceneId);
+  // 本物の死亡処理を通す(HP を 0 にする。CheckGameEnd_ が死亡演出を始め、演出の終わりにゲームオーバーへの遷移を要求する)
+  KillPlayer_();
 }
 
 void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
