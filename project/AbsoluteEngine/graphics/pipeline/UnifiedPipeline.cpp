@@ -777,6 +777,14 @@ PipelineDesc UnifiedPipeline::MakeTransitionDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeLensDropsDesc() {
+  // 画面遷移の 2 つ目のパス(レンズの水滴)。b0 = TransitionParam、t0 = 1 つ目のパスの結果。深度は使わない
+  PipelineDesc d = MakeCopyImageDesc();
+  d.psPath = L"resources/engine/shaders/LensDrops.PS.hlsl";
+  d.usePSMaterial_b0 = true;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeVolumeCloudDepthDesc() {
   PipelineDesc d = MakeCopyImageDesc(); // 頂点バッファなしの全画面三角形、深度テストなし
   d.psPath = L"resources/engine/shaders/VolumeCloudDepth.PS.hlsl";

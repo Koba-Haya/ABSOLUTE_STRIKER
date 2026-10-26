@@ -1,28 +1,11 @@
 #include "Fullscreen.hlsli"
 #include "Noise.hlsli"
+#include "LensMist.hlsli"
 
-// 画面遷移の最終パス。ポストエフェクトのあと、画面全体にかける。
-// gKind: C++ の TransitionKind と同じ並び
-//   0 = フェード、1 = ノイズワイプ、2 = ズームブラー、3 = 水の波紋、4 = レンズの水滴、5 = 雲突入
-cbuffer TransitionParam : register(b0) {
-    row_major float4x4 gInvViewProj; // 描画したシーンのカメラ(世界座標の視線の復元・深度から位置への変換用)
-    row_major float4x4 gViewProj;    // 太陽の画面位置(レンズフレア用)
-    float32_t3 gCameraPosition;
-    float32_t gSlabBottom;           // 雲を抜ける遷移: 雲の層の下面・上面(今のシーンの世界の高さ)
-    float32_t3 gSunDirection;        // 太陽へ向かう向き(今のシーンの世界)
-    float32_t gSlabTop;
-    float32_t3 gColor;               // 覆う色(リニア)
-    float32_t gCover;                // 覆い具合(0 = 透明、1 = 完全に覆う)
-    float32_t gKind;
-    float32_t gSoftness;             // ノイズワイプ: 縁のやわらかさ
-    float32_t gNoiseScale;           // ノイズワイプ: 画面の高さあたりのマス数
-    float32_t gBlurStrength;         // ズームブラー: 覆い具合が最大のときの引き込む割合
-    float32_t2 gCenter;              // ズームブラー・波紋: 中心(UV)
-    float32_t gAspect;               // 画面の縦横比(横 / 縦)。縦横に伸びないように使う
-    float32_t gTime;                 // 遷移の開始からの経過(秒)。覆い具合と違い、晴れる間も増え続ける
-    float32_t gDuration;             // 遷移全体の長さ(秒)。雲を抜ける遷移の進行(経過 / 全体)に使う
-    float32_t3 gPadding;
-};
+#include "TransitionParam.hlsli"
+
+// 画面遷移の最終パスの 1 つ目。ポストエフェクトのあと、画面全体にかける(定数バッファは TransitionParam.hlsli)。
+// 霧の上にのる水滴は、2 つ目のパス(LensDrops.PS.hlsl)が描く。
 
 Texture2D<float32_t4> gTexture : register(t0);
 Texture2D<float32_t> gDepth : register(t1);
@@ -38,6 +21,11 @@ static const float32_t kKindZoomBlur = 2.0f;
 static const float32_t kKindRipple = 3.0f;
 static const float32_t kKindDroplets = 4.0f;
 static const float32_t kKindCloudDive = 5.0f;
+static const float32_t kKindMistLens = 6.0f;
+static const float32_t kMistDebugViewThreshold = 0.5f; // デバッグ表示の番号がこれを超えたら、距離の表示にする
+static const float32_t kMistPlaneEnabledThreshold = 0.5f; // gMistPlane.y がこれを超えたら、水平面を使う
+static const float32_t kMistDebugFarTint = 0.6f;        // 深度の無い画素の、緑・青の割合(赤みをつける)
+
 static const float32_t kKindTolerance = 0.5f;          // gKind は float で受けるので、整数との比較に幅を持たせる
 
 static const float32_t kPi = 3.14159265f;
@@ -130,33 +118,6 @@ static const float32_t kFarDepth = 0.99999f;           // これ以上の深度�
 static const float32_t kInfiniteDistance = 100000.0f;
 static const float32_t kSceneFogDistanceScale = 3.0f;  // 物体までの距離を、この倍率の厚みとして雲を積算する(物体の周りにも雲があるように見せ、霞ませる)
 static const float32_t kSkyDirectionY = 0.001f;        // 視線の y 成分がこれより小さいと、層との交点の計算を避ける
-
-// 水の膜(レンズ): 放射方向に引き伸ばしたノイズで、前進の反対向き(中心から外へ)に流れる。
-//   膜の勾配で画面を歪ませ(屈折)、色収差と、膜の縁のハイライトをつける。濡れ具合は進行の時間で決める
-static const float32_t kWetRiseStart = 0.26f;
-static const float32_t kWetRiseEnd = 0.50f;
-static const float32_t kWetFallStart = 0.66f;
-static const float32_t kWetFallEnd = 1.0f;
-static const float32_t kFilmAngularFrequency = 3.2f;   // 膜のノイズ: 角度方向の細かさ(周期をそろえるため整数に近い値)
-static const float32_t kFilmRadialFrequency = 2.4f;
-static const float32_t kFilmFlowSpeed = 1.1f;
-static const float32_t kFilmSeamStart = 0.82f;         // 角度の継ぎ目を混ぜ始める位置(π に対する割合)
-static const float32_t kFilmThresholdLow = 0.50f;      // 膜になるノイズのしきい値(濡れ具合が高いほど下がる)
-static const float32_t kFilmThresholdDrop = 0.18f;
-static const float32_t kFilmThresholdHigh = 0.78f;
-static const float32_t kFilmGradientStep = 0.012f;
-static const float32_t kFilmRefractRadial = 0.020f;    // 膜の中の画面のずれ(中心から外へ向かう方向。UV)
-static const float32_t kFilmRefractGradient = 0.003f;  // 膜の勾配による歪み
-static const float32_t kFilmRefractSwirl = 0.0022f;    // 勾配に直交する向きの歪み(うねり)
-static const float32_t kFilmChromaRed = 1.35f;         // 色収差: 赤・青のずらしの倍率
-static const float32_t kFilmChromaBlue = 0.65f;
-static const float32_t kFilmSpecularScale = 0.045f;    // 膜の縁のハイライト: 勾配の大きさへの係数
-static const float32_t kFilmSpecularGain = 0.35f;
-static const float32_t kFilmFogMix = 0.35f;            // 膜の中の、わずかなくもり
-static const float32_t3 kFilmFogTint = float32_t3(0.94f, 0.97f, 1.0f);
-static const float32_t kFilmFogLift = 0.04f;
-static const float32_t kRadialMinLength = 0.001f;
-static const float32_t kFilmCenterFadeRadius = 0.30f;  // 画面中心からこの距離までは、屈折を弱める(中心は向きが定まらず、扇状に崩れるため。画面の高さを 1 とする)
 
 // レンズフレアとレンズダスト(層を抜けて太陽が見え始めるころ)
 static const float32_t kFlareCenter = 0.70f;           // 進行のどこで強くなるか
@@ -320,44 +281,18 @@ float32_t3 CloudPassage(float32_t2 uv, float32_t2 pixel, float32_t time, float32
         }
     }
 
-    // ---- 水の膜 ----
-    float32_t wet = (progress < 0.5f) ? smoothstep(kWetRiseStart, kWetRiseEnd, progress) : 1.0f - smoothstep(kWetFallStart, kWetFallEnd, progress);
+    // 画面の中心を原点とした座標(画面の高さを 1 とする)。レンズフレアとダストに使う
     float32_t2 centered = (uv - 0.5f) * float32_t2(gAspect, 1.0f);
-    float32_t r = length(centered);
-    float32_t angle = atan2(centered.y, centered.x);
-    float32_t flow = time * kFilmFlowSpeed;
-    float32_t2 np = float32_t2(angle * kFilmAngularFrequency, r * kFilmRadialFrequency - flow);
-    float32_t2 npSeam = float32_t2((angle + kTwoPi) * kFilmAngularFrequency, np.y);
-    float32_t seam = smoothstep(kPi * kFilmSeamStart, kPi, abs(angle)); // 角度の継ぎ目の近くは、反対側の値と混ぜる
-    float32_t film = lerp(Fbm2(np), Fbm2(npSeam), seam);
-    float32_t films = smoothstep(kFilmThresholdLow - kFilmThresholdDrop * wet, kFilmThresholdHigh, film) * wet;
-    float32_t2 stepped = np + float32_t2(0.0f, kFilmGradientStep * kFilmRadialFrequency);
-    float32_t2 steppedSeam = npSeam + float32_t2(0.0f, kFilmGradientStep * kFilmRadialFrequency);
-    float32_t filmStep = lerp(Fbm2(stepped), Fbm2(steppedSeam), seam);
-    float32_t gradient = (filmStep - film) / kFilmGradientStep;
-    float32_t2 radialDir = centered / max(r, kRadialMinLength);
-    float32_t2 offset = radialDir * (films * kFilmRefractRadial + gradient * kFilmRefractGradient * wet);
-    offset += float32_t2(-radialDir.y, radialDir.x) * gradient * kFilmRefractSwirl * wet;
-    // 中心へ近いほど弱める(中心では 0)。向きが定まらない所で画面をずらすと、放射状の扇になる
-    offset *= smoothstep(0.0f, kFilmCenterFadeRadius, r);
-    offset.x /= gAspect;
 
-    // 背景は、表示用の値(ガンマ空間)へ戻す。色収差: 赤・青を、緑とずらしてサンプルする。
+    // 背景は、表示用の値(ガンマ空間)へ戻す(水滴は、2 つ目のパスが、この結果を屈折して描く)。
     // 背景(sceneColor)と、足し込む光(glow: 雲・ハイライト・フレア・光)は分けて持つ。
     // 露出(トーンマップ)は glow にだけ掛ける。背景にも掛けると、真っ白な背景が灰色に落ちて、
     // 光の加わった雲より暗い影絵になるため
     float32_t3 scene;
-    scene.r = SampleScene(uv + offset * kFilmChromaRed).r;
-    scene.g = SampleScene(uv + offset).g;
-    scene.b = SampleScene(uv + offset * kFilmChromaBlue).b;
+    scene = SampleScene(uv);
     scene = pow(scene, 1.0f / kCloudDisplayGamma);
     float32_t3 sceneColor = scene * transmittance;
     float32_t3 glow = cloudColor;
-
-    // 膜の縁のハイライトと、わずかなくもり(くもりは背景にだけ掛ける)
-    float32_t specular = smoothstep(0.0f, 1.0f, abs(gradient) * kFilmSpecularScale) * films;
-    glow += float32_t3(0.9f, 0.95f, 1.0f) * specular * kFilmSpecularGain;
-    sceneColor = lerp(sceneColor, sceneColor * kFilmFogTint + kFilmFogLift, films * kFilmFogMix);
 
     // ---- レンズフレアとレンズダスト ----
     float32_t4 sunClip = mul(float32_t4(gCameraPosition + sunDir * kCloudMaxMarch, 1.0f), gViewProj);
@@ -488,6 +423,45 @@ float32_t3 LensDroplets(float32_t2 uv, float32_t cover, float32_t time) {
     return lerp(color, gColor, smoothstep(kDropletWhiteStart, 1.0f, cover));
 }
 
+// ---- 霧 ----
+
+// 画面の点の、視点から物体までの距離(深度の無い背景は、有限の遠距離にする)。isFar: 深度が無い画素か
+float32_t MistDistance(float32_t2 uv, out bool isFar) {
+    uint32_t width;
+    uint32_t height;
+    gDepth.GetDimensions(width, height);
+    float32_t2 clamped = saturate(uv);
+    int2 pixel = int2(clamped * float32_t2(width - 1u, height - 1u));
+    float32_t depth = gDepth.Load(int3(pixel, 0));
+    float32_t4 worldPos = mul(float32_t4(clamped.x * 2.0f - 1.0f, 1.0f - clamped.y * 2.0f, depth, 1.0f), gInvViewProj);
+    isFar = depth >= kFarDepth;
+    if (!isFar) {
+        return min(length(worldPos.xyz / worldPos.w - gCameraPosition), gMistFog2.x);
+    }
+    // 深度の無い背景(空、雲海): 既定は一定の遠距離。水平な層(雲海、水面)があるときは、視線との交点までの距離にする
+    float32_t distance = gMistFog2.x;
+    if (gMistPlane.y > kMistPlaneEnabledThreshold) {
+        float32_t3 dir = ViewRay(clamped);
+        if (dir.y < -kSkyDirectionY) {
+            float32_t t = (gMistPlane.x - gCameraPosition.y) / dir.y;
+            if (t > 0.0f) {
+                distance = min(t, distance);
+            }
+        }
+    }
+    return distance;
+}
+
+// 霧がかかった画面(水滴より奥。水滴の中でも、同じ霧の画面を屈折して見る)
+float32_t3 MistShade(float32_t2 uv) {
+    bool isFar;
+    float32_t distance = MistDistance(uv, isFar);
+    float32_t amount = MistAmount(distance, uv, gAspect, gTime, gCover, gMistFog.zw, gMistFog2.y) * gMistDrop.y;
+    float32_t3 scene = SampleScene(uv);
+    float32_t3 blurred = BlurScene(uv, gMistFog.y * amount);
+    return ApplyMistFog(scene, blurred, amount, ViewRay(uv), normalize(gSunDirection), gMistFog.x, gMistFog2.z, gColor);
+}
+
 PixelShaderOutput main(VertexShaderOutput input) {
     PixelShaderOutput output;
     float32_t2 uv = input.texcoord;
@@ -529,6 +503,16 @@ PixelShaderOutput main(VertexShaderOutput input) {
         float32_t4 worldPos = mul(float32_t4(uv.x * 2.0f - 1.0f, 1.0f - uv.y * 2.0f, depth, 1.0f), gInvViewProj);
         float32_t sceneDistance = depth >= kFarDepth ? kInfiniteDistance : length(worldPos.xyz / worldPos.w - gCameraPosition);
         result = CloudPassage(uv, input.position.xy, gTime, gDuration, sceneDistance);
+    } else if (abs(gKind - kKindMistLens) < kKindTolerance) {
+        if (gMistFog2.w > kMistDebugViewThreshold) {
+            // 距離の確認: 近いほど暗く、背景の距離で白。深度の無い画素は赤みをつける
+            bool isFar;
+            float32_t distance = MistDistance(uv, isFar);
+            float32_t g = saturate(distance / gMistFog2.x);
+            result = isFar ? float32_t3(g, g * kMistDebugFarTint, g * kMistDebugFarTint) : float32_t3(g, g, g);
+        } else {
+            result = MistShade(uv);
+        }
     }
 
     output.color = float32_t4(result, 1.0f);

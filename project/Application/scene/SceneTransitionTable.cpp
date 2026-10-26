@@ -9,6 +9,7 @@ namespace {
 const Vector3 kWhite{1.0f, 1.0f, 1.0f};
 const Vector3 kBlack{0.0f, 0.0f, 0.0f};
 const Vector3 kDeepWater{0.01f, 0.04f, 0.10f}; // 着水して沈む、深い青
+const Vector3 kMistGrey{0.52f, 0.52f, 0.60f};  // 雲の中の霧(明るい灰紫。リニア値)
 
 // 時間(秒)
 // 雲を抜ける: 入れ替えは、全体の約半分(層の中心。雲が最も濃い瞬間)で行う
@@ -22,6 +23,11 @@ constexpr float kGameSlabBottom = -95.0f;
 constexpr float kGameSlabTop = -25.0f;
 constexpr float kDropletsOut = 2.0f;   // レンズの水滴: 水滴が増えてくもる時間(見る間もなく終わらないよう、長めにする)
 constexpr float kDropletsIn = 2.2f;    // レンズの水滴: くもりが晴れて水滴が流れ落ちる時間
+// ゲームオーバー: 蝶が雲海へ落ちたあと、霧と水滴で覆い、GameOver へ入れ替わって、霧が晴れながら水滴が乾く
+constexpr float kMistOut = 1.5f;
+constexpr float kMistHold = 0.4f;
+constexpr float kMistIn = 1.8f;
+constexpr float kGameSeaPlaneY = -35.5f; // ゲームの雲海の平均の高さ(霧の距離を、水平の層との交点から求める)
 constexpr float kShortOut = 0.5f;
 constexpr float kMediumOut = 0.7f;
 constexpr float kLongOut = 0.9f;
@@ -82,6 +88,17 @@ TransitionSpec MakeCloudDive(const Vector3 &color, float out, float hold, float 
   // ゲームの助走は、層の中(下寄り)から始まり、雲海の上面を抜けてスタート位置へ昇る
   spec.slabBottomAfter = kGameSlabBottom;
   spec.slabTopAfter = kGameSlabTop;
+  // 雲を抜けるときの水の膜は、霧の上にのる水滴(2 つ目のパス)で描く
+  spec.style.mist.lensDrops = true;
+  return spec;
+}
+
+// 霧と水滴で覆う(ゲームの雲海へ落ちたあと)。霧の距離は、雲海の面との交点から求める
+TransitionSpec MakeMistLens(const Vector3 &color, float out, float hold, float in) {
+  TransitionSpec spec = MakeSpec(TransitionKind::MistLens, color, out, hold, in);
+  spec.style.mist.lensDrops = true;
+  spec.style.mist.backgroundPlane = true;
+  spec.style.mist.backgroundPlaneY = kGameSeaPlaneY;
   return spec;
 }
 
@@ -97,9 +114,9 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
   if (fromSceneId == SceneId::Game && toSceneId == SceneId::Clear) {
     return MakeZoomBlur(kWhite, kLongOut, kMediumHold, kMediumIn);
   }
-  // ゲーム -> ゲームオーバー: 着水して、深い青へ沈む
+  // ゲーム -> ゲームオーバー: 雲海へ落ちて、霧と水滴で覆われ、晴れながら水滴が乾く
   if (fromSceneId == SceneId::Game && toSceneId == SceneId::GameOver) {
-    return MakeRipple(kDeepWater, kLongOut, kMediumHold, kMediumIn);
+    return MakeMistLens(kMistGrey, kMistOut, kMistHold, kMistIn);
   }
   // クリア -> タイトル: レンズに水滴が付き、空の世界へ戻る
   if (fromSceneId == SceneId::Clear && toSceneId == SceneId::Title) {

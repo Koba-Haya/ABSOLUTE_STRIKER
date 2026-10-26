@@ -8,6 +8,14 @@ float Smooth(float t) {
   t = std::clamp(t, 0.0f, 1.0f);
   return t * t * (3.0f - 2.0f * t);
 }
+
+// edge0 から edge1 にかけて 0 から 1 へなめらかに変わる曲線(edge1 <= edge0 なら、edge0 で切り替わる段)
+float SmoothBetween(float edge0, float edge1, float t) {
+  if (edge1 <= edge0) {
+    return t >= edge0 ? 1.0f : 0.0f;
+  }
+  return Smooth((t - edge0) / (edge1 - edge0));
+}
 } // namespace
 
 void SceneTransition::Begin(const TransitionSpec &spec) {
@@ -82,7 +90,29 @@ TransitionStyle SceneTransition::GetStyle() const {
     style.slabBottom = spec_.slabBottomAfter;
     style.slabTop = spec_.slabTopAfter;
   }
+  // 水平な層(雲海など)は、入れ替え前のシーンの世界の高さ。入れ替え後は、別のシーンなので使わない
+  if (phase_ == Phase::Hold || phase_ == Phase::In) {
+    style.mist.backgroundPlane = false;
+  }
+  style.mist.wetness = Wetness_(style.mist);
+  // 水滴が付き始めた時刻(覆う区間の wetRiseStart の位置)からの経過
+  style.mist.lensTime = (std::max)(0.0f, totalElapsed_ - style.mist.wetRiseStart * spec_.outSeconds);
   return style;
+}
+
+float SceneTransition::Wetness_(const MistLensStyle &mist) const {
+  switch (phase_) {
+  case Phase::Out:
+    return SmoothBetween(mist.wetRiseStart, mist.wetRiseEnd, Progress_(spec_.outSeconds));
+  case Phase::Hold:
+    return 1.0f;
+  case Phase::In:
+    // 付くのは一気に、乾くのは長く残る(乾く区間の頭は、まだ濡れたまま)
+    return 1.0f - SmoothBetween(mist.wetDrainStart, mist.wetDrainEnd, Progress_(spec_.inSeconds));
+  case Phase::Idle:
+    break;
+  }
+  return 0.0f;
 }
 
 float SceneTransition::GetRevealProgress() const {

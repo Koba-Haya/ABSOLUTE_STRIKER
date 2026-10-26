@@ -52,6 +52,8 @@ private:
   // 現在の区間の長さと、そこまでの経過から 0〜1 の進み具合を返す(長さ 0 なら 1)
   float Progress_(float duration) const;
   void EnterPhase_(Phase next);
+  // 霧とレンズ水滴の、今の濡れ具合(0〜1)。付く・保つ・乾くの時間の曲線は mist に持つ
+  float Wetness_(const MistLensStyle &mist) const;
 
 private:
   TransitionSpec spec_{};
