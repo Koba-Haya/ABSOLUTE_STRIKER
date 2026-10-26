@@ -104,6 +104,7 @@ public:
   // 新方式の雲海の背景(空)の全画面パス(Sky.VS / SeaSky.PS)。b0 は SeaSkyParam
   static PipelineDesc MakeSeaSkyDesc();
   static PipelineDesc MakeTransitionDesc();
+  static PipelineDesc MakeLensDropsDesc();
   // ボリューム雲は 3 つの全画面パスでできている(どれも Fullscreen.VS、深度バッファなし、b0 = VolumeCloudParam)。
   // ルートの並びは共通: 0 = b0、1 = t0、2 = t1(環境マップ用の枠を借りる)、3 = t2(マスク用の枠を借りる)
   // パス 1: シーンの深度を低解像度へ縮める(t0 = 深度)。出力は R32_FLOAT の距離

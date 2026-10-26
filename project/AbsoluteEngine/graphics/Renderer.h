@@ -293,6 +293,7 @@ private:
   std::unique_ptr<UnifiedPipeline> waterPipeline_;
   std::unique_ptr<UnifiedPipeline> cloudSeaPipeline_;
   std::unique_ptr<UnifiedPipeline> transitionPipeline_;
+  std::unique_ptr<UnifiedPipeline> lensDropsPipeline_; // 画面遷移の 2 つ目のパス(レンズの水滴)
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -422,6 +423,10 @@ private:
     float time;
     float duration;
     float padding[3];
+    float mistFog[4];  // 霧: (彩度の落とし量, ぼかしの最大半径, 覆い具合 1 の視程, 覆い具合 0 の視程)
+    float mistFog2[4]; // 霧: (深度の無い背景の距離, 最後の覆いを始める覆い具合, 太陽側の明るさ, デバッグ表示の番号)
+    float mistDrop[4]; // 水滴: (濡れ具合, 霧の倍率, 水滴が付き始めてからの秒, レンズ水滴のパスを使うか 0 / 1)
+    float mistPlane[4]; // 霧: (深度の無い背景の水平面の高さ, 水平面を使うか 0 / 1, 未使用, 未使用)
   };
   ComPtr<ID3D12Resource> transitionParamCB_;
   TransitionParam* transitionParamMapped_ = nullptr;
