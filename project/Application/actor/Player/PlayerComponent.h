@@ -34,6 +34,8 @@ public:
   // アニメーションの切り替え(PlayerAnimator)だけは進める
   void SetDying(bool dying) { dying_ = dying; }
   bool IsDying() const { return dying_; }
+  // デバッグ用: HP を満タンにして、死亡演出の状態を元に戻す(操作を再開できる)。羽ばたきのアニメーションへ戻す
+  void Revive();
   // 蝶を、きりもみ(Tumble)で落ち始めさせる(死亡演出の、崩壊が始まる瞬間に呼ぶ)
   void PlayDeathTumble() { animator_.NotifyDeath(); }
   bool IsDead() const;

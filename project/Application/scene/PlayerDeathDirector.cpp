@@ -20,6 +20,24 @@ void PlayerDeathDirector::Begin(const PlayerDeathSettings& settings, const Playe
   EnterPhase_(PlayerDeathPhase::HitStop);
 }
 
+void PlayerDeathDirector::Reset() {
+  phase_ = PlayerDeathPhase::Idle;
+  elapsed_ = 0.0f;
+  phaseElapsed_ = 0.0f;
+  coverStartPending_ = false;
+  crumbleStartPending_ = false;
+}
+
+float PlayerDeathDirector::GetPhaseEndTime(PlayerDeathPhase phase) const {
+  float end = settings_.hitStopSeconds;
+  if (phase == PlayerDeathPhase::HitStop) return end;
+  end += settings_.crumbleSeconds;
+  if (phase == PlayerDeathPhase::Crumble) return end;
+  end += settings_.fallSeconds;
+  if (phase == PlayerDeathPhase::Fall) return end;
+  return end + settings_.impactSeconds;
+}
+
 void PlayerDeathDirector::EnterPhase_(PlayerDeathPhase phase) {
   phase_ = phase;
   phaseElapsed_ = 0.0f;
@@ -99,11 +117,9 @@ PlayerDeathPose PlayerDeathDirector::GetPlayerPose() const {
   const float k = settings_.forwardDecayPerSecond;
   const float forwardSpeed = start_.railSpeed * settings_.forwardSpeedScale;
   const float forwardDistance = k > 0.0f ? forwardSpeed * (1.0f - std::exp(-k * t)) / k : forwardSpeed * t;
-  // 重力で落ちる距離 = 1/2 g t^2
-  const float fallDistance = 0.5f * settings_.gravity * t * t;
 
   pose.position = {start_.position.x + start_.forward.x * forwardDistance,
-                   start_.position.y + start_.forward.y * forwardDistance - fallDistance,
+                   start_.position.y + start_.forward.y * forwardDistance - FallDistance_(t),
                    start_.position.z + start_.forward.z * forwardDistance};
 
   // 機首が、だんだん下を向く(Transform の x まわりの正の回転が、機首を下げる向き)
@@ -117,19 +133,54 @@ Vector3 PlayerDeathDirector::GetPlayerVelocity() const {
   const float t = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
   // 位置の式(GetPlayerPose)を、時間で微分したもの: 前へ進む速さは指数的に減り、下へ落ちる速さは重力に比例して増える
   const float forwardSpeed = start_.railSpeed * settings_.forwardSpeedScale * std::exp(-settings_.forwardDecayPerSecond * t);
-  return {start_.forward.x * forwardSpeed, start_.forward.y * forwardSpeed - settings_.gravity * t, start_.forward.z * forwardSpeed};
+  return {start_.forward.x * forwardSpeed, start_.forward.y * forwardSpeed - FallSpeed_(t), start_.forward.z * forwardSpeed};
+}
+
+float PlayerDeathDirector::LandingTime_() const {
+  // ヒットストップのあと、崩壊と落下の終わりまで(雲の上面に着く時刻)
+  return std::max(0.001f, settings_.crumbleSeconds + settings_.fallSeconds);
+}
+
+float PlayerDeathDirector::FallDistance_(float t) const {
+  const float depth = std::max(0.0f, start_.position.y - settings_.landingHeight); // 着地まで落ちる高さ
+  const float landing = LandingTime_();
+  if (t <= landing) {
+    // 着く時刻に、ちょうど depth だけ落ちる放物線: 落ち始めは 0 で、だんだん速くなる
+    const float ratio = t / landing;
+    return depth * ratio * ratio;
+  }
+  // 着いたあとは、着いた瞬間の速さ(2 * depth / landing)のまま、雲の中へ沈みながら、指数的に減速する
+  const float landingSpeed = 2.0f * depth / landing;
+  const float s = t - landing;
+  const float k = settings_.sinkDecayPerSecond;
+  const float sink = k > 0.0f ? landingSpeed * (1.0f - std::exp(-k * s)) / k : landingSpeed * s;
+  return depth + sink;
+}
+
+float PlayerDeathDirector::FallSpeed_(float t) const {
+  // FallDistance_ の、時間での微分
+  const float depth = std::max(0.0f, start_.position.y - settings_.landingHeight);
+  const float landing = LandingTime_();
+  if (t <= landing) {
+    return 2.0f * depth * t / (landing * landing);
+  }
+  const float landingSpeed = 2.0f * depth / landing;
+  return landingSpeed * std::exp(-settings_.sinkDecayPerSecond * (t - landing));
 }
 
 float PlayerDeathDirector::GetCrumbleProgress() const {
   if (!IsActive() || phase_ == PlayerDeathPhase::HitStop) return 0.0f;
-  return phase_ == PlayerDeathPhase::Crumble ? GetPhaseProgress() : 1.0f;
+  const float t = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
+  return std::clamp(t / LandingTime_(), 0.0f, 1.0f);
 }
 
 PlayerDeathDissolve PlayerDeathDirector::GetDissolve() const {
   PlayerDeathDissolve dissolve;
   if (!IsActive() || phase_ == PlayerDeathPhase::HitStop) return dissolve;
 
-  const float progress = GetCrumbleProgress();
+  // ディゾルブの進み具合: 崩壊の始まりから、着地のあと kDissolveTailSeconds 秒後まで(胴は着地まで残り、沈みながら消える)
+  const float t = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
+  const float progress = std::clamp(t / (LandingTime_() + std::max(settings_.dissolveTailSeconds, 0.0f)), 0.0f, 1.0f);
   dissolve.enabled = true;
   dissolve.threshold = settings_.dissolveStartThreshold +
                        (settings_.dissolveEndThreshold - settings_.dissolveStartThreshold) * progress;

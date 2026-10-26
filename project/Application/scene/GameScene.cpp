@@ -6,6 +6,7 @@
 #include "ModelManager.h"
 #include "ParticleManager.h"
 #include "Input.h"
+#include "ScopedCameraOverride.h"
 #include "../camera/RailCameraComponent.h"
 #include "Spline.h"
 #include "Method.h"
@@ -101,44 +102,26 @@ constexpr const char *kImpactFlashModelPath = "resources/app/title/flash.obj";
 // 板が突き破られる位置を決めるとき、「戻る」の始まりから板を割るまでに進む距離を、何個に区切って足し合わせるか
 constexpr int kBreakTravelSamples = 64;
 
-// 描画の間だけ、カメラに俯瞰のずれを重ね、スコープを抜けたら元の位置・向き・画角へ戻す。
-// ゲームの進行(自機の位置、敵、弾)に使うカメラの位置は変えず、見せるだけのずれにする。
-// 元の位置へ戻すので、世界が動いている間も、ずれが毎フレーム積み重ならない
+// 描画の間だけ、カメラに俯瞰のずれを重ね、スコープを抜けたら元の位置・向き・画角へ戻す(差し替えの仕組みは ScopedCameraOverride)。
+// ゲームの進行(自機の位置、敵、弾)に使うカメラの位置は変えず、見せるだけのずれにする
 class ScopedStageStartCameraOffset {
 public:
   // camera: ずらすカメラ(nullptr ならずらさない)。pose: ずれの大きさ
-  ScopedStageStartCameraOffset(GameCamera *camera, const StageStartPose &pose) : camera_(camera) {
-    if (camera_ == nullptr) {
-      return;
-    }
-    eye_ = camera_->GetEye();
-    target_ = camera_->GetTarget();
+  ScopedStageStartCameraOffset(GameCamera *camera, const StageStartPose &pose) : override_(MakeOverride_(camera, pose)) {}
 
+private:
+  static ScopedCameraOverride MakeOverride_(GameCamera *camera, const StageStartPose &pose) {
     // 俯瞰のずれを重ねた位置・注視点(位置が上がるだけで注視点は上げないので、見下ろす向きになり、自機の先まで見える)
     Vector3 offsetEye{0.0f, 0.0f, 0.0f};
     Vector3 offsetTarget{0.0f, 0.0f, 1.0f};
-    StageStartDirector::ApplyPose(pose, eye_, target_, offsetEye, offsetTarget);
-    camera_->SetEye(offsetEye);
-    camera_->SetTarget(offsetTarget);
-    camera_->SetPerspective(kGameCameraFovY * pose.fovScale, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
-  }
-
-  ~ScopedStageStartCameraOffset() {
-    if (camera_ == nullptr) {
-      return;
+    if (camera != nullptr) {
+      StageStartDirector::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), offsetEye, offsetTarget);
     }
-    camera_->SetEye(eye_);
-    camera_->SetTarget(target_);
-    camera_->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
+    return ScopedCameraOverride(camera, offsetEye, offsetTarget, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
+                                kGameCameraFar);
   }
 
-  ScopedStageStartCameraOffset(const ScopedStageStartCameraOffset &) = delete;
-  ScopedStageStartCameraOffset &operator=(const ScopedStageStartCameraOffset &) = delete;
-
-private:
-  GameCamera *camera_ = nullptr;
-  Vector3 eye_{0.0f, 0.0f, 0.0f};    // ずらす前の位置(戻す先)
-  Vector3 target_{0.0f, 0.0f, 1.0f}; // ずらす前の注視点(戻す先)
+  ScopedCameraOverride override_;
 };
 // 調整 UI のスライダーの範囲(新方式の空)
 constexpr float kSeaSkySunAzimuthRange = 180.0f;
@@ -155,6 +138,13 @@ constexpr float kPlayerWingspan = 3.7f;
 // キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
 constexpr BYTE kDeathSkipKey = DIK_0;
 constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
+
+// 死亡演出の間、近くの敵を描かない範囲(カメラ、蝶からの距離。ユニット)。
+// 描かないだけで、敵は存在し続ける(撃破扱いにならず、スコア・編隊のカウント・撃破の演出に影響しない)
+constexpr float kDeathHideEnemyRadiusFromCamera = 14.0f;
+constexpr float kDeathHideEnemyRadiusFromPlayer = 9.0f;
+// デバッグ用: 死亡演出を蘇生するキー(0 はスキップ。BACKSPACE で死亡)
+constexpr BYTE kDebugReviveKey = DIK_9;
 
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
 // SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
@@ -886,6 +876,7 @@ void GameScene::KillPlayer_() {
 }
 
 void GameScene::BeginDying_() {
+  phaseBeforeDeath_ = phase_;
   phase_ = GamePhase::Dying;
 
   PlayerDeathStart start;
@@ -904,7 +895,23 @@ void GameScene::BeginDying_() {
       start.forward = Normalize(camera->GetForward());
   }
   start.railSpeed = railSpeed;
-  deathDirector_.Begin(deathSettings_, start);
+
+  // 落下は、雲の上面(いまのシーンの雲海の層の上面)へ着く時刻から逆算する
+  PlayerDeathSettings settings = deathSettings_;
+  settings.landingHeight = volumeCloudSea_.layerTop;
+  deathDirector_.Begin(settings, start);
+
+  // 死亡カメラ: 各キーフレームの時刻は、サブフェーズの終わりに合わせる(演出の長さを変えても、カメラが追従する)
+  if (auto* camera = GetMainCamera()) {
+      const std::array<float, DeathCameraDefaults::kKeyCount> keyTimes{
+          0.0f,
+          deathDirector_.GetPhaseEndTime(PlayerDeathPhase::HitStop),
+          deathDirector_.GetPhaseEndTime(PlayerDeathPhase::Crumble),
+          deathDirector_.GetPhaseEndTime(PlayerDeathPhase::Fall),
+          deathDirector_.GetPhaseEndTime(PlayerDeathPhase::Impact),
+          deathDirector_.GetPhaseEndTime(PlayerDeathPhase::Impact) + deathCameraSettings_.coverHoldSeconds};
+      deathCamera_.Begin(deathCameraSettings_, camera->GetEye(), camera->GetTarget(), start.position, keyTimes);
+  }
 }
 
 void GameScene::UpdateDying_(float deltaTime) {
@@ -926,9 +933,60 @@ void GameScene::UpdateDying_(float deltaTime) {
   }
 
   // Cover へ入ったら、ゲームオーバーへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う。演出クラスは、遷移の間も進み続ける
-  if (deathDirector_.ConsumeCoverStart()) {
+  // (デバッグで、遷移を要求せずに演出を保つ設定のときは、要求しない)
+  if (deathDirector_.ConsumeCoverStart() && !debugHoldAtCover_) {
       phase_ = GamePhase::GameOver;
       RequestSceneChange(SceneId::GameOver);
+  }
+}
+
+void GameScene::RemoveBulletsDuringDeath_() {
+  for (const auto& obj : GetRootObjects()) {
+      if (!obj) continue;
+      const std::string& tag = obj->GetTag();
+      if (tag == "PlayerBullet" || tag == "EnemyBullet") {
+          obj->Destroy(); // 次の更新の終わりに、シーンから取り除かれる(それまでに描かれない: 更新は描画の前)
+      }
+  }
+}
+
+bool GameScene::IsHiddenDuringDeath_(const AbsoluteEngine::GameObject& obj) const {
+  if (!deathCamera_.IsActive()) return false;
+  const std::string& tag = obj.GetTag();
+  if (tag != "Enemy" && tag != "Boss") return false;
+
+  const Vector3& p = obj.GetTransform().translate;
+  auto distanceSquared = [&](const Vector3& q) {
+      return (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z);
+  };
+  const DeathCameraPose& pose = deathCamera_.GetPose();
+  if (distanceSquared(pose.eye) < kDeathHideEnemyRadiusFromCamera * kDeathHideEnemyRadiusFromCamera) return true;
+  if (playerObj_ && distanceSquared(playerObj_->GetTransform().translate) < kDeathHideEnemyRadiusFromPlayer * kDeathHideEnemyRadiusFromPlayer) return true;
+  return false;
+}
+
+void GameScene::ReviveForDebug_() {
+  // 遷移を要求したあと(GameOver)や、死亡していないときは、できない
+  if (phase_ != GamePhase::Dying) return;
+  deathDirector_.Reset();
+  deathCamera_.Reset();
+  wingShatter_.Reset();
+  SetWorldTimeScale(1.0f);
+  phase_ = phaseBeforeDeath_;
+  if (playerObj_) {
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          pComp->Revive();
+      }
+      if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+          dissolve->enable = false;
+      }
+  }
+}
+
+void GameScene::CheckDebugReviveShortcut_() {
+  if (!kDebugFlowShortcutEnabled || ExhibitionMode::kEnabled || !GetInput()) return;
+  if (GetInput()->TriggerKey(kDebugReviveKey)) {
+      ReviveForDebug_();
   }
 }
 
@@ -1015,6 +1073,8 @@ void GameScene::Update() {
       }
   }
 
+  CheckDebugReviveShortcut_();
+
   // 死亡演出(実時間)。世界の時間の速さを、ここで決めてから、世界を更新する
   if (deathDirector_.IsActive()) {
       UpdateDying_(deltaTime);
@@ -1092,6 +1152,22 @@ void GameScene::Update() {
       // 崩壊の破片(解放、移動)。蝶の今のポーズ・位置を使うので、位置を決めたあとに進める
       if (deathDirector_.IsActive()) {
           wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity());
+          // 死亡カメラ(蝶の位置を追う)と、弾の停止(世界の更新で出た弾は、描かれる前にここで消す)
+          if (playerObj_) {
+              // 注視点は、本体と、解放された破片の重心との中間(破片が散っても、主役を見失わない)。
+              // 破片が離れるほど、カメラを引いて、両方を画面に収める
+              const Vector3 body = playerObj_->GetTransform().translate;
+              Vector3 focus = body;
+              float spread = 0.0f;
+              Vector3 shards{0.0f, 0.0f, 0.0f};
+              if (wingShatter_.GetReleasedCentroid(shards)) {
+                  focus = {(body.x + shards.x) * 0.5f, (body.y + shards.y) * 0.5f, (body.z + shards.z) * 0.5f};
+                  spread = std::sqrt((body.x - shards.x) * (body.x - shards.x) + (body.y - shards.y) * (body.y - shards.y) +
+                                     (body.z - shards.z) * (body.z - shards.z));
+              }
+              deathCamera_.Update(deltaTime, focus, spread);
+          }
+          RemoveBulletsDuringDeath_();
       }
       UpdateHud_();
   }
@@ -1122,6 +1198,14 @@ void GameScene::Draw() {
   // デバッグカメラで見ているときは、ずらさない
   const ScopedStageStartCameraOffset stageStartView(stageStart_.IsActive() && !isDebugCamera_ ? GetMainCamera() : nullptr,
                                                     GetStageStartViewPose_());
+
+  // 死亡演出のカメラ(蝶を中心にした回り込み・急降下)。描画の間だけ差し替える。デバッグカメラのときは、差し替えない
+  std::optional<ScopedCameraOverride> deathView;
+  if (deathCamera_.IsActive() && !isDebugCamera_ && GetMainCamera() != nullptr) {
+      const DeathCameraPose& pose = deathCamera_.GetPose();
+      deathView.emplace(GetMainCamera(), pose.eye, pose.target, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
+                        kGameCameraFar);
+  }
 
   const Camera* activeCamera = nullptr;
   if (isDebugCamera_) {
@@ -1170,7 +1254,8 @@ void GameScene::Draw() {
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : GetRootObjects()) {
-      if (obj) obj->Draw();
+      if (!obj || IsHiddenDuringDeath_(*obj)) continue;
+      obj->Draw();
   }
 
   // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
@@ -1263,6 +1348,44 @@ void GameScene::DrawEditorUI() {
     ImGui::Begin("GameScene Controls##LeftPanel");
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Death Director")) {
+        // 死亡演出の確認用。設定は、次に死んだとき(Begin)に反映される。「Hold at Cover」を入れると、遷移を要求せず、演出をその場で保つ
+        ImGui::Text("Phase: %d  Elapsed: %.2f s  World time scale: %.2f", static_cast<int>(deathDirector_.GetPhase()),
+                    deathDirector_.GetElapsed(), GetWorldTimeScale());
+        if (ImGui::Button("Kill player (BACKSPACE)")) KillPlayer_();
+        ImGui::SameLine();
+        if (ImGui::Button("Revive (9)")) ReviveForDebug_();
+        ImGui::Checkbox("Hold at Cover (no scene change)", &debugHoldAtCover_);
+        ImGui::Checkbox("Hold player position (debug)", &deathSettings_.debugHoldPlayerPosition);
+        ImGui::Text("Landing height (cloud top): %.1f", volumeCloudSea_.layerTop);
+        ImGui::SeparatorText("Timing");
+        ImGui::SliderFloat("Hit stop (s)", &deathSettings_.hitStopSeconds, 0.0f, 0.5f);
+        ImGui::SliderFloat("Crumble (s)", &deathSettings_.crumbleSeconds, 0.2f, 3.0f);
+        ImGui::SliderFloat("Fall (s)", &deathSettings_.fallSeconds, 0.2f, 4.0f);
+        ImGui::SliderFloat("Impact (s)", &deathSettings_.impactSeconds, 0.1f, 2.0f);
+        ImGui::SliderFloat("Slow motion scale", &deathSettings_.slowMotionScale, 0.0f, 1.0f);
+        ImGui::SliderFloat("Slow motion ramp (s)", &deathSettings_.slowMotionRampSeconds, 0.0f, 1.0f);
+        ImGui::SliderFloat("Sink decay (1/s)", &deathSettings_.sinkDecayPerSecond, 0.0f, 6.0f);
+        ImGui::SeparatorText("Camera keys (0 = start, 1 = hit stop end, 2 = crumble end, 3 = fall end, 4 = impact end, 5 = cover)");
+        ImGui::SliderFloat("Cover hold (s)", &deathCameraSettings_.coverHoldSeconds, 0.0f, 4.0f);
+        ImGui::SliderFloat("Follow sharpness", &deathCameraSettings_.followSharpness, 1.0f, 20.0f);
+        for (int i = 1; i < DeathCameraDefaults::kKeyCount; ++i) {
+            DeathCameraDefaults::Key& key = deathCameraSettings_.keys[i];
+            ImGui::PushID(i);
+            ImGui::Text("Key %d", i);
+            ImGui::SliderFloat("azimuth", &key.azimuthDelta, -3.2f, 3.2f);
+            ImGui::SliderFloat("elevation", &key.elevation, 0.0f, DeathCameraDefaults::kMaxElevation);
+            ImGui::SliderFloat("distance", &key.distance, 0.5f, 40.0f);
+            ImGui::SliderFloat("fov scale", &key.fovScale, 0.3f, 2.0f);
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Reset death settings")) {
+            deathSettings_ = PlayerDeathSettings{};
+            deathCameraSettings_ = DeathCameraSettings{};
+        }
+        ImGui::Separator();
+    }
 
     if (ImGui::CollapsingHeader("Cloud Sea")) {
         ImGui::Checkbox("Use Cloud Sea (off = Skybox)", &useCloudSea_);

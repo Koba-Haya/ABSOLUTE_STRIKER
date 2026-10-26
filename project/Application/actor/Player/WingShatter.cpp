@@ -399,6 +399,20 @@ void WingShatter::Update(float deltaTime, float crumbleProgress, const Vector3& 
   shardResource_->UpdateVertices(worldVertices_.data(), static_cast<uint32_t>(worldVertices_.size()));
 }
 
+bool WingShatter::GetReleasedCentroid(Vector3& out) const {
+  Vector3 sum{0.0f, 0.0f, 0.0f};
+  uint32_t count = 0;
+  for (const Cluster& cluster : clusters_) {
+    if (!cluster.released) continue;
+    sum.x += cluster.position.x; sum.y += cluster.position.y; sum.z += cluster.position.z;
+    ++count;
+  }
+  if (count == 0) return false;
+  const float inv = 1.0f / static_cast<float>(count);
+  out = {sum.x * inv, sum.y * inv, sum.z * inv};
+  return true;
+}
+
 void WingShatter::Draw(const PlayerDeathDissolve& dissolve) {
   if (!built_ || releasedCount_ == 0) return;
   shardInstance_.SetDissolveParam(dissolve.enabled, dissolve.threshold, dissolve.edgeRange, dissolve.edgeColor, {1.0f, 1.0f, 1.0f});

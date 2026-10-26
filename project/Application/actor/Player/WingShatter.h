@@ -30,16 +30,16 @@ class ModelComponent;
 // 破片の動きと分け方の設定。名前付きの定数で、実機で見て調整する
 namespace WingShatterDefaults {
 constexpr int kClustersPerSide = 14;            // 片側の翅を分けるかたまりの数(左右で、合計 約 28 個)
-constexpr float kReleaseStartProgress = 0.10f;  // 最初のかたまりを解放する、崩壊の進み具合(0 〜 1)
-constexpr float kReleaseEndProgress = 0.80f;    // 最後のかたまりを解放する、崩壊の進み具合
+constexpr float kReleaseStartProgress = 0.06f;  // 最初のかたまりを解放する、崩壊の進み具合(0 〜 1)
+constexpr float kReleaseEndProgress = 0.78f;    // 最後のかたまりを解放する、崩壊の進み具合
 constexpr float kReleaseJitter = 0.06f;         // 解放の時刻のばらつき(進み具合の単位)
 constexpr float kOutwardSpeed = 2.5f;           // 翅の外側へ飛ぶ速さ(ユニット / 秒)
 constexpr float kUpwardSpeed = 1.0f;            // 上へ飛ぶ速さ(ふわっと舞い上がる)
 constexpr float kSpeedJitter = 0.5f;            // 速さのばらつきの割合(0 〜 1)
 constexpr float kInheritVelocityScale = 1.0f;   // 蝶の速度を引き継ぐ割合
 constexpr float kSpinSpeed = 7.0f;              // 回転の速さ(ラジアン / 秒。ばらつきあり)
-constexpr float kGravity = 6.0f;                // 落ちる加速度(ユニット / 秒^2。蝶の落下よりゆるやかで、ひらひら落ちる)
-constexpr float kDragPerSecond = 1.4f;          // 空気抵抗(1 秒あたりの速度の減衰率)
+constexpr float kGravity = 5.0f;                // 落ちる加速度(ユニット / 秒^2。蝶の落下(約 5)に近づけて、破片が本体と一緒に落ちるようにする)
+constexpr float kDragPerSecond = 0.35f;         // 空気抵抗(1 秒あたりの速度の減衰率。小さくして、本体から取り残されないようにする)
 constexpr uint32_t kRandomSeed = 20261026;      // 乱数の種(同じ分け方・飛び方にそろえる)
 } // namespace WingShatterDefaults
 
@@ -87,6 +87,9 @@ public:
 
   // 解放が 1 つでも始まっているか(描く必要があるか)
   bool IsActive() const { return releasedCount_ > 0; }
+
+  // 解放済みの破片の中心(平均)。1 つも無ければ false。死亡カメラの注視点を、破片も収める位置へ寄せるのに使う
+  bool GetReleasedCentroid(Vector3& out) const;
 
   // このフレームに解放された破片(鱗粉の発生などに使う)。次の Update で入れ替わる
   const std::vector<WingShardRelease>& GetReleasesThisFrame() const { return releasesThisFrame_; }

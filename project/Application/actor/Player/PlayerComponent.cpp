@@ -378,6 +378,18 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzleP
   scene->AddRootObject(BulletFactory::CreatePlayerNormal(spec));
 }
 
+void PlayerComponent::Revive() {
+  hp_ = maxHp_;
+  dying_ = false;
+  dodgeTimer_ = 0.0f;
+  animator_.Reset();
+  if (owner_) {
+      if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+          model->PlayAnimation(PlayerAnimation::kFlap, true);
+      }
+  }
+}
+
 void PlayerComponent::TakeDamage(int damage) {
   if (IsDead()) return; // すでに死んでいる。重ねてダメージを受けない
   hp_ -= damage;

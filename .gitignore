@@ -19,6 +19,9 @@ mono_crash.*
 # Build results
 generated/
 
+# class files
+claude/
+
 # Intermediate Generation
 Compiled/
 
