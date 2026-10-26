@@ -5,6 +5,8 @@
 #include "../../resources/AssetManager.h"
 #include "../graphics/3d/model/ModelResource.h"
 #include "Method.h"
+#include "AnimationManager.h"
+#include "Logger.h"
 #include <algorithm>
 #include <optional>
 #include <vector>
@@ -26,6 +28,7 @@ void ModelComponent::LoadModel(const std::string& path) {
 
     CpuTimer::AccumScope instScope("ModelComponent.CreateInstance");
     modelPath_ = path;
+    animationSet_.reset(); // 別のファイルのアニメーションを引かないよう、モデルを替えたら読み直す
     fitCenter_ = {0.0f, 0.0f, 0.0f};
     fitScale_ = 1.0f;
     // 既存のmodelInstance_をここで即座に破棄しない。読み込み直後にLoadModel()が
@@ -40,12 +43,15 @@ void ModelComponent::LoadModel(const std::string& path) {
     ModelInstance::CreateInfo ci{};
     ci.resource = res;
     ci.baseColor = {color_.x, color_.y, color_.z, color_.w};
-    ci.lightingMode = 1;
+    ci.lightingMode = lightingMode_;
     ci.environmentCoefficient = environmentCoefficient_;
     modelInstance_->Initialize(ci);
     
     if (!texturePath_.empty()) {
         LoadTexture(texturePath_);
+    }
+    if (dissolveMask_) {
+        modelInstance_->SetDissolveMaskTexture(dissolveMask_);
     }
 }
 
@@ -68,6 +74,13 @@ void ModelComponent::FitToWingspan(float wingspan) {
     fitScale_ = width > kMinFitWidth ? wingspan / width : 1.0f;
 }
 
+void ModelComponent::LoadDissolveMask(const std::string& path) {
+    dissolveMask_ = AssetManager::GetInstance()->Load<TextureResource>(path);
+    if (modelInstance_ && dissolveMask_) {
+        modelInstance_->SetDissolveMaskTexture(dissolveMask_);
+    }
+}
+
 void ModelComponent::LoadTexture(const std::string& path) {
     texturePath_ = path;
     if (modelInstance_) {
@@ -76,6 +89,45 @@ void ModelComponent::LoadTexture(const std::string& path) {
             modelInstance_->SetOverrideTexture(tex);
         }
     }
+}
+
+void ModelComponent::PlayAnimation(const std::string& animationName, bool loop, float blendSeconds) {
+    if (!modelInstance_) return;
+
+    if (!animationSet_) {
+        // "dir/file.gltf" を、ディレクトリとファイル名に分けて AnimationManager へ渡す
+        const size_t slash = modelPath_.find_last_of('/');
+        const std::string directory = slash == std::string::npos ? std::string{} : modelPath_.substr(0, slash);
+        const std::string filename = slash == std::string::npos ? modelPath_ : modelPath_.substr(slash + 1);
+        animationSet_ = AnimationManager::GetInstance()->LoadAnimationSet(directory, filename);
+    }
+    const std::shared_ptr<Animation> animation = animationSet_ ? animationSet_->Find(animationName) : nullptr;
+    if (!animation) {
+        Logger::GetInstance().Log("[ModelComponent] animation not found: model=%s name=%s", modelPath_.c_str(), animationName.c_str());
+        return;
+    }
+    modelInstance_->PlayAnimation(animation, loop, blendSeconds);
+}
+
+bool ModelComponent::IsAnimationFinished() const {
+    return modelInstance_ && modelInstance_->IsAnimationFinished();
+}
+
+bool ModelComponent::TryGetBoneWorldPosition(const std::string& boneName, Vector3& out) const {
+    if (!modelInstance_ || !owner_) return false;
+    Matrix4x4 boneModel;
+    if (!modelInstance_->TryGetBoneModelMatrix(boneName, boneModel)) return false;
+    const Matrix4x4 boneWorld = Multiply(boneModel, ComputeWorldMatrix_());
+    out = {boneWorld.m[3][0], boneWorld.m[3][1], boneWorld.m[3][2]};
+    return true;
+}
+
+Matrix4x4 ModelComponent::ComputeWorldMatrix_() const {
+    const Transform& transform = owner_->GetTransform();
+    // 行ベクトル規約なので左から順に適用: 中心を原点へ → 補正の拡大 → Transform(拡大・回転・位置)
+    const Matrix4x4 fit = Multiply(MakeTranslateMatrix({-fitCenter_.x, -fitCenter_.y, -fitCenter_.z}),
+                                   MakeScaleMatrix({fitScale_, fitScale_, fitScale_}));
+    return Multiply(fit, MakeAffineMatrix(transform.scale, transform.rotate, transform.translate));
 }
 
 void ModelComponent::Update(float deltaTime) {
@@ -91,13 +143,7 @@ void ModelComponent::Update(float deltaTime) {
 
 void ModelComponent::Draw() {
     if (modelInstance_ && owner_) {
-        const Transform& transform = owner_->GetTransform();
-        // 行ベクトル規約なので左から順に適用: 中心を原点へ → 補正の拡大 → Transform(拡大・回転・位置)
-        const Matrix4x4 fit = Multiply(MakeTranslateMatrix({-fitCenter_.x, -fitCenter_.y, -fitCenter_.z}),
-                                       MakeScaleMatrix({fitScale_, fitScale_, fitScale_}));
-        Matrix4x4 world = Multiply(fit, MakeAffineMatrix(transform.scale, transform.rotate, transform.translate));
-        
-        modelInstance_->SetWorld(world);
+        modelInstance_->SetWorld(ComputeWorldMatrix_());
 
         auto dissolve = owner_->GetComponent<DissolveComponent>();
         if (dissolve) {

@@ -249,17 +249,18 @@ void BaseScene::UpdateEditor() {
         }
     }
 
-    // プレイモード中のオブジェクトの更新
-    if (playMode_ == PlayMode::Play) {
+    // プレイモード中のオブジェクトの更新。世界の時間の速さが 0(ヒットストップ)の間は、世界を更新しない
+    if (playMode_ == PlayMode::Play && worldTimeScale_ > 0.0f) {
+        const float worldDeltaTime = deltaTime * worldTimeScale_; // スローモーションのとき、世界だけが遅くなる
         // タイムラインをオブジェクトより先に更新する
-        UpdateTimeline(deltaTime);
+        UpdateTimeline(worldDeltaTime);
 
         // 追加されたオブジェクトでループが壊れないようインデックスで回す
         size_t count = rootObjects_.size();
         for (size_t i = 0; i < count; ++i) {
             auto obj = rootObjects_[i];
             if (obj && obj->IsActive()) {
-                obj->Update(deltaTime);
+                obj->Update(worldDeltaTime);
             }
         }
         

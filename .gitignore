@@ -19,6 +19,9 @@ mono_crash.*
 # Build results
 generated/
 
+# class files
+claude/
+
 # Intermediate Generation
 Compiled/
 
@@ -336,3 +339,8 @@ project/logs/
 project/imgui.ini
 *.tmp
 *.bak
+
+# ===== Claude が使うだけのもの(ビルドに不要) =====
+# 蝶の生成スクリプト・確認画像・確認用ツール、Claude の引き継ぎ書・計画書
+project/tools/
+project/claude/

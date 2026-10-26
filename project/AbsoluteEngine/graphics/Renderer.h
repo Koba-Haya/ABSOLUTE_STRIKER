@@ -206,7 +206,10 @@ public:
     Random
   };
   void DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostProcessMode mode = PostProcessMode::Normal, D3D12_GPU_DESCRIPTOR_HANDLE depthOrMaskTextureHandle = {});
+  // Vignette(画面の周囲を、色に寄せる)。周囲ほど暗く(= 色に近く)なる。色は黒、強さは 1 の既定(従来どおりの暗転)
   void SetVignetteParam(float scale, float powValue);
+  // 色と強さ付き。周囲を color へ寄せる(黒なら暗転、赤なら赤い枠)。strength は 0(効果なし)〜 1(最大)
+  void SetVignetteParam(float scale, float powValue, const Vector3& color, float strength);
   void SetBoxFilterParam(int32_t k);
   void SetGaussianFilterParam(int32_t k, float sigma, const Vector2& direction);
   void SetDepthBasedOutlineParam(const Matrix4x4& projectionInverse);
@@ -290,6 +293,7 @@ private:
   std::unique_ptr<UnifiedPipeline> waterPipeline_;
   std::unique_ptr<UnifiedPipeline> cloudSeaPipeline_;
   std::unique_ptr<UnifiedPipeline> transitionPipeline_;
+  std::unique_ptr<UnifiedPipeline> lensDropsPipeline_; // 画面遷移の 2 つ目のパス(レンズの水滴)
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
@@ -343,6 +347,7 @@ private:
     float scale;
     float powValue;
     float pad[2];
+    float tint[4]; // 周囲を寄せる色(rgb)と、効果の強さ(w)
   };
   ComPtr<ID3D12Resource> vignetteParamCB_;
   VignetteParam* vignetteParamMapped_ = nullptr;
@@ -418,6 +423,10 @@ private:
     float time;
     float duration;
     float padding[3];
+    float mistFog[4];  // 霧: (彩度の落とし量, ぼかしの最大半径, 覆い具合 1 の視程, 覆い具合 0 の視程)
+    float mistFog2[4]; // 霧: (深度の無い背景の距離, 最後の覆いを始める覆い具合, 太陽側の明るさ, デバッグ表示の番号)
+    float mistDrop[4]; // 水滴: (濡れ具合, 霧の倍率, 水滴が付き始めてからの秒, レンズ水滴のパスを使うか 0 / 1)
+    float mistPlane[4]; // 霧: (深度の無い背景の水平面の高さ, 水平面を使うか 0 / 1, 未使用, 未使用)
   };
   ComPtr<ID3D12Resource> transitionParamCB_;
   TransitionParam* transitionParamMapped_ = nullptr;

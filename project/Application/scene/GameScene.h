@@ -15,6 +15,9 @@
 #include "Animation.h"
 #include "HitEffectSpawner.h"
 #include "PostEffectDirector.h"
+#include "PlayerDeathDirector.h"
+#include "DeathCameraDirector.h"
+#include "../actor/Player/WingShatter.h"
 #include "ScoreTracker.h"
 #include "StageStartDirector.h"
 #include "StageNameBoard.h"
@@ -29,8 +32,9 @@ class RailCameraComponent;
 enum class GamePhase {
   InProgress,
   Boss,
+  Dying,    // 自機の HP が 0 になって、死亡演出(PlayerDeathDirector)を進めている間
   Clear,
-  GameOver
+  GameOver  // 死亡演出が Cover へ入り、ゲームオーバーへの遷移を要求した(または、クリア・ゲームオーバーの要求を出した)
 };
 
 class GameScene final : public BaseScene {
@@ -69,7 +73,6 @@ private:
   // ゲームプレイ中の描画カメラ（デバッグカメラ or レールカメラ）
   Camera* GetGameplayCamera_() const;
   // ワールド座標をスクリーン座標(UV 0〜1)に変換する
-  Vector2 WorldToScreenUv_(const Vector3& worldPos) const;
   // PostEffectDirector に渡す毎フレームの状態を集めて更新する
   void UpdatePostEffects_(float deltaTime);
   // Playモード中のみOSマウスカーソルを隠して閉じ込める（Escで一時解除）
@@ -79,6 +82,22 @@ private:
   void SpawnBoss_();
   // プレイヤー死亡 / ボス撃破でシーン遷移を要求する
   void CheckGameEnd_();
+  // 死亡演出を始める(HP が 0 になったとき、または、デバッグのショートカットから)。入力・発射・ロックオンを止め、
+  // 演出クラスに、死亡の瞬間の自機の状態を渡す
+  void BeginDying_();
+  // 死亡演出を 1 フレーム進める(実時間)。スキップの入力、世界の時間の速さの反映、遷移の要求を行う
+  void UpdateDying_(float deltaTime);
+  // 死亡演出が決めた位置・向きを、自機へ反映する
+  void ApplyDeathPose_();
+  // 死亡演出の間、飛んでいる弾(自機のも敵のも)をすべて消す。新しく出た弾も、描かれる前に消す(当たり判定も描画も止まる)
+  void RemoveBulletsDuringDeath_();
+  // 死亡演出の間、カメラ・蝶の近くの敵を、描かないか(画面を邪魔しない、カメラが敵に埋まらない)
+  bool IsHiddenDuringDeath_(const AbsoluteEngine::GameObject& obj) const;
+  // デバッグ用: 死亡演出を中止して、蘇生する(Dying 中だけ。Cover で遷移を要求したあとは、できない)
+  void ReviveForDebug_();
+  void CheckDebugReviveShortcut_();
+  // 自機に致命傷を与える(デバッグのショートカットと、展示の自動死亡が使う。本物の死亡処理と同じ経路を通る)
+  void KillPlayer_();
   // 展示: 覆いが晴れたらすぐ、クリア / ゲームオーバーを交互に要求する(操作は受け付けない)
   void UpdateExhibitionFlow_(float deltaTime);
   // スタート演出のデモ: 演出が終わってから一定時間後に、タイトルへ戻る遷移を要求する(操作は受け付けない)
@@ -192,6 +211,13 @@ private:
   bool showDebugFracture_ = false;                // 板の分割の輪郭線を描く(確認用。分割の形を調整するときだけ true にする)
 
   GamePhase phase_ = GamePhase::InProgress;
+  PlayerDeathDirector deathDirector_;       // 死亡演出の進行(サブフェーズ、世界の時間の速さ、自機の落下)
+  WingShatter wingShatter_;                 // 蝶の翅が裂けて飛び散る破片(崩壊)
+  DeathCameraDirector deathCamera_;         // 死亡カメラの進行(蝶を中心にした回り込み・急降下)
+  DeathCameraSettings deathCameraSettings_; // 死亡カメラの設定(キーフレームの表)
+  GamePhase phaseBeforeDeath_ = GamePhase::InProgress; // 死亡演出の前のフェーズ(蘇生で戻す先)
+  bool debugHoldAtCover_ = false;           // デバッグ: Cover で遷移を要求せず、演出をその場で保つ(演出だけを、何度も見るため)
+  PlayerDeathSettings deathSettings_;       // 死亡演出の設定(ステージごとの値へ差し替えられる)
 
   std::unique_ptr<GameHUD> gameHUD_;
 };

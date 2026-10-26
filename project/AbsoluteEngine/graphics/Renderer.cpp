@@ -114,6 +114,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
     transitionPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(transitionPipeline_->Initialize(device, utils, compiler, includeHandler,
                                                UnifiedPipeline::MakeTransitionDesc()));
+    // 画面遷移の 2 つ目のパス(レンズの水滴)
+    lensDropsPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(lensDropsPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                              UnifiedPipeline::MakeLensDropsDesc()));
   }
 
   // CloudSea Pipeline
@@ -336,6 +340,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   if (vignetteParamMapped_) {
     vignetteParamMapped_->scale = 16.0f;
     vignetteParamMapped_->powValue = 0.8f;
+    vignetteParamMapped_->tint[0] = 0.0f; // 既定は黒の暗転(強さ 1)
+    vignetteParamMapped_->tint[1] = 0.0f;
+    vignetteParamMapped_->tint[2] = 0.0f;
+    vignetteParamMapped_->tint[3] = 1.0f;
   }
 
   boxFilterParamCB_ = CreateUploadBuffer(align256(sizeof(BoxFilterParam)));
@@ -700,8 +708,10 @@ void Renderer::DrawModel(ModelInstance *instance) {
     cmdList->SetGraphicsRootDescriptorTable(7, environmentMap_->GetSrvGpu());
   }
   
-  // t2: マスクテクスチャ (Dissolve用)
-  if (dissolveMaskTexture_) {
+  // t2: マスクテクスチャ (Dissolve用)。インスタンス専用のマスクがあればそれ、なければ共有のマスク
+  if (TextureResource* instanceMask = instance->GetDissolveMaskTexture()) {
+    cmdList->SetGraphicsRootDescriptorTable(8, instanceMask->GetSrvGpu());
+  } else if (dissolveMaskTexture_) {
     cmdList->SetGraphicsRootDescriptorTable(8, dissolveMaskTexture_->GetSrvGpu());
   }
 
@@ -1279,6 +1289,22 @@ void Renderer::ApplyTransitionPass_() {
     param->aspect = GetAspectRatio();
     param->time = transitionTime_;
     param->duration = transitionDuration_;
+    param->mistFog[0] = transitionStyle_.mist.desaturate;
+    param->mistFog[1] = transitionStyle_.mist.blurRadius;
+    param->mistFog[2] = transitionStyle_.mist.visibilityNear;
+    param->mistFog[3] = transitionStyle_.mist.visibilityFar;
+    param->mistFog2[0] = transitionStyle_.mist.backgroundDistance;
+    param->mistFog2[1] = transitionStyle_.mist.wrapStart;
+    param->mistFog2[2] = transitionStyle_.mist.sunGlow;
+    param->mistFog2[3] = transitionStyle_.mist.debugDistance ? 1.0f : 0.0f;
+    param->mistDrop[0] = transitionStyle_.mist.wetness;
+    param->mistDrop[1] = transitionStyle_.mist.fogScale;
+    param->mistDrop[2] = transitionStyle_.mist.lensTime;
+    param->mistDrop[3] = transitionStyle_.mist.lensDrops ? 1.0f : 0.0f;
+    param->mistPlane[0] = transitionStyle_.mist.backgroundPlaneY;
+    param->mistPlane[1] = transitionStyle_.mist.backgroundPlane ? 1.0f : 0.0f;
+    param->mistPlane[2] = 0.0f;
+    param->mistPlane[3] = 0.0f;
 
     // パス1: postProcessTexture_ を読み、遷移の効果をかけて一時のテクスチャへ描く
     auto *cmdList = dx_->GetCommandList();
@@ -1297,9 +1323,18 @@ void Renderer::ApplyTransitionPass_() {
     cmdList->DrawInstanced(3, 1, 0, 0);
     dx_->FinishRendering(gaussianTempTexture_.get());
 
-    // パス2: 結果を postProcessTexture_ へ戻す(以降の処理は、これまで通り postProcessTexture_ を読む)
+    // パス2: 結果を postProcessTexture_ へ戻す(以降の処理は、これまで通り postProcessTexture_ を読む)。
+    // 水滴を使う遷移では、パス1の結果(霧や雲がかかった画面)を、レンズの水滴で屈折させて描く。それ以外は、そのまま写す
     dx_->SetRenderTarget(postProcessTexture_.get());
-    DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
+    if (transitionStyle_.mist.lensDrops && lensDropsPipeline_) {
+        lensDropsPipeline_->SetPipelineState(cmdList);
+        cmdList->SetGraphicsRootConstantBufferView(0, transitionParamCB_->GetGPUVirtualAddress());
+        cmdList->SetGraphicsRootDescriptorTable(1, gaussianTempTexture_->GetSrvGpuHandle());
+        cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        cmdList->DrawInstanced(3, 1, 0, 0);
+    } else {
+        DrawFullscreen(gaussianTempTexture_->GetSrvGpuHandle(), PostProcessMode::Normal);
+    }
     dx_->FinishRendering(postProcessTexture_.get());
 }
 
@@ -1659,9 +1694,17 @@ void Renderer::DrawFullscreen(D3D12_GPU_DESCRIPTOR_HANDLE textureHandle, PostPro
 }
 
 void Renderer::SetVignetteParam(float scale, float powValue) {
+  SetVignetteParam(scale, powValue, Vector3{0.0f, 0.0f, 0.0f}, 1.0f);
+}
+
+void Renderer::SetVignetteParam(float scale, float powValue, const Vector3& color, float strength) {
   if (vignetteParamMapped_) {
     vignetteParamMapped_->scale = scale;
     vignetteParamMapped_->powValue = powValue;
+    vignetteParamMapped_->tint[0] = color.x;
+    vignetteParamMapped_->tint[1] = color.y;
+    vignetteParamMapped_->tint[2] = color.z;
+    vignetteParamMapped_->tint[3] = strength;
   }
 }
 

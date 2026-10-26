@@ -7,13 +7,12 @@ class ScoreTracker {
 public:
   static constexpr int kScorePerKill = 100;           // 1体撃破ごとの基礎点（編隊メンバーも同様に加算される）
   static constexpr int kFormationBonusMultiplier = 2; // 編隊を画面内で全滅させた場合の倍率
-  static constexpr int kKillStreakInterval = 5;       // キルストリークが発生する撃破数の間隔
 
   // 編隊メンバーの生成時に呼ぶ（編隊の初期メンバー数と残数を積む）
   void RegisterFormationMember(int formationId);
 
-  // 敵を1体撃破した時に呼ぶ（基礎点を加算）。キルストリークに到達したら true を返す。
-  bool OnEnemyKilled();
+  // 敵を1体撃破した時に呼ぶ（基礎点を加算）。
+  void OnEnemyKilled();
 
   // 編隊メンバーを1体撃破した時に呼ぶ（OnEnemyKilled とは別に呼ぶこと）。
   // 編隊が全滅したら全滅ボーナスを加算して、その編隊の初期メンバー数を返す。それ以外は 0。

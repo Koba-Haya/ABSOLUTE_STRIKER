@@ -11,6 +11,14 @@ struct Skeleton;
 struct SkinCluster;
 class TextureResource;
 
+// 照明モード(ModelInstance::CreateInfo::lightingMode / SetLightingMode。Object3d.PS.hlsl の enableLighting と対応)
+namespace ModelLightingMode {
+constexpr int32_t kUnlit = 0;        // 照明なし(テクスチャの色をそのまま出す)
+constexpr int32_t kLambert = 1;      // Lambert(光が当たらない側は真っ黒)
+constexpr int32_t kHalfLambert = 2;  // Half-Lambert
+constexpr int32_t kThinSurface = 3;  // 薄い面(Half-Lambert + 環境光。蝶の翅など、両面が見えるもの)
+} // namespace ModelLightingMode
+
 class ModelInstance {
 public:
   struct CreateInfo {
@@ -78,6 +86,11 @@ public:
   void SetOverrideTexture(std::shared_ptr<TextureResource> tex);
   TextureResource* GetOverrideTexture() const;
 
+  // このインスタンスだけが使うディゾルブのマスク(null なら、Renderer が共有で持つマスクを使う)。
+  // マスクはモデルの UV で引かれるので、モデル専用の朽ち方(例: 翅の外側から内側へ)を、専用のマスクで作れる
+  void SetDissolveMaskTexture(std::shared_ptr<TextureResource> tex);
+  TextureResource* GetDissolveMaskTexture() const;
+
   void Draw();
   void DrawSkeleton();
 
@@ -85,12 +98,20 @@ public:
   // blendDuration > 0 の場合、現在再生中のポーズから新しいアニメーションへ
   // blendDuration秒かけてクロスフェード（Lerp/Slerp補間）しながら遷移する。
   void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true, float blendDuration = 0.0f);
+  // 再生中のアニメーションが最後まで再生されたか。ループしないアニメーションが終わったときだけ true
+  // (ループ再生中や、何も再生していないときは false)。次のアニメーションへ切り替える合図に使う
+  bool IsAnimationFinished() const;
   
   SkinCluster* GetSkinCluster() const;
   Skeleton* GetSkeleton() const;
 
   // 指定したボーン名の現在のワールド行列を取得する。ボーンが存在しない場合はモデルのワールド行列を返す。
   Matrix4x4 GetBoneWorldMatrix(const std::string &boneName) const;
+
+  // 指定したボーンの、モデル空間(ワールド行列を掛ける前)の行列を取得する。ボーンが存在しなければ false。
+  // GetBoneWorldMatrix は「最後に SetWorld した行列」を使うので 1 フレーム遅れるが、
+  // こちらは、呼び出し側が「今の」ワールド行列を掛けて使える(ModelComponent::TryGetBoneWorldPosition)
+  bool TryGetBoneModelMatrix(const std::string &boneName, Matrix4x4 &out) const;
 
   unsigned long long GetMaterialCBAddress() const;
   unsigned long long GetTransformCBAddress() const;

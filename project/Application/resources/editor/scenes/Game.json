@@ -158,7 +158,7 @@
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/player/dragon/dragon.obj",
+                    "modelPath": "resources/app/butterfly/butterfly.gltf",
                     "texturePath": "",
                     "type": "ModelComponent"
                 },

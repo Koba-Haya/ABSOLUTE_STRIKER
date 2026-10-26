@@ -5,6 +5,7 @@
 #include "Type/Vector.h"
 #include "LockOnSystem.h"
 #include "PlayerInput.h"
+#include "PlayerAnimator.h"
 #include <memory>
 
 class Input;
@@ -22,12 +23,21 @@ public:
 
   void Initialize();
   void Update(float deltaTime) override;
-  void Draw() override;
   void OnCollision(AbsoluteEngine::GameObject* other) override;
 
   std::string GetTypeName() const override { return "PlayerComponent"; }
 
+  // ダメージを受ける。すでに死んでいる(HP 0)ときは無視する(死亡演出中に、重ねて呼ばれても、被弾の演出や二重の死亡が起きない)
   void TakeDamage(int damage);
+
+  // 死亡演出中か。true の間は、カーソル追従・発射・ロックオンを止め、位置と向きは死亡演出(PlayerDeathDirector)が決める。
+  // アニメーションの切り替え(PlayerAnimator)だけは進める
+  void SetDying(bool dying) { dying_ = dying; }
+  bool IsDying() const { return dying_; }
+  // デバッグ用: HP を満タンにして、死亡演出の状態を元に戻す(操作を再開できる)。羽ばたきのアニメーションへ戻す
+  void Revive();
+  // 蝶を、きりもみ(Tumble)で落ち始めさせる(死亡演出の、崩壊が始まる瞬間に呼ぶ)
+  void PlayDeathTumble() { animator_.NotifyDeath(); }
   bool IsDead() const;
   int GetHp() const { return hp_; }
   int GetMaxHp() const { return maxHp_; }
@@ -50,6 +60,7 @@ public:
 
 private:
   LockOnSystem lockon_;
+  PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 
   // Update の各段階。呼び出し順は Update() を参照。
   void MoveCursor_(const PlayerInputState& in, float deltaTime);
@@ -60,13 +71,14 @@ private:
   void UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
   // 照準点（カーソルレイ上）と発射基点から、3重レティクルのワールド座標を求める
   void UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir, const Vector3& muzzlePos);
-  // 弾の発射位置（右手ボーン。無ければ自機中心）
-  Vector3 GetHandPosition_() const;
-  void UpdateFire_(const PlayerInputState& in, BaseScene* scene, const GameCamera& camera, const Vector3& handPos);
-  void EmitMuzzleFlash_(const Vector3& handPos) const;
-  void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& handPos);
-  void FireNormalBullet_(BaseScene* scene, const Vector3& handPos);
+  // 弾・リボンの尾・ミサイルの発射位置（muzzle ボーンの今のワールド位置。無ければ自機中心）
+  Vector3 GetMuzzlePosition_() const;
+  void UpdateFire_(const PlayerInputState& in, BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
+  void EmitMuzzleFlash_(const Vector3& muzzlePos) const;
+  void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
+  void FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos);
 
+  bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ
@@ -98,6 +110,4 @@ private:
   float dodgeCooldownTimer_ = 0.0f;
   float dodgeRollSign_ = 1.0f;
 
-  // 右手ボーンに追従させる武器モデル（仮モデル）
-  std::unique_ptr<ModelInstance> weaponModel_;
 };

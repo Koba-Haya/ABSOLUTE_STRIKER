@@ -197,6 +197,36 @@ void GameApp::Update() {
   if (ImGui::Button("Cloud Dive")) {
     testTransition(TransitionKind::CloudDive);
   }
+  ImGui::SameLine();
+  static bool mistDebugDistance = false;
+  static bool mistDropletsOnly = false;
+  ImGui::Checkbox("Mist: show distance", &mistDebugDistance);
+  ImGui::SameLine();
+  ImGui::Checkbox("Mist: droplets only", &mistDropletsOnly);
+  if (ImGui::Button("Mist Lens")) {
+    // 霧の色(リニア値)。明るい灰紫(AC8 の霧)
+    const Vector3 kMistTestFogColor{0.52f, 0.52f, 0.60f};
+    // 霧とレンズ水滴の確認用。霧の変化が見えるよう、覆う・晴れるを長めにする
+    constexpr float kMistTestOutSeconds = 1.5f;
+    constexpr float kMistTestHoldSeconds = 0.6f;
+    constexpr float kMistTestInSeconds = 1.5f;
+    TransitionSpec spec;
+    spec.outSeconds = kMistTestOutSeconds;
+    spec.holdSeconds = kMistTestHoldSeconds;
+    spec.inSeconds = kMistTestInSeconds;
+    spec.style.kind = TransitionKind::MistLens;
+    spec.style.color = kMistTestFogColor;
+    spec.style.mist.debugDistance = mistDebugDistance;
+    spec.style.mist.lensDrops = true;
+    if (mistDropletsOnly) {
+      // 水滴だけ: 霧を消し、水滴は覆う区間の最初から付き始める(覆い具合は 0 から始まるので、そのままだと付くまで何も見えない)
+      constexpr float kDropletsOnlyRiseEnd = 0.4f;
+      spec.style.mist.fogScale = 0.0f;
+      spec.style.mist.wetRiseStart = 0.0f;
+      spec.style.mist.wetRiseEnd = kDropletsOnlyRiseEnd;
+    }
+    sceneManager_->RequestChange(sceneManager_->GetCurrentSceneId(), spec);
+  }
   ImGui::Text("Transition: %s", sceneManager_->IsTransitioning() ? "active" : "idle");
   ImGui::End();
 

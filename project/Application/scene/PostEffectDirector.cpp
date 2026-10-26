@@ -1,91 +1,54 @@
 #include "PostEffectDirector.h"
 #include "Renderer.h"
 #include <algorithm> // std::clamp
-#include <cstdlib> // rand()
+#include <cmath>
 
 namespace {
-// 各演出の継続時間（秒）・強さ
-constexpr float kCameraShakeDuration    = 0.3f;
-constexpr float kCameraShakeIntensity   = 0.2f;
-constexpr float kHitDistortionDuration  = 0.25f;
-constexpr float kHitDistortionIntensity = 0.06f;
-// 加速中のブラーの、最大の強さ(RadialBlur の幅。ヒット時の歪み 0.06 より弱くして、少しだけ掛ける)
+// 加速中のブラーの、最大の強さ(RadialBlur の幅)
 constexpr float kSpeedBlurIntensity     = 0.03f;
 // これ以下の強さのブラーは、掛けない(わずかなブラーのために、ポストエフェクトを切り替えないようにする)
 constexpr float kSpeedBlurMin           = 0.01f;
 constexpr float kBossIntroDuration      = 1.2f;
-constexpr float kPlayerHitDuration      = 0.3f;
-constexpr float kWaveSpawnDuration      = 0.5f;
-constexpr float kKillStreakDuration     = 0.4f;
+// 被弾の Vignette(画面の周囲が暗くなる)の長さ(秒)。Hit のアニメーションが見えるよう、元の 0.3 の半分にした
+constexpr float kPlayerHitDuration      = 0.15f;
 
 // 演出パラメータ（トリガー時に一度だけ設定する）
+// Vignette の明るさの式: 明るさ = saturate((周囲ほど小さい値 * kVignetteScale) ^ kVignettePow)。
+// 被弾の Vignette は、周囲が暗くなりすぎて Hit のアニメーションが見づらかったので、乗数を 0.5 から 0.25 に下げて、
+// 周囲の暗さを約半分にした(例: 画面の左端の中央で、暗さが 約 40% から 約 23%)。さらに調整するなら、この値(小さいほど弱い)と長さ
 constexpr float kVignetteScale = 16.0f;
-constexpr float kVignettePow   = 0.5f;
+constexpr float kVignettePow   = 0.25f;
+// 瀕死(HP が kCriticalHp 以下で、まだ生きている間)の、画面の周囲の赤い枠。静かに脈打たせる程度にして、
+// 被弾のアニメーションの邪魔にならないようにする。強さの最小・最大(0 〜 1)と、1 回脈打つ時間(秒)は、実機で見て調整する
+constexpr int   kCriticalHp = 1;
+constexpr float kCriticalPulsePeriod      = 1.6f;
+constexpr float kCriticalStrengthMin      = 0.30f;
+constexpr float kCriticalStrengthMax      = 0.60f;
+constexpr float kCriticalVignetteScale    = 16.0f; // 枠の形(被弾の暗転と同じ式)
+constexpr float kCriticalVignettePow      = 1.0f;  // 大きいほど、赤が中心側まで広がる
+constexpr float kTwoPi                    = 6.28318530718f;
+const Vector3 kCriticalColor{ 0.85f, 0.03f, 0.03f };   // 枠の色(暗めの赤)
 constexpr int   kBossIntroBlurKernel = 5;
 constexpr float kBossIntroBlurSigma  = 4.0f;
-constexpr int   kWaveSpawnBoxKernel  = 4;
-
-constexpr int kCriticalHp = 1; // このHP以下で瀕死演出（Grayscale）
 } // namespace
-
-void PostEffectDirector::OnEnemyDestroyed(const Vector2& radialBlurCenterUv) {
-  cameraShake_.Start(kCameraShakeDuration);
-  cameraShakeIntensity_ = kCameraShakeIntensity;
-
-  hitDistortion_.Start(kHitDistortionDuration);
-  hitDistortionIntensity_ = kHitDistortionIntensity;
-  radialBlurCenter_ = radialBlurCenterUv;
-}
-
-void PostEffectDirector::OnKillStreak() {
-  killStreakGlitch_.Start(kKillStreakDuration);
-}
 
 void PostEffectDirector::OnBossIntro() {
   bossIntroBlur_.Start(kBossIntroDuration);
   Renderer::GetInstance()->SetGaussianFilterParam(kBossIntroBlurKernel, kBossIntroBlurSigma, { 1.0f, 0.0f });
 }
 
-void PostEffectDirector::OnWaveSpawn() {
-  waveSpawnBlur_.Start(kWaveSpawnDuration);
-  Renderer::GetInstance()->SetBoxFilterParam(kWaveSpawnBoxKernel);
-}
-
-void PostEffectDirector::Update(float deltaTime, float totalTime, const FrameState& state) {
+void PostEffectDirector::Update(float deltaTime, const FrameState& state) {
   auto* renderer = Renderer::GetInstance();
 
   // --- タイマー更新 ---
-  // カメラシェイク
-  if (cameraShake_.IsActive()) {
-    cameraShake_.timer += deltaTime;
-    const float t = 1.0f - (cameraShake_.timer / cameraShake_.duration);
-    const float intensity = cameraShakeIntensity_ * t;
-    const float rX = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
-    const float rY = ((rand() % 100) / 100.0f * 2.0f - 1.0f) * intensity;
-    cameraShakeOffset_ = { rX, rY, 0.0f };
-  } else {
-    cameraShakeOffset_ = { 0.0f, 0.0f, 0.0f };
-  }
-
-  // 画面歪み（RadialBlur）：強さを時間で減衰させ、終了時に0へ戻す
-  if (hitDistortion_.IsActive()) {
-    hitDistortion_.timer += deltaTime;
-    const float t = 1.0f - (hitDistortion_.timer / hitDistortion_.duration);
-    renderer->SetRadialBlurParam(radialBlurCenter_, hitDistortionIntensity_ * t);
-  } else if (hitDistortion_.duration > 0.0f) {
-    renderer->SetRadialBlurParam(radialBlurCenter_, 0.0f);
-    hitDistortion_.duration = 0.0f;
-  }
-
   bossIntroBlur_.Tick(deltaTime);
   playerHitVignette_.Tick(deltaTime);
-  waveSpawnBlur_.Tick(deltaTime);
-  killStreakGlitch_.Tick(deltaTime);
+  criticalPulseTimer_ += deltaTime;
 
   // --- 被弾検知：前フレームよりHPが減っていたらVignetteを発火 ---
   bool isCriticalHp = false;
   if (state.hasPlayer) {
-    isCriticalHp = state.playerHp <= kCriticalHp;
+    isCriticalHp = state.playerHp > 0 && state.playerHp <= kCriticalHp;
     if (lastPlayerHp_ >= 0 && state.playerHp < lastPlayerHp_) {
       playerHitVignette_.Start(kPlayerHitDuration);
       renderer->SetVignetteParam(kVignetteScale, kVignettePow);
@@ -95,25 +58,20 @@ void PostEffectDirector::Update(float deltaTime, float totalTime, const FrameSta
 
   // --- 優先度チェーン（ヘッダのコメント参照） ---
   Renderer::PostProcessMode nextMode = Renderer::PostProcessMode::Normal;
-  if (hitDistortion_.IsActive()) {
-    nextMode = Renderer::PostProcessMode::RadialBlur;
-  } else if (state.speedBlur > kSpeedBlurMin) {
-    // 加速中のブラー: ブースト量に比例した強さの RadialBlur(ヒット時の歪みと同じモード。ヒット中は、そちらを優先する)
+  if (state.speedBlur > kSpeedBlurMin) {
+    // 加速中のブラー: ブースト量に比例した強さの RadialBlur
     renderer->SetRadialBlurParam(state.speedBlurCenterUv, kSpeedBlurIntensity * std::clamp(state.speedBlur, 0.0f, 1.0f));
     nextMode = Renderer::PostProcessMode::RadialBlur;
   } else if (playerHitVignette_.IsActive()) {
     nextMode = Renderer::PostProcessMode::Vignette;
   } else if (bossIntroBlur_.IsActive()) {
     nextMode = Renderer::PostProcessMode::GaussianFilter;
-  } else if (killStreakGlitch_.IsActive()) {
-    renderer->SetRandomParam(totalTime);
-    nextMode = Renderer::PostProcessMode::Random;
-  } else if (waveSpawnBlur_.IsActive()) {
-    nextMode = Renderer::PostProcessMode::BoxFilter;
-  } else if (state.hasPlayer && state.isLockingMode) {
-    nextMode = Renderer::PostProcessMode::DepthBasedOutline;
   } else if (isCriticalHp) {
-    nextMode = Renderer::PostProcessMode::Grayscale;
+    // 瀕死: 周囲の枠だけが、ゆっくり脈打つように赤くなる(強さを、最小と最大の間で、正弦波で変える)
+    const float wave = 0.5f + 0.5f * std::sin(criticalPulseTimer_ / kCriticalPulsePeriod * kTwoPi);
+    const float strength = kCriticalStrengthMin + (kCriticalStrengthMax - kCriticalStrengthMin) * wave;
+    renderer->SetVignetteParam(kCriticalVignetteScale, kCriticalVignettePow, kCriticalColor, strength);
+    nextMode = Renderer::PostProcessMode::Vignette;
   } else if (state.isBossPhase) {
     nextMode = Renderer::PostProcessMode::LuminanceBasedOutline;
   }
