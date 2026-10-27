@@ -1020,6 +1020,22 @@ void Renderer::FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudS
   param.fogDensity = s.fogDensity;
   param.highlightKnee = s.highlightKnee;
   param.shadowLift = s.shadowLift;
+
+  // 着地の反応(層のときだけ有効にする。箱は強さ 0 のままにして、シェーダーが何もしないようにする)
+  const VolumeCloudImpact &impact = s.impact;
+  const bool impactEnabled = s.shape == VolumeCloudShape::Layer;
+  param.impactCenter[0] = impact.centerX;
+  param.impactCenter[1] = impact.centerZ;
+  param.impactAge = impact.age;
+  param.impactStrength = impactEnabled ? impact.strength : 0.0f;
+  param.impactCraterRadius = impact.craterRadius;
+  param.impactCraterDepth = impact.craterDepth;
+  param.impactRingWidth = impact.ringWidth;
+  param.impactRingHeight = impact.ringHeight;
+  param.impactRingSpeed = impact.ringSpeed;
+  param.impactRefillSeconds = impact.refillSeconds;
+  param.impactRingFadeSeconds = impact.ringFadeSeconds;
+  param.seaFill = impactEnabled ? impact.seaFill : 0.0f;
 }
 
 void Renderer::DrawVolumeCloudPass_() {

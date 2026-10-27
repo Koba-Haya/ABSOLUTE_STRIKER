@@ -35,6 +35,18 @@ cbuffer VolumeCloudParam : register(b0) {
     float32_t gFogDensity;        // 層: 距離に対する霞の強さ(大きいほど、近くから霞む)
     float32_t gHighlightKnee;     // 明るい部分の圧縮を始める値(0〜1)。これを超える光を、1 へ向けて滑らかに圧縮する(1 で圧縮なし)
     float32_t gShadowLift;        // 影の持ち上げ(0〜1)。大きいほど、影の部分に空からの明るい光が回る
+    // --- 着地の反応(層のみ。VolumeCloud.hlsli の ImpactDisplacement が使う)。gImpactStrength が 0 なら何もしない ---
+    float32_t2 gImpactCenter;          // 着地点のワールド座標 (x, z)
+    float32_t gImpactAge;              // 着地からの経過秒(負なら未着地)
+    float32_t gImpactStrength;         // 反応の強さ(0 で無効。くぼみと波の高さに掛ける)
+    float32_t gImpactCraterRadius;     // くぼみの半径(ガウス形の広がり)
+    float32_t gImpactCraterDepth;      // くぼみの深さ(雲の面を押し下げる量)
+    float32_t gImpactRingWidth;        // 波の縁の幅
+    float32_t gImpactRingHeight;       // 波の縁の盛り上がり(雲の面を持ち上げる量)
+    float32_t gImpactRingSpeed;        // 波の縁が外へ広がる速さ(ユニット / 秒)
+    float32_t gImpactRefillSeconds;    // くぼみが雲で埋まり戻るまでの秒
+    float32_t gImpactRingFadeSeconds;  // 波の縁が消えるまでの秒
+    float32_t gSeaFill;                // 落下の間の、雲海を雲で満たす量(0〜1。層のみ。0 で通常の雲海)
 };
 
 static const float32_t kFarDepth = 0.99999f;           // これ以上の深度は、何も描かれていない(無限遠)

@@ -14,6 +14,28 @@ enum class VolumeCloudShape : int32_t {
   Layer = 1, // 水平に無限に続く層(雲海。下面と上面の高さで決まる)
 };
 
+// 層の雲への「着地の反応」(物体が雲の面に落ちたときの、くぼみと、外へ広がる波の縁)。
+// 層のシェーダー(VolumeCloud.hlsli の ImpactDisplacement)が、密度を引く高さをずらして表現する。strength が 0 なら何も起きない。
+// 時間と位置は、これを管理する側(Application の CloudImpact)が毎フレーム書く。
+struct VolumeCloudImpact {
+  float strength = 0.0f;         // 反応の強さ(0 = 無効)
+  float centerX = 0.0f;          // 着地点のワールド座標
+  float centerZ = 0.0f;
+  float age = 0.0f;              // 着地からの経過秒
+  float craterRadius = 3.5f;     // くぼみの半径(ユニット)
+  float craterDepth = 7.0f;      // くぼみの深さ(雲の面を押し下げる量。層の厚みは 20)
+  float ringWidth = 3.0f;        // 波の縁の幅
+  float ringHeight = 5.0f;       // 波の縁の盛り上がり
+  float ringSpeed = 10.0f;       // 波の縁が外へ広がる速さ(ユニット / 秒)
+  float refillSeconds = 2.5f;    // くぼみが埋まり戻るまでの秒
+  float ringFadeSeconds = 2.2f;  // 波の縁が消えるまでの秒
+  float seaFill = 0.0f;          // 落下の間、雲海を雲で満たす量(0〜1。CloudImpact が時間で決める。0 = 通常の雲海)
+  // 落下の間の雲海の満たし方(CloudImpact が使う)
+  float fallFillAmount = 0.8f;   // 満たしきったときの量
+  float fallFillStartSeconds = 0.3f; // 死亡から、満たし始めるまでの秒
+  float fallFillRampSeconds = 1.2f;  // 満たしきるまでの秒
+};
+
 struct VolumeCloudSettings {
   bool enabled = true;
   VolumeCloudShape shape = VolumeCloudShape::Box;
@@ -44,6 +66,9 @@ struct VolumeCloudSettings {
   float phaseG = 0.55f;           // 前方散乱の強さ(0〜1)
   float highlightKnee = 0.75f;    // 明るい部分の圧縮を始める値(0〜1)。光が強くても、これを超える分は 1 へ滑らかに圧縮されて、白飛びが減る。1 で圧縮なし
   float shadowLift = 0.15f;       // 影の持ち上げ(0〜1)。大きいほど、影の部分に空からの明るい光が回り、影が浅くなる
+
+  // --- 着地の反応(層のみ) ---
+  VolumeCloudImpact impact;
 
   // --- 負荷 ---
   // 雲を描く解像度の分母。1 = シーンと同じ、2 = 縦横半分(負荷は約 1/4)、4 = 縦横 1/4。

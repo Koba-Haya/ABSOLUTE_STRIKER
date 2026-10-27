@@ -198,6 +198,8 @@
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
+    <ClCompile Include="scene\CloudImpact.cpp" />
+    <ClCompile Include="scene\CloudImpactDebugUi.cpp" />
     <ClCompile Include="scene\PlayerDeathDirector.cpp" />
     <ClCompile Include="scene\DeathCameraDirector.cpp" />
     <ClCompile Include="actor\Player\PlayerAnimator.cpp" />
@@ -255,6 +257,8 @@
     <ClInclude Include="ScreenSize.h" />
     <ClInclude Include="actor\Bullet\BulletFactory.h" />
     <ClInclude Include="actor\Player\PlayerInput.h" />
+    <ClInclude Include="scene\CloudImpact.h" />
+    <ClInclude Include="scene\CloudImpactDebugUi.h" />
     <ClInclude Include="scene\PlayerDeathDirector.h" />
     <ClInclude Include="scene\DeathCameraDirector.h" />
     <ClInclude Include="scene\ScopedCameraOverride.h" />

@@ -481,6 +481,18 @@ private:
     float fogDensity;   // 層: 霞の強さ
     float highlightKnee; // 明るい部分の圧縮を始める値
     float shadowLift;   // 影の持ち上げ
+    // 着地の反応(層のみ)。VolumeCloudImpact と同じ意味
+    float impactCenter[2];
+    float impactAge;
+    float impactStrength;
+    float impactCraterRadius;
+    float impactCraterDepth;
+    float impactRingWidth;
+    float impactRingHeight;
+    float impactRingSpeed;
+    float impactRefillSeconds;
+    float impactRingFadeSeconds;
+    float seaFill;
   };
   std::unique_ptr<UnifiedPipeline> volumeCloudDepthPipeline_;     // パス 1: 深度を低解像度へ縮める
   std::unique_ptr<UnifiedPipeline> volumeCloudPipeline_;          // パス 2: 雲を低解像度で描く

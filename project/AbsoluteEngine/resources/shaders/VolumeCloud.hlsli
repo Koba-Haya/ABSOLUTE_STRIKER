@@ -73,7 +73,24 @@ static const float32_t kLayerLodEndRatio = 0.90f;        // 細かい模様を�
 // r が小さい(歩幅が細かい)うちはそのまま、限界に近づくにつれて省き、限界で完全に平均へ寄せる
 static const float32_t kLayerStepLodStart = 0.25f;       // 細かい模様を省き始める r(波長の 1/4)
 static const float32_t kLayerStepLodEnd = 0.50f;         // 完全に省く r(波長の 1/2。測れる限界)
-static const float32_t kLowFbmMean = 0.476f;            // 形のノイズ G/B/A の fbm の平均(生成したノイズの統計。省いたときの寄せ先)
+// 着地の反応(くぼみと波の縁)。振幅や半径などの調整値は定数バッファ(gImpact*)。ここは形を決める定数
+static const float32_t kImpactOnsetSeconds = 0.10f;      // 着地の瞬間に、くぼみと波が立ち上がるまでの秒(一瞬で凹むが、ゼロ秒だと不連続に見える)
+static const float32_t kImpactTroughRatio = 0.35f;       // 波の縁の内側にできる谷の深さ(山に対する比)
+static const float32_t kImpactPuffRadiusScale = 1.6f;    // 着地点の雲の塊の広がり(くぼみの半径に対する倍率)
+static const float32_t kImpactPuffRiseStart = 0.10f;     // 雲の塊が立ち上がり始める着地後の秒
+static const float32_t kImpactPuffRiseEnd = 0.60f;       // 立ち上がりきる秒
+static const float32_t kImpactBillowScale = 2.5f;        // 波・塊のむらの細かさ(細かい模様に対する倍率)
+static const float32_t kImpactBillowWarp = 2.0f;         // 形のノイズでゆがませる量(格子を崩す)
+static const float32_t kImpactRotateCos = 0.8660254f;    // 2 つ目の模様の向きの回転(30 度)
+static const float32_t kImpactRotateSin = 0.5f;
+static const float32_t kImpactBillowSecondScale = 0.63f; // 2 つ目の模様の細かさ(1 つ目に対する倍率。割り切れない値)
+static const float32_t kImpactBillowMix = 0.5f;          // 2 つの混ぜ具合
+static const float32_t kImpactBillowStrength = 0.65f;    // むらで、雲の湧きを減らす最大の割合
+static const float32_t kImpactBillowLow = 0.25f;         // 細かい模様の値を 0〜1 にならす範囲
+static const float32_t kImpactBillowHigh = 0.75f;
+static const float32_t kImpactFillAmount = 1.5f;         // 波の縁に足す雲の量の倍率(1 で、山の頂上は雲がいっぱいに湧く)
+static const float32_t kImpactTroughOffset = 1.6f;       // 谷の位置(波の縁の幅に対する倍率。山の内側)
+static const float32_t kLowFbmMean = 0.476f;           // 形のノイズ G/B/A の fbm の平均(生成したノイズの統計。省いたときの寄せ先)
 
 static const float32_t kMinKnee = 0.05f;                 // ハイライト圧縮の始まりの下限(0 に近いと、全体が潰れる)
 static const float32_t kKneeOffThreshold = 0.999f;       // 圧縮の始まりがこの値以上なら、圧縮しない
@@ -116,15 +133,70 @@ bool IsLayer() {
     return gShapeMode > kShapeModeLayerThreshold;
 }
 
+// 着地の反応が有効か(強さがあり、着地のあとか)
+bool IsImpactActive() {
+    return gImpactStrength > 0.0f && gImpactAge >= 0.0f;
+}
+
+// 着地による層の上下のずれ(ワールド y。正 = 雲の面が持ち上がる、負 = 凹む)。xz: 水平位置。
+// 2 つの成分を足す:
+//   くぼみ: 着地点を中心にしたガウス形の凹み。一瞬で凹み(kImpactOnsetSeconds)、gImpactRefillSeconds かけて埋まり戻る
+//   波の縁: 着地点から外へ広がるリング状の盛り上がり。山のすぐ内側に浅い谷を伴う(水面の波のように、盛り上がりの後ろが凹む)。
+//           gImpactRingFadeSeconds かけて消える
+// 雲の密度を、高さ方向にずらした位置で引くことで(SampleDensity)、雲の面そのものが動いて見える
+// fill: 波の縁に沿って湧く雲の量(0〜1)。雲の無い隙間でも、波が立つ場所に雲を足す(隙間の上では、面をずらすだけでは何も見えないため)
+float32_t ImpactField(float32_t2 xz, out float32_t fill) {
+    fill = 0.0f;
+    if (!IsImpactActive()) {
+        return 0.0f;
+    }
+    float32_t r = length(xz - gImpactCenter);
+    float32_t onset = smoothstep(0.0f, kImpactOnsetSeconds, gImpactAge);
+
+    // 着地点の雲の塊の立ち上がり(くぼみが、この塊で埋まっていく)
+    float32_t puffRise = smoothstep(kImpactPuffRiseStart, kImpactPuffRiseEnd, gImpactAge);
+
+    // くぼみ(塊が立ち上がるにつれて浅くなり、塊に埋まる)
+    float32_t refill = 1.0f - smoothstep(0.0f, max(gImpactRefillSeconds, kMinRange), gImpactAge);
+    float32_t bowl = r / max(gImpactCraterRadius, kMinRange);
+    float32_t crater = -gImpactCraterDepth * exp(-bowl * bowl) * onset * refill * (1.0f - puffRise);
+
+    // 波の縁(くぼみの縁から広がり始める)
+    float32_t ringFade = 1.0f - smoothstep(0.0f, max(gImpactRingFadeSeconds, kMinRange), gImpactAge);
+    float32_t ringRadius = gImpactCraterRadius + gImpactRingSpeed * gImpactAge;
+    float32_t crest = (r - ringRadius) / max(gImpactRingWidth, kMinRange);
+    float32_t trough = crest + kImpactTroughOffset;
+    float32_t crestProfile = exp(-crest * crest);
+    float32_t ring = gImpactRingHeight * (crestProfile - kImpactTroughRatio * exp(-trough * trough)) * onset * ringFade;
+
+    // 波の縁に湧く雲 + 着地点に湧き上がる雲の塊(くぼみの上へ、少し遅れて立ち上がり、埋まり戻る間に薄れる)
+    float32_t ringFill = crestProfile * onset * ringFade;
+    float32_t puffRadius = bowl / kImpactPuffRadiusScale;
+    float32_t puffFill = exp(-puffRadius * puffRadius) * puffRise * refill;
+    fill = saturate(max(ringFill, puffFill) * gImpactStrength * kImpactFillAmount);
+    return (crater + ring) * gImpactStrength;
+}
+
+float32_t ImpactDisplacement(float32_t2 xz) {
+    float32_t fill;
+    return ImpactField(xz, fill);
+}
+
+// 層を進み始める高さ。着地の波で雲の面が持ち上がるぶん、有効なあいだは上へ広げる
+float32_t LayerMarchTop() {
+    float32_t top = gLayerBottom + (gLayerTop - gLayerBottom) * kLayerMarchTopRatio;
+    return IsImpactActive() ? top + gImpactRingHeight * gImpactStrength : top;
+}
+
 // 視線と層(下面と上面の間)の交差。交差すれば true で、tNear / tFar に入口と出口の距離(カメラから)を返す。
 // 水平に近い視線は、層の中にいるときだけ、距離の上限まで続く
 bool RaySlab(float32_t3 origin, float32_t3 dir, out float32_t tNear, out float32_t tFar) {
     tNear = 0.0f;
     tFar = gMaxDistance;
+    float32_t marchTop = LayerMarchTop();
     if (abs(dir.y) < kMinDirComponent) {
-        return origin.y >= gLayerBottom && origin.y <= gLayerBottom + (gLayerTop - gLayerBottom) * kLayerMarchTopRatio;
+        return origin.y >= gLayerBottom && origin.y <= marchTop;
     }
-    float32_t marchTop = gLayerBottom + (gLayerTop - gLayerBottom) * kLayerMarchTopRatio;
     float32_t t0 = (gLayerBottom - origin.y) / dir.y;
     float32_t t1 = (marchTop - origin.y) / dir.y;
     tNear = min(t0, t1);
@@ -156,27 +228,52 @@ float32_t BoxFade(float32_t3 p) {
 // lod: 細かさを省く割合(0 = そのまま、1 = 細かい模様を全部省く)。遠くの層で、粒や縞になるのを防ぐ
 float32_t SampleDensity(float32_t3 p, bool useDetail, float32_t lod) {
     bool layer = IsLayer();
-    float32_t fade = layer ? LayerFade(p) : BoxFade(p);
+    // 層: 着地の反応で雲の面がずれているぶん、高さを逆向きにずらして引く(面が上がっていれば、低い位置を引く)。
+    // ノイズの座標も同じ高さを使うので、模様は面と一緒に動く
+    float32_t3 layerPos = p;
+    float32_t impactFill = 0.0f;
+    if (layer) {
+        layerPos.y -= ImpactField(p.xz, impactFill);
+    }
+    float32_t fade = layer ? LayerFade(layerPos) : BoxFade(p);
     if (fade <= 0.0f) {
         return 0.0f;
     }
 
     // ノイズの座標へ(風で流れる)。箱は中心を基準にして、ノイズが箱に付く。層はワールド座標のまま(水平に繰り返す)
-    float32_t3 local = layer ? p : p - gBoxCenter;
+    float32_t3 local = layer ? layerPos : p - gBoxCenter;
     float32_t3 noisePos = (local - gWindVelocity * gTime) * gNoiseScale;
     float32_t4 shape = gShape.SampleLevel(gWrap, noisePos, 0.0f);
+
+    if (layer) {
+        impactFill = max(impactFill, gSeaFill); // 落下の間は、雲海全体を雲で満たす(隙間を雲で埋める)
+    }
+    if (layer && impactFill > 0.0f) {
+        // 着地の波・雲の塊を、細かい模様でむらにする(なめらかな輪のままだと、作り物に見える。むらの所は、もこもこした塊に砕ける)
+        // 同じ細かい模様をそのまま繰り返すと、格子状に並んで見える。向きを回し、形のノイズでゆがませ、細かさの違う 2 つを混ぜて崩す
+        float32_t3 billowPos = noisePos * gDetailScale * kImpactBillowScale;
+        billowPos += (shape.gba - 0.5f) * kImpactBillowWarp;
+        float32_t3 rotatedPos = float32_t3(billowPos.x * kImpactRotateCos - billowPos.z * kImpactRotateSin, billowPos.y,
+                                           billowPos.x * kImpactRotateSin + billowPos.z * kImpactRotateCos);
+        float32_t billow = lerp(gDetail.SampleLevel(gWrap, billowPos, 0.0f).r, gDetail.SampleLevel(gWrap, rotatedPos * kImpactBillowSecondScale, 0.0f).g,
+                                kImpactBillowMix);
+        impactFill *= lerp(1.0f - kImpactBillowStrength, 1.0f, smoothstep(kImpactBillowLow, kImpactBillowHigh, billow));
+    }
 
     if (layer) {
         // 大きな周期の濃淡(繰り返し模様を崩す)
         float32_t3 coveragePos = float32_t3((local.xz - gWindVelocity.xz * gTime) * (gNoiseScale * kLayerCoverageScale), kLayerCoverageSlice);
         float32_t coverage = gShape.SampleLevel(gWrap, coveragePos, 0.0f).r;
-        fade *= lerp(1.0f - kLayerCoverageStrength, 1.0f, smoothstep(kCoverageLow, kCoverageHigh, coverage));
+        // 着地の波・雲の塊(impactFill)の場所は、雲の薄い領域でも雲が湧くよう、濃淡の減りを打ち消す
+        float32_t coverageFade = lerp(1.0f - kLayerCoverageStrength, 1.0f, smoothstep(kCoverageLow, kCoverageHigh, coverage));
+        fade *= lerp(coverageFade, 1.0f, impactFill);
     }
 
     // 形: Perlin-Worley の起伏を、細かさの違う Worley の fbm で削る(遠くでは、fbm を平均へ寄せる)
     float32_t lowFbm = shape.g * kFbmWeightA + shape.b * kFbmWeightB + shape.a * kFbmWeightC;
     lowFbm = lerp(lowFbm, kLowFbmMean, lod);
     float32_t base = saturate(Remap(shape.r, lowFbm - 1.0f, 1.0f, 0.0f, 1.0f));
+    base = lerp(base, 1.0f, impactFill); // 着地の波の縁: 雲の量を押し上げる(隙間にも雲が湧く)
 
     // 縁を薄くしてから、しきい値より小さい所を雲なしにする(縁ほど隙間が増え、塊の輪郭になる)
     float32_t cloud = saturate(Remap(base * fade, gThreshold, 1.0f, 0.0f, 1.0f));
@@ -296,7 +393,9 @@ VolumeCloudResult MarchVolumeCloud(float32_t3 origin, float32_t3 dir, float32_t 
             float32_t stepTransmittance = exp(-density * gExtinction * dt);
 
             // 光: 太陽(遮られずに届く分 * 位相)と、空からの光(上ほど明るい)
-            float32_t heightRatio = layer ? saturate((p.y - gLayerBottom) / max(gLayerTop - gLayerBottom, kMinRange))
+            // 層は、着地でずれた面に合わせた高さで見る(凹んだ底も、面として明るく照らす)
+            float32_t layerHeight = p.y - (layer ? ImpactDisplacement(p.xz) : 0.0f);
+            float32_t heightRatio = layer ? saturate((layerHeight - gLayerBottom) / max(gLayerTop - gLayerBottom, kMinRange))
                                           : saturate(0.5f + (p.y - gBoxCenter.y) / (2.0f * gBoxHalfSize.y));
             // 影の持ち上げ: 下側(影)にも、上側の明るい光が回るようにする(大きいほど、影が浅くなる)
             float32_t lift = saturate(heightRatio + gShadowLift * (1.0f - heightRatio));
