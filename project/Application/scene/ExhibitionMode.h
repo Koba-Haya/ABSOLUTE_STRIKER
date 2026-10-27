@@ -10,7 +10,7 @@
 // 通常の開発・プレイでは false にする(キー入力で進める従来の動作に戻る)
 namespace ExhibitionMode {
 
-constexpr bool kEnabled = true;
+constexpr bool kEnabled = false;
 
 // タイトルが表示されてから、自動でスタート演出を始めるまでの時間(秒)。ロゴが出きる時間(2 秒)より長くする
 constexpr float kTitleWaitSec = 3.0f;
@@ -19,5 +19,8 @@ constexpr float kTitleWaitSec = 3.0f;
 constexpr float kGameHoldSec = 1.0f;
 // クリア / ゲームオーバーの覆いが晴れてから、タイトルへの遷移を要求するまでの時間(秒)
 constexpr float kResultHoldSec = 3.0f;
+// ゲームオーバー: 覆いが晴れてから、ゲームへ戻る要求を出すまでは「カメラの降下の長さ + この秒数」
+// (降下は GameOverBackdrop が持つ。降下が終わって灰が集まりきり、核が灯る姿勢を、少し見せてから、復活の演出(リトライ)を始める)
+constexpr float kGameOverHoldMarginSec = 1.5f;
 
 } // namespace ExhibitionMode

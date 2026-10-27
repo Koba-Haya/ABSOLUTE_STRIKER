@@ -201,6 +201,12 @@
     <ClCompile Include="scene\CloudImpact.cpp" />
     <ClCompile Include="scene\CloudImpactDebugUi.cpp" />
     <ClCompile Include="scene\PlayerDeathDirector.cpp" />
+    <ClCompile Include="scene\ScaleDust.cpp" />
+    <ClCompile Include="scene\PlayerDeathDust.cpp" />
+    <ClCompile Include="scene\ScaleDustDebugUi.cpp" />
+    <ClCompile Include="scene\EmberCore.cpp" />
+    <ClCompile Include="scene\GameOverAsh.cpp" />
+    <ClCompile Include="scene\GameOverAshDebugUi.cpp" />
     <ClCompile Include="scene\DeathCameraDirector.cpp" />
     <ClCompile Include="actor\Player\PlayerAnimator.cpp" />
     <ClCompile Include="actor\Player\WingShatter.cpp" />
@@ -218,6 +224,9 @@
     <ClCompile Include="scene\SpeedStreaks.cpp" />
     <ClCompile Include="scene\ResultBackdrop.cpp" />
     <ClCompile Include="scene\GameOverBackdrop.cpp" />
+    <ClCompile Include="scene\GameOverIslands.cpp" />
+    <ClCompile Include="scene\RebirthDirector.cpp" />
+    <ClCompile Include="scene\RebirthButterfly.cpp" />
     <ClCompile Include="scene\ResultBanner.cpp" />
     <ClCompile Include="scene\HitEffectSpawner.cpp" />
     <ClCompile Include="scene\GameAssetPreloader.cpp" />
@@ -261,6 +270,12 @@
     <ClInclude Include="scene\CloudImpact.h" />
     <ClInclude Include="scene\CloudImpactDebugUi.h" />
     <ClInclude Include="scene\PlayerDeathDirector.h" />
+    <ClInclude Include="scene\ScaleDust.h" />
+    <ClInclude Include="scene\PlayerDeathDust.h" />
+    <ClInclude Include="scene\ScaleDustDebugUi.h" />
+    <ClInclude Include="scene\EmberCore.h" />
+    <ClInclude Include="scene\GameOverAsh.h" />
+    <ClInclude Include="scene\GameOverAshDebugUi.h" />
     <ClInclude Include="scene\DeathCameraDirector.h" />
     <ClInclude Include="scene\ScopedCameraOverride.h" />
     <ClInclude Include="actor\Player\PlayerAnimator.h" />
@@ -281,6 +296,9 @@
     <ClInclude Include="scene\SpeedStreaks.h" />
     <ClInclude Include="scene\ResultBackdrop.h" />
     <ClInclude Include="scene\GameOverBackdrop.h" />
+    <ClInclude Include="scene\GameOverIslands.h" />
+    <ClInclude Include="scene\RebirthDirector.h" />
+    <ClInclude Include="scene\RebirthButterfly.h" />
     <ClInclude Include="scene\ResultBanner.h" />
     <ClInclude Include="scene\HitEffectSpawner.h" />
     <ClInclude Include="scene\GameAssetPreloader.h" />

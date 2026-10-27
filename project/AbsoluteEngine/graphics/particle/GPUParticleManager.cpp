@@ -1,4 +1,4 @@
-#define NOMINMAX
+﻿#define NOMINMAX
 #include "GPUParticleManager.h"
 #include "DirectXCommon.h"
 #include "Renderer.h"
@@ -6,6 +6,7 @@
 #include "texture/TextureResource.h"
 #include "../../base/AssetPath.h"
 #include <cassert>
+#include <cmath>
 #include <cstring>
 #include <dxcapi.h>
 
@@ -132,6 +133,7 @@ void GPUParticleManager::Initialize(DirectXCommon* dx) {
     CreateComputePipeline();
     CreateGraphicsPipeline();
     CreateQuad();
+    CreateGlowPipeline();
 
     // Run Initialization CS
     auto* cmdList = dx_->GetCommandList();
@@ -223,7 +225,20 @@ void GPUParticleManager::Update() {
 
     // PerFrame Update
     perFrameMapped_->time = totalTime;
-    perFrameMapped_->deltaTime = kDeltaTime;
+    perFrameMapped_->deltaTime = kDeltaTime * timeScale_;
+    perFrameMapped_->clearAll = clearAllPending_ ? 1u : 0u;
+    perFrameMapped_->pad = 0.0f;
+    if (clearAllPending_) {
+        // 保留しているものも、ここで確実に初期化する: バーストの要求と、常駐エミッタの射出のタイマー
+        for (uint32_t i = 0; i < kMaxGPUEmitters; ++i) {
+            emittersMapped_->emitters[i].emit = 0;
+            emittersMapped_->emitters[i].frequencyTime = 0.0f;
+        }
+        for (uint32_t i = 0; i < kBurstPoolSize; ++i) {
+            burstPendingClear_[i] = false;
+        }
+    }
+    clearAllPending_ = false;
 
     // PerView Update (Billboard用)
     const Matrix4x4& view = Renderer::GetInstance()->GetViewMatrix();
@@ -286,7 +301,7 @@ void GPUParticleManager::Update() {
     cmdList->ResourceBarrier(1, &srvTransitionBarrier);
 }
 
-void GPUParticleManager::Draw(BlendMode blendMode) {
+void GPUParticleManager::Draw(BlendMode blendMode, GPUParticleDepth depth) {
     auto* cmdList = dx_->GetCommandList();
     auto& srvAlloc = dx_->GetSrvAllocator();
 
@@ -295,9 +310,16 @@ void GPUParticleManager::Draw(BlendMode blendMode) {
     if (psoIndex < 0 || psoIndex >= kBlendModeCount || !graphicsPipelineStates_[psoIndex]) {
         psoIndex = static_cast<int>(BlendMode::Alpha);
     }
+    // 描画先に深度が無いとき(雲の合成のあと)は、深度なしのパイプラインを使う
+    ID3D12PipelineState* pso = graphicsPipelineStates_[psoIndex].Get();
+    if (depth == GPUParticleDepth::None) {
+        pso = graphicsPipelineStatesColorOnly_[psoIndex].Get();
+    } else if (depth == GPUParticleDepth::TestAndWrite) {
+        pso = graphicsPipelineStatesDepthWrite_[psoIndex].Get();
+    }
 
     cmdList->SetGraphicsRootSignature(graphicsRootSignature_.Get());
-    cmdList->SetPipelineState(graphicsPipelineStates_[psoIndex].Get());
+    cmdList->SetPipelineState(pso);
 
     cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     cmdList->IASetVertexBuffers(0, 1, &vbView_);
@@ -316,26 +338,176 @@ void GPUParticleManager::Draw(BlendMode blendMode) {
     cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
 }
 
-uint32_t GPUParticleManager::CreateEmitter(const EmitterDesc& desc) {
-    if (persistentEmitterCount_ >= kPersistentEmitterSlots) {
-        assert(false && "GPUParticleManager: persistent emitter slots exhausted");
-        return UINT32_MAX;
-    }
-    uint32_t index = persistentEmitterCount_++;
-    GPUEmitter& em = emittersMapped_->emitters[index];
+void GPUParticleManager::WriteEmitterDesc_(GPUEmitter& em, const EmitterDesc& desc) {
     em.translate = desc.translate;
     em.radius = desc.radius;
     em.halfExtents = desc.halfExtents;
-    em.pad0 = 0.0f;
+    em.glowOnly = desc.style.glowOnly ? 1.0f : 0.0f;
+    // 発光パスで粒自身の色を使う印は、明るさの倍率の符号で渡す(負 = 粒自身の色)。粒の構造体を増やさないため
+    em.glowGain = desc.style.glowOwnColor ? -std::fabs(desc.style.glowGain) : desc.style.glowGain;
+    em.pad4[0] = em.pad4[1] = em.pad4[2] = 0.0f;
     em.shape = static_cast<uint32_t>(desc.shape);
     em.count = desc.count;
     em.frequency = desc.frequency;
+    em.coolRatio = desc.style.coolRatio;
+    em.fadePower = desc.style.fadePower;
+    em.colorStart = desc.style.colorStart;
+    em.lifeMin = desc.style.lifeMin;
+    em.colorEnd = desc.style.colorEnd;
+    em.lifeMax = desc.style.lifeMax;
+    em.sizeMin = desc.style.sizeMin;
+    em.sizeMax = desc.style.sizeMax;
+    em.speedMin = desc.style.speedMin;
+    em.speedMax = desc.style.speedMax;
+    em.baseVelocity = desc.style.baseVelocity;
+    em.styled = desc.styled ? 1u : 0u;
+}
+
+void GPUParticleManager::DrawGlow(const GlowParams& params, D3D12_GPU_DESCRIPTOR_HANDLE depthSrv) {
+    auto* cmdList = dx_->GetCommandList();
+    auto& srvAlloc = dx_->GetSrvAllocator();
+
+    std::memcpy(glowParamMapped_, &params, sizeof(GlowParams));
+
+    cmdList->SetGraphicsRootSignature(glowRootSignature_.Get());
+    cmdList->SetPipelineState(glowPipelineState_.Get());
+    cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    cmdList->IASetVertexBuffers(0, 1, &vbView_);
+    cmdList->IASetIndexBuffer(&ibView_);
+
+    ID3D12DescriptorHeap* heaps[] = { dx_->GetSRVHeap() };
+    cmdList->SetDescriptorHeaps(1, heaps);
+
+    // 0: PerView(b0)、1: 粒(t0)、2: シーンの深度(t2)、3: 発光の調整値(b1)
+    cmdList->SetGraphicsRootConstantBufferView(0, perViewCB_->GetGPUVirtualAddress());
+    cmdList->SetGraphicsRootDescriptorTable(1, srvAlloc.Gpu(srvIndex_));
+    cmdList->SetGraphicsRootDescriptorTable(2, depthSrv);
+    cmdList->SetGraphicsRootConstantBufferView(3, glowParamCB_->GetGPUVirtualAddress());
+
+    cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
+}
+
+void GPUParticleManager::CreateGlowPipeline() {
+    auto* device = dx_->GetDevice();
+    auto* renderer = Renderer::GetInstance();
+
+    // 調整値の定数バッファ
+    glowParamCB_ = renderer->CreateUploadBuffer(Align256_(sizeof(GlowParams)));
+    glowParamCB_->SetName(L"GPUParticleManager::GlowParamCB");
+    glowParamCB_->Map(0, nullptr, reinterpret_cast<void**>(&glowParamMapped_));
+    *glowParamMapped_ = GlowParams{};
+
+    // ルートシグネチャ: 0 = PerView(b0, VS)、1 = 粒(t0, VS)、2 = シーンの深度(t2, PS)、3 = 発光の調整値(b1, VS + PS)
+    D3D12_DESCRIPTOR_RANGE particleRange{};
+    particleRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    particleRange.NumDescriptors = 1;
+    particleRange.BaseShaderRegister = 0;
+
+    D3D12_DESCRIPTOR_RANGE depthRange{};
+    depthRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    depthRange.NumDescriptors = 1;
+    depthRange.BaseShaderRegister = 2;
+
+    D3D12_ROOT_PARAMETER params[4]{};
+    params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[0].Descriptor.ShaderRegister = 0;
+    params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[1].DescriptorTable.NumDescriptorRanges = 1;
+    params[1].DescriptorTable.pDescriptorRanges = &particleRange;
+    params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+    params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[2].DescriptorTable.NumDescriptorRanges = 1;
+    params[2].DescriptorTable.pDescriptorRanges = &depthRange;
+    params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[3].Descriptor.ShaderRegister = 1;
+    params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    D3D12_ROOT_SIGNATURE_DESC rsDesc{};
+    rsDesc.NumParameters = 4;
+    rsDesc.pParameters = params;
+    rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    ComPtr<ID3DBlob> blob, err;
+    D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err);
+    device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&glowRootSignature_));
+
+    ComPtr<IDxcBlob> vsBlob = CompileShader(L"resources/engine/shaders/GPUParticleGlow.VS.hlsl", L"vs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+    ComPtr<IDxcBlob> psBlob = CompileShader(L"resources/engine/shaders/GPUParticleGlow.PS.hlsl", L"ps_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+
+    D3D12_INPUT_ELEMENT_DESC inputLayout[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
+
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
+    psoDesc.pRootSignature = glowRootSignature_.Get();
+    psoDesc.VS = { vsBlob->GetBufferPointer(), vsBlob->GetBufferSize() };
+    psoDesc.PS = { psBlob->GetBufferPointer(), psBlob->GetBufferSize() };
+    psoDesc.InputLayout = { inputLayout, _countof(inputLayout) };
+    psoDesc.RasterizerState = CD3DX12_RASTERIZER_DESC(D3D12_DEFAULT);
+    psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE; // 板を回して伸ばすので、表裏は問わない
+    // 加算: 出力 + 背景(色にあらかじめ明るさを掛けてあるので、アルファは使わない)
+    auto& rt = psoDesc.BlendState.RenderTarget[0];
+    rt.BlendEnable = TRUE;
+    rt.SrcBlend = D3D12_BLEND_ONE;
+    rt.DestBlend = D3D12_BLEND_ONE;
+    rt.BlendOp = D3D12_BLEND_OP_ADD;
+    rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
+    rt.DestBlendAlpha = D3D12_BLEND_ONE;
+    rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    rt.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    // 雲のあとは描画先に深度が無い。深度テストはピクセルシェーダーが、深度の SRV を読んで行う
+    psoDesc.DepthStencilState.DepthEnable = FALSE;
+    psoDesc.DepthStencilState.StencilEnable = FALSE;
+    psoDesc.SampleMask = UINT_MAX;
+    psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    psoDesc.NumRenderTargets = 1;
+    psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    psoDesc.SampleDesc.Count = 1;
+    HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&glowPipelineState_));
+    assert(SUCCEEDED(hr) && "GPUParticle 発光パスの PSO 生成失敗");
+}
+
+uint32_t GPUParticleManager::CreateEmitter(const EmitterDesc& desc) {
+    // 返されたスロットがあれば、それを先に再利用する(シーンを入り直すたびにスロットが減らないようにする)
+    uint32_t index = UINT32_MAX;
+    for (uint32_t i = 0; i < persistentEmitterCount_; ++i) {
+        if (persistentEmitterFree_[i]) {
+            index = i;
+            persistentEmitterFree_[i] = false;
+            break;
+        }
+    }
+    if (index == UINT32_MAX) {
+        if (persistentEmitterCount_ >= kPersistentEmitterSlots) {
+            assert(false && "GPUParticleManager: persistent emitter slots exhausted");
+            return UINT32_MAX;
+        }
+        index = persistentEmitterCount_++;
+    }
+    GPUEmitter& em = emittersMapped_->emitters[index];
+    WriteEmitterDesc_(em, desc);
     em.frequencyTime = 0.0f;
     em.emit = 0;
     em.enabled = 1;
-    em.pad1[0] = 0.0f;
-    em.pad1[1] = 0.0f;
     return index;
+}
+
+void GPUParticleManager::ReleaseEmitter(uint32_t emitterIndex) {
+    if (emitterIndex >= persistentEmitterCount_) return;
+    GPUEmitter& em = emittersMapped_->emitters[emitterIndex];
+    em.enabled = 0;
+    em.emit = 0;
+    persistentEmitterFree_[emitterIndex] = true;
+}
+
+void GPUParticleManager::ConfigureEmitter(uint32_t emitterIndex, const EmitterDesc& desc) {
+    if (emitterIndex >= persistentEmitterCount_) return;
+    // 射出のタイマー(frequencyTime)と、有効・無効は保ったまま、設定だけ置き換える
+    WriteEmitterDesc_(emittersMapped_->emitters[emitterIndex], desc);
 }
 
 void GPUParticleManager::SetEmitterTransform(uint32_t emitterIndex, const Vector3& translate) {
@@ -352,19 +524,46 @@ void GPUParticleManager::EmitBurst(const Vector3& position, uint32_t count, floa
     uint32_t slot = kPersistentEmitterSlots + (burstCursor_ % kBurstPoolSize);
     burstCursor_++;
 
+    // 前に立てた emit のクリア予約は取り消す(毎フレームバーストを出すと、プールが一周して同じスロットに戻る。
+    // 予約が残っていると、今立てた emit を、次の Update の冒頭で消してしまい、このバーストが出なくなる)
+    burstPendingClear_[slot - kPersistentEmitterSlots] = false;
+
+    EmitterDesc desc;
+    desc.shape = EmitterShape::Sphere;
+    desc.translate = position;
+    desc.radius = radius;
+    desc.halfExtents = { radius, radius, radius };
+    desc.count = count;
+    desc.frequency = 0.0f; // バースト枠は頻度タイマーを使わずワンショットで直接emitを立てる
+
     GPUEmitter& em = emittersMapped_->emitters[slot];
-    em.translate = position;
-    em.radius = radius;
-    em.halfExtents = { radius, radius, radius };
-    em.pad0 = 0.0f;
-    em.shape = static_cast<uint32_t>(EmitterShape::Sphere);
-    em.count = count;
-    em.frequency = 0.0f; // バースト枠は頻度タイマーを使わずワンショットで直接emitを立てる
+    WriteEmitterDesc_(em, desc);
     em.frequencyTime = 0.0f;
     em.enabled = 1;
     em.emit = 1;
-    em.pad1[0] = 0.0f;
-    em.pad1[1] = 0.0f;
+}
+
+void GPUParticleManager::EmitStyledBurst(const Vector3& position, uint32_t count, float radius, const ParticleStyle& style) {
+    uint32_t slot = kPersistentEmitterSlots + (burstCursor_ % kBurstPoolSize);
+    burstCursor_++;
+
+    burstPendingClear_[slot - kPersistentEmitterSlots] = false; // EmitBurst と同じ理由
+
+    EmitterDesc desc;
+    desc.shape = EmitterShape::Sphere;
+    desc.translate = position;
+    desc.radius = radius;
+    desc.halfExtents = { radius, radius, radius };
+    desc.count = count;
+    desc.frequency = 0.0f;
+    desc.styled = true;
+    desc.style = style;
+
+    GPUEmitter& em = emittersMapped_->emitters[slot];
+    WriteEmitterDesc_(em, desc);
+    em.frequencyTime = 0.0f;
+    em.enabled = 1;
+    em.emit = 1;
 }
 
 void GPUParticleManager::SetField(int slot, const FieldDesc& desc) {
@@ -643,6 +842,24 @@ void GPUParticleManager::CreateGraphicsPipeline() {
         psoDesc.BlendState = MakeGPUParticleBlendDesc(static_cast<BlendMode>(i));
         HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&graphicsPipelineStates_[i]));
         assert(SUCCEEDED(hr) && "GPUParticle PSO 生成失敗");
+    }
+
+    // 深度テストあり・書き込みあり(雲の合成の前に描く粒用)。粒は深度を書くので、雲の合成が、粒の位置までの雲だけを粒にかける
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    for (int i = 0; i < kBlendModeCount; ++i) {
+        psoDesc.BlendState = MakeGPUParticleBlendDesc(static_cast<BlendMode>(i));
+        HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&graphicsPipelineStatesDepthWrite_[i]));
+        assert(SUCCEEDED(hr) && "GPUParticle PSO(深度書き込み) 生成失敗");
+    }
+    psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    // 深度なし(色だけの描画先用)。ボリューム雲の合成のあとは、描画先に深度が無いので、深度テストも深度の形式も無しにする
+    psoDesc.DepthStencilState.DepthEnable = FALSE;
+    psoDesc.DSVFormat = DXGI_FORMAT_UNKNOWN;
+    for (int i = 0; i < kBlendModeCount; ++i) {
+        psoDesc.BlendState = MakeGPUParticleBlendDesc(static_cast<BlendMode>(i));
+        HRESULT hr = device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&graphicsPipelineStatesColorOnly_[i]));
+        assert(SUCCEEDED(hr) && "GPUParticle PSO(色だけ) 生成失敗");
     }
 }
 

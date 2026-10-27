@@ -122,9 +122,36 @@ float32_t DropletDensity(float32_t2 centerUv, float32_t aspect) {
     return smoothstep(kSmallDropClusterEdgeLow, kSmallDropClusterEdgeHigh, n);
 }
 
+// ---- 水滴の縁寄せ ----
+// レンズや風防の水滴は、縁に集まり、中央は開く。画面の中心からの距離で決まるマスク(0 = 中央、1 = 縁)を作り、
+// 水滴の出やすさ(セルごとに 1 つ)と、縁のぼかし(LensDrops.PS.hlsl)に使う。
+// 距離は、画面の端が各軸で 1 になる楕円の距離(縦横比に関わらず、縁が画面の端に沿う)。輪郭はノイズで揺らして、整った楕円に見せない。
+
+static const float32_t kEdgeJitterSeedOffset = 41.3f;  // 揺らぎのノイズの位置のずらし(他のノイズと同じ模様にしない)
+static const float32_t kEdgeMinDensity = 0.0001f;      // 密度の下限(order の 0 割りを避ける。これ以下は、水滴が付かないのと同じ)
+
+// edge: (縁の内側, 縁の外側, 揺らぎの幅, 中央に残す割合)  edge2: (揺らぎの細かさ, ぼかしの半径, 大粒のべき, 縁寄せを使うか 0 / 1)
+// 位置は、セルの中心などの「セルごとに 1 つ決まる点」で水滴に使うこと(画素ごとに使うと、水滴が途中で欠ける)
+// 縁の帯(0 = 中央、1 = 縁)。縁寄せを使わないときも計算する(呼び出し側で edge2.w を見る)
+float32_t LensEdgeBand(float32_t2 uv, float32_t aspect, float32_t4 edge, float32_t4 edge2) {
+    float32_t dist = length((uv - 0.5f) * 2.0f);
+    float32_t n = ValueNoise(float32_t2(uv.x * aspect, uv.y) * edge2.x + kEdgeJitterSeedOffset) - 0.5f;
+    dist += n * 2.0f * edge.z;
+    return smoothstep(edge.x, edge.y, dist);
+}
+
+// 水滴の出やすさのマスク。中央にも edge.w の割合だけ残す。縁寄せを使わないときは、常に 1
+float32_t LensEdgeMask(float32_t2 uv, float32_t aspect, float32_t4 edge, float32_t4 edge2) {
+    if (edge2.w < 0.5f) {
+        return 1.0f;
+    }
+    return lerp(edge.w, 1.0f, LensEdgeBand(uv, aspect, edge, edge2));
+}
+
 // 1 層分の小粒。cellsPerHeight: 画面の高さあたりのセル数  seed: 層ごとの乱数の種
 // rotation: 格子を回す角度(ラジアン)。層ごとに変えると、縦横の並び(網戸のような格子)が見えなくなる
-DropletHit SmallDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness, float32_t cellsPerHeight, int32_t seed, float32_t rotation) {
+// edge, edge2: 縁寄せの設定(LensEdgeMask)。マスクが小さい所は、水滴を持つセルが減る  densityScale: 水滴を持つセルの数の倍率
+DropletHit SmallDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness, float32_t cellsPerHeight, int32_t seed, float32_t rotation, float32_t4 edge, float32_t4 edge2, float32_t densityScale) {
     DropletHit hit;
     hit.mask = 0.0f;
     hit.normal = float32_t2(0.0f, 0.0f);
@@ -144,6 +171,7 @@ DropletHit SmallDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness,
     float32_t2 cellCenterWorld = float32_t2(cellCenterRot.x * cosR + cellCenterRot.y * sinR, -cellCenterRot.x * sinR + cellCenterRot.y * cosR);
     float32_t2 cellCenterUv = float32_t2(cellCenterWorld.x / aspect, cellCenterWorld.y);
     float32_t density = lerp(kSmallDropClusterLow, kSmallDropClusterHigh, DropletDensity(cellCenterUv, aspect));
+    density = max(density * LensEdgeMask(cellCenterUv, aspect, edge, edge2) * densityScale, kEdgeMinDensity);
     float32_t order = Hash21(id + int2(seed, kSmallDropSeedOrder)) / (kSmallDropExistence * density);
     float32_t hx = Hash21(id + int2(seed + kSmallDropSeedOffsetX, 17));
     float32_t hy = Hash21(id + int2(seed + kSmallDropSeedOffsetY, 53));
@@ -223,7 +251,8 @@ static const int32_t kRunDropSeedStretch = 113;
 static const int32_t kRunDropSeedStay = 131;
 
 // 流れる水滴(drop)と、その跡(trail)。wetness: 濡れ具合  lensTime: 水滴が付き始めてからの秒
-void RunningDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness, float32_t lensTime, out DropletHit drop, out DropletHit trail) {
+// edge, edge2: 縁寄せの設定。大粒は、マスクをべき乗して、小粒より縁寄りにだけ出す
+void RunningDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness, float32_t lensTime, float32_t4 edge, float32_t4 edge2, float32_t densityScale, out DropletHit drop, out DropletHit trail) {
     drop.mask = 0.0f;
     drop.normal = float32_t2(0.0f, 0.0f);
     drop.radiusUv = 0.0f;
@@ -254,6 +283,7 @@ void RunningDropletLayer(float32_t2 uv, float32_t aspect, float32_t wetness, flo
     float32_t cellRadius = (float32_t(band) + 0.5f) * kRunDropBand;
     float32_t2 cellCenterUv = float32_t2(cos(cellAngle), sin(cellAngle)) * cellRadius / float32_t2(aspect, 1.0f) + 0.5f;
     float32_t density = lerp(kRunDropClusterLow, kRunDropClusterHigh, DropletDensity(cellCenterUv, aspect));
+    density = max(density * pow(LensEdgeMask(cellCenterUv, aspect, edge, edge2), edge2.z) * densityScale, kEdgeMinDensity);
     float32_t order = hOrder / (kRunDropExistence * density);
     float32_t grow = smoothstep(order, order + kSmallDropGrowSpan, wetness) * step(order, 1.0f);
     if (grow <= 0.0f) {

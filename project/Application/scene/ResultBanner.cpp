@@ -48,6 +48,6 @@ void ResultBanner::SetRevealProgress(float progress) {
 
 void ResultBanner::Draw() {
   if (!sprite_) return;
-  sprite_->SetColor({1.0f, 1.0f, 1.0f, appearance_});
+  sprite_->SetColor({1.0f, 1.0f, 1.0f, appearance_ * opacityScale_});
   sprite_->Draw();
 }

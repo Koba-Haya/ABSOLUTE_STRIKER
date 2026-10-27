@@ -123,8 +123,9 @@ void ModelInstance::SetEnvironmentCoefficient(float c) {
 }
 
 void ModelInstance::SetDissolveParam(bool enable, float threshold, float edgeRange, 
-                                     const Vector3& edgeColor, const Vector3& maskColor) {
+                                     const Vector3& edgeColor, const Vector3& maskColor, float emberAmount) {
   if (pImpl_->cbMatMapped) {
+    pImpl_->cbMatMapped->dissolveEmber = emberAmount;
     pImpl_->cbMatMapped->enableDissolve = enable ? 1 : 0;
     pImpl_->cbMatMapped->dissolveThreshold = threshold;
     pImpl_->cbMatMapped->dissolveEdgeRange = edgeRange;
@@ -277,6 +278,13 @@ void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loo
 bool ModelInstance::IsAnimationFinished() const {
   const auto &animation = pImpl_->currentAnimation;
   return animation && !pImpl_->animationLoop && pImpl_->animationTime >= animation->duration;
+}
+
+void ModelInstance::SetAnimationTime(float seconds) {
+  if (!pImpl_->currentAnimation) return;
+  // 時刻を置いてから、時間 0 の更新でポーズを求める(UpdateAnimation が、ループの折り返しと長さでの停止を行う)
+  pImpl_->animationTime = (std::max)(seconds, 0.0f);
+  UpdateAnimation(0.0f);
 }
 
 void ModelInstance::UpdateAnimation(float deltaTime) {

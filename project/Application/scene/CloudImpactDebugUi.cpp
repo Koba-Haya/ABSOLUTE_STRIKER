@@ -18,6 +18,7 @@ constexpr float kCraterDepthMax = 20.0f; // 層の厚み(20)まで
 constexpr float kRingWidthMax = 10.0f;
 constexpr float kRingHeightMax = 15.0f;
 constexpr float kRingSpeedMax = 40.0f;
+constexpr float kRingWobbleMax = 8.0f;
 constexpr float kSecondsMax = 6.0f;
 constexpr float kPuffSizeMax = 20.0f;
 constexpr float kPuffRiseRange = 15.0f;
@@ -61,6 +62,9 @@ void Draw(CloudImpact &impact, const Vector3 &defaultPosition) {
   ImGui::SliderFloat("Ring height", &shape.ringHeight, 0.0f, kRingHeightMax);
   ImGui::SliderFloat("Ring speed", &shape.ringSpeed, 0.0f, kRingSpeedMax);
   ImGui::SliderFloat("Ring fade (s)", &shape.ringFadeSeconds, 0.1f, kSecondsMax);
+  ImGui::SliderFloat("Ring ease (0 = constant speed)", &shape.ringEase, 0.0f, 1.0f);
+  ImGui::SliderFloat("Ring wobble", &shape.ringWobble, 0.0f, kRingWobbleMax);
+  ImGui::SliderFloat("Ring break", &shape.ringBreak, 0.0f, 1.0f);
   ImGui::SeparatorText("Puff (box cloud)");
   CloudImpactPuff &puff = impact.GetPuff();
   ImGui::SliderFloat3("Size start", &puff.halfSizeStart.x, 0.5f, kPuffSizeMax);

@@ -24,11 +24,14 @@ struct VolumeCloudImpact {
   float age = 0.0f;              // 着地からの経過秒
   float craterRadius = 3.5f;     // くぼみの半径(ユニット)
   float craterDepth = 7.0f;      // くぼみの深さ(雲の面を押し下げる量。層の厚みは 20)
-  float ringWidth = 3.0f;        // 波の縁の幅
-  float ringHeight = 5.0f;       // 波の縁の盛り上がり
-  float ringSpeed = 10.0f;       // 波の縁が外へ広がる速さ(ユニット / 秒)
+  float ringWidth = 2.4f;        // 波の縁の幅
+  float ringHeight = 3.5f;       // 波の縁の盛り上がり
+  float ringSpeed = 5.0f;        // 波の縁が外へ広がる速さ(ユニット / 秒)
   float refillSeconds = 2.5f;    // くぼみが埋まり戻るまでの秒
   float ringFadeSeconds = 2.2f;  // 波の縁が消えるまでの秒
+  float ringEase = 1.0f;         // 波の縁の広がりの減速の度合い(0 = 一定の速さ、1 = だんだん遅くなる。初速は ringSpeed)
+  float ringWobble = 0.7f;       // 波の縁の半径を形のノイズで揺らす量(ユニット。0 でゆらぎなし)
+  float ringBreak = 0.35f;       // 波の縁の方向ごとの強さのむら(0 = 全周が同じ。大きいほどむらが強い)
   // 雲海を常に満たす(プレイの最初から、隙間の少ない雲海にする)。雲海自身のノイズを使い、濃淡の減りの打ち消しと、
   // しきい値の引き下げで、雲の領域を広げる(着地のむらは掛けない)
   float seaFill = 0.7f;          // 満たす量(0〜1。0 = 隙間のある雲海、1 = しきい値が seaFillThreshold まで下がる)

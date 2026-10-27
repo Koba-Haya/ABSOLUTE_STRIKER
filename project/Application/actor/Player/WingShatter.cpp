@@ -415,6 +415,6 @@ bool WingShatter::GetReleasedCentroid(Vector3& out) const {
 
 void WingShatter::Draw(const PlayerDeathDissolve& dissolve) {
   if (!built_ || releasedCount_ == 0) return;
-  shardInstance_.SetDissolveParam(dissolve.enabled, dissolve.threshold, dissolve.edgeRange, dissolve.edgeColor, {1.0f, 1.0f, 1.0f});
+  shardInstance_.SetDissolveParam(dissolve.enabled, dissolve.threshold, dissolve.edgeRange, dissolve.edgeColor, {1.0f, 1.0f, 1.0f}, dissolve.emberAmount);
   shardInstance_.Draw();
 }

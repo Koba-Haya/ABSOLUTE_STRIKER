@@ -147,7 +147,7 @@ void ModelComponent::Draw() {
 
         auto dissolve = owner_->GetComponent<DissolveComponent>();
         if (dissolve) {
-            modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor);
+            modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor, dissolve->emberAmount);
         }
         
         modelInstance_->Draw();

@@ -19,6 +19,7 @@
 #include "CloudImpact.h"
 #include "DeathCameraDirector.h"
 #include "../actor/Player/WingShatter.h"
+#include "PlayerDeathDust.h"
 #include "ScoreTracker.h"
 #include "StageStartDirector.h"
 #include "StageNameBoard.h"
@@ -92,8 +93,9 @@ private:
   void ApplyDeathPose_();
   // 死亡演出の間、飛んでいる弾(自機のも敵のも)をすべて消す。新しく出た弾も、描かれる前に消す(当たり判定も描画も止まる)
   void RemoveBulletsDuringDeath_();
-  // 死亡演出の間、カメラ・蝶の近くの敵を、描かないか(画面を邪魔しない、カメラが敵に埋まらない)
-  bool IsHiddenDuringDeath_(const AbsoluteEngine::GameObject& obj) const;
+  // 死亡演出の間、敵(Enemy / Boss。距離に関係なく全部)を描く大きさの倍率を返す(1 = 通常、0 = 描かない)。
+  // 死亡の瞬間から短い時間で 1 -> 0 へ縮める。敵以外と、死亡演出でないときは 1。蝶の崩壊を見やすくするため
+  float GetEnemyDrawScaleDuringDeath_(const AbsoluteEngine::GameObject& obj) const;
   // デバッグ用: 死亡演出を中止して、蘇生する(Dying 中だけ。Cover で遷移を要求したあとは、できない)
   void ReviveForDebug_();
   void CheckDebugReviveShortcut_();
@@ -215,6 +217,7 @@ private:
   PlayerDeathDirector deathDirector_;       // 死亡演出の進行(サブフェーズ、世界の時間の速さ、自機の落下)
   CloudImpact cloudImpact_;                 // 雲海への着地の反応(くぼみと波の縁。着地の瞬間に始まる)
   WingShatter wingShatter_;                 // 蝶の翅が裂けて飛び散る破片(崩壊)
+  PlayerDeathDust playerDeathDust_;         // 崩壊の鱗粉(破片の解放と朽ちる縁から出る、熾火から灰へ冷める粒)
   DeathCameraDirector deathCamera_;         // 死亡カメラの進行(蝶を中心にした回り込み・急降下)
   DeathCameraSettings deathCameraSettings_; // 死亡カメラの設定(キーフレームの表)
   GamePhase phaseBeforeDeath_ = GamePhase::InProgress; // 死亡演出の前のフェーズ(蘇生で戻す先)

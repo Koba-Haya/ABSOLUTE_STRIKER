@@ -5,6 +5,15 @@ struct GPUParticle {
     float32_t3 velocity;
     float32_t currentTime;
     float32_t4 color;
+    // 色の変化とフェードの形(GPUParticle.h の同名のメンバと同じ並び)
+    float32_t3 colorStart;
+    float32_t3 colorEnd;
+    float32_t coolRate;
+    float32_t fadePower;
+    // 発光パス用(GPUParticle.h の同名のメンバと同じ並び)
+    float32_t heat;
+    float32_t glowOnly;
+    float32_t glowGain;
 };
 
 // GPUEmitter(GPUParticle.h)とレイアウトを1:1で一致させること
@@ -12,14 +21,28 @@ struct Emitter {
     float32_t3 translate;
     float32_t radius;
     float32_t3 halfExtents;
-    float32_t pad0;
+    float32_t glowOnly;
     uint32_t shape; // 0:Sphere 1:Box
     uint32_t count;
     float32_t frequency;
     float32_t frequencyTime;
     uint32_t emit;
     uint32_t enabled;
-    float32_t2 pad1;
+    float32_t coolRatio;
+    float32_t fadePower;
+    // スタイル(styled が 0 のときは使わない)
+    float32_t3 colorStart;
+    float32_t lifeMin;
+    float32_t3 colorEnd;
+    float32_t lifeMax;
+    float32_t sizeMin;
+    float32_t sizeMax;
+    float32_t speedMin;
+    float32_t speedMax;
+    float32_t3 baseVelocity;
+    uint32_t styled;
+    float32_t glowGain;
+    float32_t3 pad4;
 };
 
 static const uint32_t kMaxEmitters = 8;
@@ -33,10 +56,10 @@ struct Field {
     float32_t3 target;
     float32_t strength;
     float32_t3 direction;
-    uint32_t type; // 0:None 1:Attractor 2:Wind 3:Vortex
+    uint32_t type; // 0:None 1:Attractor 2:Wind 3:Vortex 4:Drag 5:Turbulence 6:Spring
 };
 
-static const uint32_t kMaxFields = 4;
+static const uint32_t kMaxFields = 5;
 
 struct FieldArray {
     Field fields[kMaxFields];
@@ -46,6 +69,7 @@ struct FieldArray {
 struct PerFrame {
     float32_t time;
     float32_t deltaTime;
+    uint32_t clearAll; // 0 以外のフレームは、全ての粒を消して空きの管理を戻す(Emit は何もしない)
 };
 
 float32_t3 rand3dTo3d(float32_t3 value) {

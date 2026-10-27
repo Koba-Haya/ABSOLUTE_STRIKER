@@ -23,6 +23,11 @@ VertexShaderOutput main(VertexShaderInput input, uint32_t instanceId : SV_Instan
     VertexShaderOutput output;
     GPUParticle particle = gParticles[instanceId];
 
+    // 発光パス専用の粒(核の光など)は、通常の描画では描かない(大きさ 0 で潰す)
+    if (particle.glowOnly > 0.5f) {
+        particle.scale = float32_t3(0.0f, 0.0f, 0.0f);
+    }
+
     // ビルボード行列とスケール・座標を組み合わせてWorld行列を作成
     float32_t4x4 worldMatrix = gPerView.billboardMatrix;
     worldMatrix[0] *= particle.scale.x;

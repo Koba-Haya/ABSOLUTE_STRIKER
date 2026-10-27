@@ -38,6 +38,7 @@
 #include "CloudSeaDebugUi.h"
 #include "VolumeCloudDebugUi.h"
 #include "CloudImpactDebugUi.h"
+#include "ScaleDustDebugUi.h"
 #include "GameIntroDirector.h"
 #include "StageStartDirector.h"
 #include "StageNamePath.h"
@@ -140,16 +141,15 @@ constexpr float kPlayerWingspan = 3.7f;
 constexpr BYTE kDeathSkipKey = DIK_0;
 constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
 
-// 死亡演出の間、近くの敵を描かない範囲(カメラ、蝶からの距離。ユニット)。
+// 死亡演出の間、敵(全部)を画面から消すまでの時間(秒)。死亡の瞬間から、この時間をかけて縮んで見えなくなる。
 // 描かないだけで、敵は存在し続ける(撃破扱いにならず、スコア・編隊のカウント・撃破の演出に影響しない)
-constexpr float kDeathHideEnemyRadiusFromCamera = 14.0f;
-constexpr float kDeathHideEnemyRadiusFromPlayer = 9.0f;
+constexpr float kDeathHideEnemyFadeSeconds = 0.2f;
 // デバッグ用: 死亡演出を蘇生するキー(0 はスキップ。BACKSPACE で死亡)
 constexpr BYTE kDebugReviveKey = DIK_9;
 
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
 // SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
-constexpr bool kDebugFlowShortcutEnabled = true;
+constexpr bool kDebugFlowShortcutEnabled = false;
 } // namespace
 
 void GameScene::Initialize(const SceneServices &services) {
@@ -405,6 +405,7 @@ void GameScene::Finalize() {
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
+  playerDeathDust_.Shutdown(); // 借りているエミッタと粒の力を返す
 }
 
 void GameScene::BeginIntro_() {
@@ -958,19 +959,14 @@ void GameScene::RemoveBulletsDuringDeath_() {
   }
 }
 
-bool GameScene::IsHiddenDuringDeath_(const AbsoluteEngine::GameObject& obj) const {
-  if (!deathCamera_.IsActive()) return false;
+float GameScene::GetEnemyDrawScaleDuringDeath_(const AbsoluteEngine::GameObject& obj) const {
+  if (!deathDirector_.IsActive()) return 1.0f;
   const std::string& tag = obj.GetTag();
-  if (tag != "Enemy" && tag != "Boss") return false;
+  if (tag != "Enemy" && tag != "Boss") return 1.0f;
 
-  const Vector3& p = obj.GetTransform().translate;
-  auto distanceSquared = [&](const Vector3& q) {
-      return (p.x - q.x) * (p.x - q.x) + (p.y - q.y) * (p.y - q.y) + (p.z - q.z) * (p.z - q.z);
-  };
-  const DeathCameraPose& pose = deathCamera_.GetPose();
-  if (distanceSquared(pose.eye) < kDeathHideEnemyRadiusFromCamera * kDeathHideEnemyRadiusFromCamera) return true;
-  if (playerObj_ && distanceSquared(playerObj_->GetTransform().translate) < kDeathHideEnemyRadiusFromPlayer * kDeathHideEnemyRadiusFromPlayer) return true;
-  return false;
+  // 死亡の瞬間からの実時間で、1 -> 0 へ縮める(状態を持たないので、蘇生・リトライのあとに残らない)
+  const float t = std::clamp(deathDirector_.GetElapsed() / kDeathHideEnemyFadeSeconds, 0.0f, 1.0f);
+  return 1.0f - t;
 }
 
 void GameScene::ReviveForDebug_() {
@@ -1012,6 +1008,7 @@ void GameScene::ApplyDeathPose_() {
       dissolve->threshold = state.threshold;
       dissolve->edgeRange = state.edgeRange;
       dissolve->edgeColor = state.edgeColor;
+      dissolve->emberAmount = state.emberAmount;
   }
 }
 
@@ -1179,6 +1176,10 @@ void GameScene::Update() {
           }
           RemoveBulletsDuringDeath_();
       }
+      // 崩壊の鱗粉。死亡演出が始まっていないフレームも呼ぶ(出ている粒を動かし続け、シーンの開始時に前の粒を消すため)
+      playerDeathDust_.Update(deathDirector_.IsActive(), deathDirector_.GetDissolve(), wingShatter_,
+                              playerObj_ ? playerObj_->GetTransform().translate : Vector3{0.0f, 0.0f, 0.0f},
+                              deathDirector_.GetPlayerVelocity());
       UpdateHud_();
   }
 
@@ -1269,8 +1270,19 @@ void GameScene::Draw() {
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : GetRootObjects()) {
-      if (!obj || IsHiddenDuringDeath_(*obj)) continue;
+      if (!obj) continue;
+
+      // 死亡演出の間は、敵を縮めて消す。縮めるのは描く間だけで、描いたあとに元の大きさへ戻す(当たり判定や撃破には影響しない)
+      const float deathScale = GetEnemyDrawScaleDuringDeath_(*obj);
+      if (deathScale <= 0.0f) continue;
+      if (deathScale >= 1.0f) {
+          obj->Draw();
+          continue;
+      }
+      const Vector3 originalScale = obj->GetTransform().scale;
+      obj->GetTransform().scale = {originalScale.x * deathScale, originalScale.y * deathScale, originalScale.z * deathScale};
       obj->Draw();
+      obj->GetTransform().scale = originalScale;
   }
 
   // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
@@ -1291,8 +1303,9 @@ void GameScene::Draw() {
   ParticleManager::GetInstance()->Draw(BlendMode::Add, false, ParticleDrawFilter::NormalOnly);
   ParticleManager::GetInstance()->Draw(BlendMode::Alpha, true, ParticleDrawFilter::SoftAlphaOnly);
 
-  // GPU Particleの描画（加点要素: GPU Particle拡張）
-  Renderer::GetInstance()->DrawGPUParticles(BlendMode::Add);
+  // GPU Particleの描画（崩壊の鱗粉）。雲の合成のあとに描く(雲海の中・手前の粒が、雲に隠されないため)。
+  // 熾火の橙から灰へ冷める粒なので、加算ではなくアルファブレンド(灰が暗く見える)
+  Renderer::GetInstance()->DrawGPUParticlesAfterClouds(BlendMode::Alpha);
 
   // ステージ開始演出の速度線(ブーストの強さで濃くなる)と、突き破った瞬間の白いフラッシュ。
   // どちらも、描画するカメラ(上でずらしたあとのもの)に合わせて描く。フラッシュは、カメラのすぐ前の板なので、最後に描く
@@ -1382,6 +1395,10 @@ void GameScene::DrawEditorUI() {
         ImGui::SliderFloat("Slow motion scale", &deathSettings_.slowMotionScale, 0.0f, 1.0f);
         ImGui::SliderFloat("Slow motion ramp (s)", &deathSettings_.slowMotionRampSeconds, 0.0f, 1.0f);
         ImGui::SliderFloat("Sink decay (1/s)", &deathSettings_.sinkDecayPerSecond, 0.0f, 6.0f);
+        ImGui::SeparatorText("Dissolve ember edge");
+        ImGui::SliderFloat("Ember amount", &deathSettings_.dissolveEmberAmount, 0.0f, 1.0f);
+        ImGui::SliderFloat("Edge range", &deathSettings_.dissolveEdgeRange, 0.02f, 0.4f);
+        ImGui::ColorEdit3("Edge (hot) color", &deathSettings_.dissolveEdgeColor.x);
         ImGui::SeparatorText("Camera keys (0 = start, 1 = hit stop end, 2 = crumble end, 3 = fall end, 4 = impact end, 5 = cover)");
         ImGui::SliderFloat("Cover hold (s)", &deathCameraSettings_.coverHoldSeconds, 0.0f, 4.0f);
         ImGui::SliderFloat("Follow sharpness", &deathCameraSettings_.followSharpness, 1.0f, 20.0f);
@@ -1399,6 +1416,11 @@ void GameScene::DrawEditorUI() {
             deathSettings_ = PlayerDeathSettings{};
             deathCameraSettings_ = DeathCameraSettings{};
         }
+        ImGui::Separator();
+    }
+
+    if (ImGui::CollapsingHeader("Scale Dust (death)")) {
+        ScaleDustDebugUi::Draw(playerDeathDust_);
         ImGui::Separator();
     }
 
