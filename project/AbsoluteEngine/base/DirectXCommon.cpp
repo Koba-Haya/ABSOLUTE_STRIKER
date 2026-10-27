@@ -230,9 +230,18 @@ void DirectXCommon::CreateSwapChain_() {
   assert(SUCCEEDED(hr));
 }
 
+namespace {
+// シェーダーから見える(CBV / SRV / UAV)デスクリプタヒープの大きさ。
+// モデル・テクスチャなどは、確保したデスクリプタを、破棄しても返さないものがある(ModelResource、SkinCluster、TextureResource)。
+// 展示のように、シーンを何周も作り直しても尽きないよう、余裕を持たせる(使用量は、シーンの開始時にログへ出す)。
+// 計測: ゲーム -> ゲームオーバーの 1 周で、約 20 個ずつ増える(128 個のままなら、展示のループは 5 周で尽きる見込みだった)。
+// 16384 個なら、約 800 周(約 4.5 時間)は尽きない。シェーダーから見えるヒープの上限(約 100 万)に対して、十分に小さい
+constexpr UINT kSrvDescriptorCount = 16384;
+} // namespace
+
 void DirectXCommon::CreateDescriptorHeaps_() {
   rtvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 16, false);
-  srvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 128, true);
+  srvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvDescriptorCount, true);
   dsvDescriptorHeap_ = CreateDescriptorHeap(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 16, false);
 
   descriptorSizeRTV_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);

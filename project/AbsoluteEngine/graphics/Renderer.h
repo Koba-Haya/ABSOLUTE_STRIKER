@@ -167,6 +167,11 @@ public:
   // sunDirection: 太陽へ向かう向き(正規化は内部で行う)、time: 雲が風で流れるアニメーション用の秒。
   // 3D ノイズの生成に失敗しているときや、settings.enabled が false のときは何もしない
   void AddVolumeCloud(const VolumeCloudSettings &settings, const Vector3 &sunDirection, float time);
+  // 依頼済みのボリューム雲を、今ここで描いてシーンへ合成する(通常は EndRenderScene の中で描かれる)。
+  // 雲は深度を見て重ねるので、深度を持たないスプライトは、先に描くと雲に隠れる。雲より手前に出したいスプライト
+  // (見出しなど)は、この関数を呼んだあと、EndRenderScene の前に DrawSprite する。
+  // この関数の後ろのスプライトは、深度なしの専用パイプラインで描かれる(Alpha ブレンドのみ対応)。BeginRenderScene で解除される
+  void FlushVolumeClouds();
   // ボリューム雲の品質の自動調整(実測の GPU 時間に合わせて、解像度とステップ数を上げ下げする。全ての雲に同じ段を適用する)。
   // AddVolumeCloud に渡した設定は「基準」で、描くときだけ、今の段に合わせて軽くした値で上書きされる。
   // 設定や現在の段の確認用(調整 UI が使う)
@@ -296,6 +301,8 @@ private:
   std::unique_ptr<UnifiedPipeline> lensDropsPipeline_; // 画面遷移の 2 つ目のパス(レンズの水滴)
 
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
+  std::unique_ptr<UnifiedPipeline> spritePipelineAlphaColorOnly_; // 深度バッファなしで描く版(雲の合成のあとに使う)
+  bool spriteColorOnly_ = false; // true の間、スプライトは深度なしのパイプラインで描く
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
   std::unique_ptr<UnifiedPipeline> spritePipelineSub_;
   std::unique_ptr<UnifiedPipeline> spritePipelineMul_;
@@ -481,6 +488,26 @@ private:
     float fogDensity;   // 層: 霞の強さ
     float highlightKnee; // 明るい部分の圧縮を始める値
     float shadowLift;   // 影の持ち上げ
+    // 着地の反応(層のみ)。VolumeCloudImpact と同じ意味
+    float impactCenter[2];
+    float impactAge;
+    float impactStrength;
+    float impactCraterRadius;
+    float impactCraterDepth;
+    float impactRingWidth;
+    float impactRingHeight;
+    float impactRingSpeed;
+    float impactRefillSeconds;
+    float impactRingFadeSeconds;
+    float seaFill;
+    float seaFillThreshold;
+    float seaFillRelief;
+    float rimStrength;
+    float rimWidth;
+    float rimPower;
+    float moundAmplitude;
+    float moundScale;
+    float debugView;
   };
   std::unique_ptr<UnifiedPipeline> volumeCloudDepthPipeline_;     // パス 1: 深度を低解像度へ縮める
   std::unique_ptr<UnifiedPipeline> volumeCloudPipeline_;          // パス 2: 雲を低解像度で描く
@@ -505,7 +532,8 @@ private:
   bool volumeCloudHasLastTime_ = false;
 
   // ボリューム雲の全画面パス。シーンの色へプリマルチプライドでブレンドする(依頼がなければ何もしない)
-  void DrawVolumeCloudPass_();
+  // 雲を描いて合成したら true(描く依頼が無い・準備ができていないときは false)
+  bool DrawVolumeCloudPass_();
   // 雲 1 つ分の定数バッファの中身を埋める。divisor: 解像度の分母(同じフレームの雲で共通)
   static void FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudSettings &settings, const Vector3 &sunDirection,
                                     float time, const Matrix4x4 &invViewProj, const Vector3 &cameraPosition,

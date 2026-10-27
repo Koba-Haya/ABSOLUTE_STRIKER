@@ -126,9 +126,9 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
   if (fromSceneId == SceneId::GameOver && toSceneId == SceneId::Title) {
     return MakeNoiseWipe(kWhite, kLongOut, kShortHold, kLongIn);
   }
-  // クリア / ゲームオーバー -> ゲーム(リトライ): 短い暗転
+  // クリア / ゲームオーバー -> ゲーム(リトライ): 雲の形のワイプ(白)で覆う
   if ((fromSceneId == SceneId::Clear || fromSceneId == SceneId::GameOver) && toSceneId == SceneId::Game) {
-    return MakeFade(kBlack, kShortOut, kShortHold, kShortIn);
+    return MakeNoiseWipe(kWhite, kLongOut, kShortHold, kLongIn);
   }
   return std::nullopt;
 }

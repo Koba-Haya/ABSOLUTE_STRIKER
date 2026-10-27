@@ -42,6 +42,14 @@ constexpr int kLightStepsMax = 8; // シェーダーの kMaxLightSteps と同じ
 constexpr float kLightStepLengthMin = 1.0f;
 constexpr float kLightStepLengthMax = 30.0f;
 
+constexpr float kMoundAmplitudeMax = 0.8f;
+constexpr float kMoundScaleMin = 0.1f;
+constexpr float kMoundScaleMax = 3.0f;
+constexpr float kRimStrengthMax = 3.0f;
+constexpr float kRimWidthMin = 0.01f;
+constexpr float kRimPowerMin = 0.1f;
+constexpr float kRimPowerMax = 6.0f;
+
 constexpr size_t kClipboardBufferSize = 2048;
 } // namespace
 #endif
@@ -83,6 +91,21 @@ bool Draw(VolumeCloudSettings &settings) {
   changed |= ImGui::SliderFloat("Phase G", &settings.phaseG, 0.0f, kPhaseGMax, "%.2f");
   changed |= ImGui::SliderFloat("Highlight Knee", &settings.highlightKnee, kHighlightKneeMin, 1.0f, "%.2f");
   changed |= ImGui::SliderFloat("Shadow Lift", &settings.shadowLift, 0.0f, 1.0f, "%.2f");
+  if (settings.shape == VolumeCloudShape::Layer) {
+    ImGui::SeparatorText("Mounds (sea layer top relief)");
+    changed |= ImGui::SliderFloat("Mound Amplitude", &settings.moundAmplitude, 0.0f, kMoundAmplitudeMax, "%.2f");
+    changed |= ImGui::SliderFloat("Mound Scale", &settings.moundScale, kMoundScaleMin, kMoundScaleMax, "%.2f");
+    ImGui::SeparatorText("Rim light (sea layer)");
+    changed |= ImGui::SliderFloat("Rim Strength", &settings.rimStrength, 0.0f, kRimStrengthMax, "%.2f");
+    changed |= ImGui::SliderFloat("Rim Width", &settings.rimWidth, kRimWidthMin, 1.0f, "%.3f");
+    changed |= ImGui::SliderFloat("Rim Power", &settings.rimPower, kRimPowerMin, kRimPowerMax, "%.2f");
+    ImGui::SeparatorText("Debug view (no lighting)");
+    changed |= ImGui::RadioButton("Off", &settings.debugView, 0);
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Thickness", &settings.debugView, 1);
+    ImGui::SameLine();
+    changed |= ImGui::RadioButton("Surface height", &settings.debugView, 2);
+  }
 
   ImGui::SeparatorText("Cost");
   changed |= ImGui::SliderInt("Resolution Divisor", &settings.resolutionDivisor, kVolumeCloudMinResolutionDivisor,

@@ -37,6 +37,7 @@
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
 #include "VolumeCloudDebugUi.h"
+#include "CloudImpactDebugUi.h"
 #include "GameIntroDirector.h"
 #include "StageStartDirector.h"
 #include "StageNamePath.h"
@@ -837,18 +838,20 @@ void GameScene::CheckDebugFlowShortcut_() {
 }
 
 void GameScene::UpdateExhibitionFlow_(float deltaTime) {
-  // すでに終了の要求を出している間は何もしない(二重に要求しない)
+  // 死亡演出の最中や、終了の要求を出している間は何もしない(二重に死なせない)
   if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
     return;
   }
-  // 覆いが晴れてから(通常の更新に入ってから)の時間を数え、一定時間たったら終わらせる
+  // スタート演出の最中は数えない(終わってから、kGameHoldSec 秒たったら、自機を死なせる)
+  if (stageStart_.IsActive()) {
+    return;
+  }
   exhibitionHoldTimer_ += deltaTime;
   if (exhibitionHoldTimer_ < ExhibitionMode::kGameHoldSec) {
     return;
   }
-  const std::string &nextSceneId = ExhibitionMode::NextGameEndSceneId();
-  phase_ = (nextSceneId == SceneId::Clear) ? GamePhase::Clear : GamePhase::GameOver;
-  RequestSceneChange(nextSceneId);
+  // 本物の死亡処理を通す(HP を 0 にする。CheckGameEnd_ が死亡演出を始め、演出の終わりにゲームオーバーへの遷移を要求する)
+  KillPlayer_();
 }
 
 void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
@@ -925,6 +928,11 @@ void GameScene::UpdateDying_(float deltaTime) {
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション)
   SetWorldTimeScale(deathDirector_.GetWorldTimeScale());
 
+  // 着地の瞬間(Impact に入ったとき)に、雲が反応する。蝶の位置が着地点(スキップで Impact を飛ばしたときは起こさない)
+  if (deathDirector_.GetPhase() == PlayerDeathPhase::Impact && !cloudImpact_.IsActive()) {
+      cloudImpact_.Trigger(deathDirector_.GetPlayerPose().position);
+  }
+
   // 崩壊が始まる瞬間に、蝶をきりもみへ切り替える(スキップで飛んだときも 1 回出る)
   if (deathDirector_.ConsumeCrumbleStart() && playerObj_) {
       if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
@@ -970,6 +978,7 @@ void GameScene::ReviveForDebug_() {
   if (phase_ != GamePhase::Dying) return;
   deathDirector_.Reset();
   deathCamera_.Reset();
+  cloudImpact_.Reset();
   wingShatter_.Reset();
   SetWorldTimeScale(1.0f);
   phase_ = phaseBeforeDeath_;
@@ -1052,6 +1061,7 @@ void GameScene::Update() {
   // ステージ名の破片の動き。ステージ開始演出が終わったあとも、飛んでいる間は動かし続ける
   stageNameBoard_.Update(deltaTime);
   stageImpact_.Update(deltaTime);
+  cloudImpact_.Update(deltaTime); // 雲の着地の反応(死亡演出の外から起こしても、ここで進む)
 
   playerObj_ = FindPlayerObject_();
 
@@ -1246,10 +1256,15 @@ void GameScene::Draw() {
   // 重なるときは奥から手前の順に追加する: 雲海の層(下)→ 箱の雲。太陽の向きは背景と同じにして、光の向きをそろえる
   const Vector3 sunDirection = newMethod ? seaSky_.SunDirection() : cloudSea_.SunDirection();
   if (newMethod) {
+      cloudImpact_.ApplyToSea(volumeCloudSea_); // 着地の反応(続いていなければ強さ 0 で、何も起きない)
       renderer->AddVolumeCloud(volumeCloudSea_, sunDirection, time_);
   }
   if (useVolumeCloud_) {
       renderer->AddVolumeCloud(volumeCloud_, sunDirection, time_);
+  }
+  VolumeCloudSettings impactPuff;
+  if (cloudImpact_.BuildPuff(impactPuff)) {
+      renderer->AddVolumeCloud(impactPuff, sunDirection, time_); // 着地点に湧く雲の塊(手前の雲として、最後に追加する)
   }
 
   // エディタ上で配置したオブジェクト群の描画
@@ -1384,6 +1399,13 @@ void GameScene::DrawEditorUI() {
             deathSettings_ = PlayerDeathSettings{};
             deathCameraSettings_ = DeathCameraSettings{};
         }
+        ImGui::Separator();
+    }
+
+    if (ImGui::CollapsingHeader("Cloud Impact")) {
+        // 雲海への着地の反応の確認用。ボタンで、死亡演出なしに反応だけを起こせる
+        const Vector3 defaultLanding = playerObj_ ? playerObj_->GetTransform().translate : Vector3{0.0f, 0.0f, 0.0f};
+        CloudImpactDebugUi::Draw(cloudImpact_, defaultLanding);
         ImGui::Separator();
     }
 

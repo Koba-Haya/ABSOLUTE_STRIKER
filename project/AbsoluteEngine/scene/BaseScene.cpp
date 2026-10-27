@@ -12,6 +12,8 @@
 #include "GameObject.h"
 #include "Input.h"
 #include "Renderer.h"
+#include "Logger.h"
+#include "DirectXCommon.h"
 #include "../camera/ITimelineCamera.h"
 #include "timeline/PrefabRegistry.h"
 // タイムラインイベントプレビュー用（タスク16）
@@ -43,6 +45,12 @@ BaseScene::~BaseScene() {
 void BaseScene::Initialize(const SceneServices &services) {
     services_ = services;
     activeScene_ = this;
+
+    // シーンの開始時の、SRV デスクリプタの使用量(シーンを何周も作り直しても、頭打ちになるかを確かめるため)
+    if (auto* dx = Renderer::GetInstance()->GetDX()) {
+        const auto& srvAlloc = dx->GetSrvAllocator();
+        Logger::GetInstance().Log("[SRV] scene start: id=%s used=%u capacity=%u", sceneId_.c_str(), srvAlloc.UsedCount(), srvAlloc.Capacity());
+    }
 
     // カメラの初期化（ゲーム中も使用するためマクロ外で生成）
     editorCamera_ = std::make_unique<AbsoluteEngine::EditorCamera>();

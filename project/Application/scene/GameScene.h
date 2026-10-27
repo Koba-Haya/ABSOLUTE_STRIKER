@@ -16,6 +16,7 @@
 #include "HitEffectSpawner.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
+#include "CloudImpact.h"
 #include "DeathCameraDirector.h"
 #include "../actor/Player/WingShatter.h"
 #include "ScoreTracker.h"
@@ -212,6 +213,7 @@ private:
 
   GamePhase phase_ = GamePhase::InProgress;
   PlayerDeathDirector deathDirector_;       // 死亡演出の進行(サブフェーズ、世界の時間の速さ、自機の落下)
+  CloudImpact cloudImpact_;                 // 雲海への着地の反応(くぼみと波の縁。着地の瞬間に始まる)
   WingShatter wingShatter_;                 // 蝶の翅が裂けて飛び散る破片(崩壊)
   DeathCameraDirector deathCamera_;         // 死亡カメラの進行(蝶を中心にした回り込み・急降下)
   DeathCameraSettings deathCameraSettings_; // 死亡カメラの設定(キーフレームの表)

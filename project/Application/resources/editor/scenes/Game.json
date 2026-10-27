@@ -191,6 +191,9 @@
                         0.0,
                         0.0
                     ]
+                },
+                {
+                    "type": "DissolveComponent"
                 }
             ],
             "name": "Player",
@@ -198,7 +201,7 @@
             "transform": {
                 "rotate": {
                     "x": 0.0,
-                    "y": -0.0,
+                    "y": 0.0,
                     "z": 0.0
                 },
                 "scale": {
@@ -207,9 +210,9 @@
                     "z": 1.0
                 },
                 "translate": {
-                    "x": -3.4568324089050293,
+                    "x": 0.0,
                     "y": -0.5,
-                    "z": 283.5467529296875
+                    "z": -28.0
                 }
             }
         },
@@ -1018,9 +1021,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
@@ -1080,9 +1080,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
@@ -1142,9 +1139,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
@@ -1204,9 +1198,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
@@ -1266,9 +1257,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyTurret.json",
@@ -1384,9 +1372,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1446,9 +1431,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1508,9 +1490,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1570,9 +1549,6 @@
                 },
                 {
                     "type": "StraightMoveComponent"
-                },
-                {
-                    "type": "FormationMemberComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",

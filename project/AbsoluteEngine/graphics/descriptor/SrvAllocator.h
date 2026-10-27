@@ -65,6 +65,9 @@ public:
         return base;
     }
 
+    // いま使われている個数(予約領域と、返却済みの空きを除く)。ヒープが尽きないかの確認用(シーンの開始時に、ログへ出す)
+    UINT UsedCount() const { return next_ - reserved_ - static_cast<UINT>(freeList_.size()); }
+
     UINT Capacity() const { return capacity_; }
     UINT Reserved() const { return reserved_; }
 
