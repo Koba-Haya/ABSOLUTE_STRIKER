@@ -10,7 +10,7 @@
 // 通常の開発・プレイでは false にする(キー入力で進める従来の動作に戻る)
 namespace ExhibitionMode {
 
-constexpr bool kEnabled = false;
+constexpr bool kEnabled = true;
 
 // タイトルが表示されてから、自動でスタート演出を始めるまでの時間(秒)。ロゴが出きる時間(2 秒)より長くする
 constexpr float kTitleWaitSec = 3.0f;
