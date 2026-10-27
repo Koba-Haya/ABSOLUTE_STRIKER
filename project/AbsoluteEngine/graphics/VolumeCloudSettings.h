@@ -14,6 +14,28 @@ enum class VolumeCloudShape : int32_t {
   Layer = 1, // 水平に無限に続く層(雲海。下面と上面の高さで決まる)
 };
 
+// 層の雲への「着地の反応」(物体が雲の面に落ちたときの、くぼみと、外へ広がる波の縁)。
+// 層のシェーダー(VolumeCloud.hlsli の ImpactDisplacement)が、密度を引く高さをずらして表現する。strength が 0 なら何も起きない。
+// 時間と位置は、これを管理する側(Application の CloudImpact)が毎フレーム書く。
+struct VolumeCloudImpact {
+  float strength = 0.0f;         // 反応の強さ(0 = 無効)
+  float centerX = 0.0f;          // 着地点のワールド座標
+  float centerZ = 0.0f;
+  float age = 0.0f;              // 着地からの経過秒
+  float craterRadius = 3.5f;     // くぼみの半径(ユニット)
+  float craterDepth = 7.0f;      // くぼみの深さ(雲の面を押し下げる量。層の厚みは 20)
+  float ringWidth = 3.0f;        // 波の縁の幅
+  float ringHeight = 5.0f;       // 波の縁の盛り上がり
+  float ringSpeed = 10.0f;       // 波の縁が外へ広がる速さ(ユニット / 秒)
+  float refillSeconds = 2.5f;    // くぼみが埋まり戻るまでの秒
+  float ringFadeSeconds = 2.2f;  // 波の縁が消えるまでの秒
+  // 雲海を常に満たす(プレイの最初から、隙間の少ない雲海にする)。雲海自身のノイズを使い、濃淡の減りの打ち消しと、
+  // しきい値の引き下げで、雲の領域を広げる(着地のむらは掛けない)
+  float seaFill = 0.7f;          // 満たす量(0〜1。0 = 隙間のある雲海、1 = しきい値が seaFillThreshold まで下がる)
+  float seaFillThreshold = 0.45f; // 満たしきったときの、雲になるしきい値(雲海の threshold より小さいとき有効)
+  float seaFillRelief = 0.4f;    // 満たしたとき、大きな周期の濃淡(盛り上がり)を残す割合(0 = 全部均す、1 = 満たさない場合と同じ)
+};
+
 struct VolumeCloudSettings {
   bool enabled = true;
   VolumeCloudShape shape = VolumeCloudShape::Box;
@@ -27,7 +49,7 @@ struct VolumeCloudSettings {
   float layerBottom = -44.0f; // 下面の高さ(ワールド y)。既定は旧方式の雲海(平均 y = -35.5、厚み 9)に合わせた値
   float layerTop = -24.0f;  // 上面の高さ(旧方式の雲海の起伏の最大に合わせた値)
   float maxDistance = 1000.0f; // 描く距離の上限(カメラから。ゲームカメラの遠方クリップと同じ。その先は霞)
-  float fogDensity = 0.0022f;  // 距離に対する霞の強さ(大きいほど、遠くの雲が早く霞に溶ける。小さいと、描く距離の端で雲が急に途切れて見える)
+  float fogDensity = 0.0014f;  // 距離に対する霞の強さ(大きいほど、遠くの雲が早く霞に溶ける。小さいと、描く距離の端で雲が急に途切れて見える)
 
   // --- 形 ---
   float noiseScale = 0.05f; // 形のノイズの細かさ(1 ユニットあたりのタイル数。0.05 なら 20 ユニットで 1 周期)
@@ -44,6 +66,18 @@ struct VolumeCloudSettings {
   float phaseG = 0.55f;           // 前方散乱の強さ(0〜1)
   float highlightKnee = 0.75f;    // 明るい部分の圧縮を始める値(0〜1)。光が強くても、これを超える分は 1 へ滑らかに圧縮されて、白飛びが減る。1 で圧縮なし
   float shadowLift = 0.15f;       // 影の持ち上げ(0〜1)。大きいほど、影の部分に空からの明るい光が回り、影が浅くなる
+  // 上面の起伏(層のみ): 低い周波数のノイズで、雲の上面の高さを持ち上げ・下げして、盛り上がりと谷を作る(満たした雲海が、平らな板に見えるのを防ぐ)
+  float moundAmplitude = 0.30f;   // 起伏の大きさ(層の厚みに対する割合。山と谷の差)。0 で平ら
+  float moundScale = 0.60f;       // 起伏の細かさ(形のノイズの細かさに対する倍率。大きいほど、小さな盛り上がり)
+  // 縁の光(層のみ): 太陽側へ光が抜けやすい薄い所(塊の縁、盛り上がりの肩)を明るくして、起伏の輪郭を立たせる
+  float rimStrength = 0.8f;       // 縁の光の強さ(0 で無効)
+  float rimWidth = 0.12f;         // 縁の光が届く深さ(消光に掛ける倍率。小さいほど、雲の奥まで届く)
+  float rimPower = 1.5f;          // 縁の光の鋭さ(大きいほど、縁の薄い所だけが光る)
+  // 確認用の表示(層のみ)。起伏が本当にあるのか、光の当たり方だけの問題かを見分ける
+  int32_t debugView = 0;          // 0 = 通常、1 = 光の厚み(1 - 透過率。照明なし)、2 = 雲の表面の高さ(明るいほど高い。照明なし)
+
+  // --- 着地の反応(層のみ) ---
+  VolumeCloudImpact impact;
 
   // --- 負荷 ---
   // 雲を描く解像度の分母。1 = シーンと同じ、2 = 縦横半分(負荷は約 1/4)、4 = 縦横 1/4。
@@ -59,17 +93,18 @@ struct VolumeCloudSettings {
 inline VolumeCloudSettings MakeSeaLayerSettings() {
   VolumeCloudSettings s;
   s.shape = VolumeCloudShape::Layer;
-  s.noiseScale = 0.025f; // 約 40 ユニットで 1 周期(箱の既定と同じ程度。大きな周期の濃淡を別に重ねて、繰り返しを崩している)
+  s.noiseScale = 0.0130f; // 約 77 ユニットで 1 周期(大きな山にする。大きな周期の濃淡を別に重ねて、繰り返しを崩している)
   s.detailScale = 3.7f;
   s.threshold = 0.74f;
   s.edgeFade = 0.35f; // 上面側の薄くなる幅。広いと、上面近くが透けて、水平に近い視線で雲が見えなくなる
   s.erosion = 0.60f;
   s.density = 0.4f;     // 上から見ると、表面近くで光が尽きる濃さ
   s.sunIntensity = 0.75f;
-  s.ambientIntensity = 1.0f;
+  s.ambientIntensity = 0.75f; // 影の側を暗く保つ(起伏の陰影が見えるように、空からの光を控える)
+  s.shadowLift = 0.05f;
   s.resolutionDivisor = 2;
   s.steps = 32;
   s.lightSteps = 4;
-  s.lightStepLength = 8.0f;
+  s.lightStepLength = 5.0f; // 盛り上がり(高さ数ユニット)の影を拾えるよう、最初の歩幅を短くする(合計は約 40 ユニット)
   return s;
 }

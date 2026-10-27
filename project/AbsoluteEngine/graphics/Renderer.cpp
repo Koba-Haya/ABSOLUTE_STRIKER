@@ -154,6 +154,14 @@ void Renderer::Initialize(DirectXCommon *dx) {
     spritePipelineAlpha_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(spritePipelineAlpha_->Initialize(device, utils, compiler,
                                                 includeHandler, desc));
+    {
+      // 雲の合成のあとは、描画先に深度バッファが付いていない(色だけ)ので、深度の形式を付けない版が要る
+      PipelineDesc colorOnlyDesc = desc;
+      colorOnlyDesc.dsvFormat = DXGI_FORMAT_UNKNOWN;
+      spritePipelineAlphaColorOnly_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(spritePipelineAlphaColorOnly_->Initialize(device, utils, compiler,
+                                                           includeHandler, colorOnlyDesc));
+    }
     desc.blendMode = BlendMode::Add;
     spritePipelineAdd_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(spritePipelineAdd_->Initialize(device, utils, compiler,
@@ -1020,9 +1028,36 @@ void Renderer::FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudS
   param.fogDensity = s.fogDensity;
   param.highlightKnee = s.highlightKnee;
   param.shadowLift = s.shadowLift;
+  // 縁の光と確認用の表示は、層だけ(箱では無効にして、既存の箱の雲の見た目を変えない)
+  const bool isLayer = s.shape == VolumeCloudShape::Layer;
+  param.rimStrength = isLayer ? s.rimStrength : 0.0f;
+  param.rimWidth = s.rimWidth;
+  param.moundAmplitude = isLayer ? s.moundAmplitude : 0.0f;
+  param.moundScale = s.moundScale;
+  param.rimPower = s.rimPower;
+  param.debugView = isLayer ? static_cast<float>(s.debugView) : 0.0f;
+
+  // 着地の反応(層のときだけ有効にする。箱は強さ 0 のままにして、シェーダーが何もしないようにする)。
+  // 値は毎回、依頼の設定から全部書き直すので、前の雲やシーンの値は残らない(GameOver 画面の雲は、既定の強さ 0)
+  const VolumeCloudImpact &impact = s.impact;
+  const bool impactEnabled = s.shape == VolumeCloudShape::Layer;
+  param.impactCenter[0] = impact.centerX;
+  param.impactCenter[1] = impact.centerZ;
+  param.impactAge = impact.age;
+  param.impactStrength = impactEnabled ? impact.strength : 0.0f;
+  param.impactCraterRadius = impact.craterRadius;
+  param.impactCraterDepth = impact.craterDepth;
+  param.impactRingWidth = impact.ringWidth;
+  param.impactRingHeight = impact.ringHeight;
+  param.impactRingSpeed = impact.ringSpeed;
+  param.impactRefillSeconds = impact.refillSeconds;
+  param.impactRingFadeSeconds = impact.ringFadeSeconds;
+  param.seaFill = impactEnabled ? impact.seaFill : 0.0f;
+  param.seaFillThreshold = impact.seaFillThreshold;
+  param.seaFillRelief = impact.seaFillRelief;
 }
 
-void Renderer::DrawVolumeCloudPass_() {
+bool Renderer::DrawVolumeCloudPass_() {
   // 依頼は 1 フレーム分。毎フレーム AddVolumeCloud で渡し直す(シーンが渡さなくなれば、自然に描かれなくなる)。
   // 描いても描かなくても、この関数の終わりで空にする
   const size_t count = volumeCloudRequests_.size();
@@ -1031,7 +1066,7 @@ void Renderer::DrawVolumeCloudPass_() {
                      volumeCloudColorLow_;
   if (!ready) {
     volumeCloudRequests_.clear();
-    return;
+    return false;
   }
   auto *cmdList = dx_->GetCommandList();
 
@@ -1124,6 +1159,14 @@ void Renderer::DrawVolumeCloudPass_() {
   }
 
   volumeCloudRequests_.clear();
+  return true;
+}
+
+void Renderer::FlushVolumeClouds() {
+  // 雲を描いたあとは、描画先が色だけ(深度なし)になる。以降のスプライトは、深度なしのパイプラインで描く
+  if (DrawVolumeCloudPass_()) {
+    spriteColorOnly_ = true;
+  }
 }
 
 void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool depthTest, ParticleDrawFilter filter) {
@@ -1182,6 +1225,7 @@ void Renderer::InitializePostProcess(uint32_t width, uint32_t height) {
 }
 
 void Renderer::BeginRenderScene() {
+    spriteColorOnly_ = false; // 前のフレームの雲の合成で切り替えた、スプライトのパイプラインを戻す
     // リボンの共有頂点バッファの書き込み位置を、フレームの最初に先頭へ戻す
     if (ribbonDrawer_) ribbonDrawer_->Reset();
 
@@ -1486,6 +1530,9 @@ void Renderer::DrawRibbon(const RibbonTrail &trail) {
 }
 
 UnifiedPipeline *Renderer::GetSpritePipeline_(BlendMode mode) {
+  if (spriteColorOnly_ && mode == BlendMode::Alpha) {
+    return spritePipelineAlphaColorOnly_.get();
+  }
   switch (mode) {
   case BlendMode::Add:
     return spritePipelineAdd_.get();
