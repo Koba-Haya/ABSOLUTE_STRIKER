@@ -14,6 +14,29 @@ enum class TransitionKind : int32_t {
   MistLens = 6,  // 霧とレンズの水滴(LensMist.hlsli)。場面を決め打ちせず、MistLensStyle のパラメータで見た目を決める
 };
 
+// 水滴を画面の縁へ寄せる設定(レンズや風防の水滴は縁に集まり、中央は開く)。遷移ごとに持てる。
+// 中心からの距離(画面の端を 1 とする楕円の距離)に、縁のノイズでむらにした帯のマスクを掛ける:
+//   距離が innerEdge 以下は 0(中央)、outerEdge 以上は 1(縁)。間はなめらか。
+// マスクは、水滴の出やすさ(セルごとに 1 つ)と、縁だけのぼかしの両方に使う。
+struct LensEdgeStyle {
+  bool enabled = true;           // false なら、従来どおり画面全体に水滴を付ける(ぼかしも無し)
+  float innerEdge = 0.55f;       // 縁の内側の位置(これより内側は、水滴が出ない)
+  float outerEdge = 0.95f;       // 縁の外側の位置(これより外側は、水滴が最も出やすい)
+  float jitter = 0.12f;          // 縁の輪郭の揺らぎの幅(距離の単位)。0 で整った楕円
+  float jitterScale = 3.0f;      // 揺らぎの細かさ(画面の高さあたりの波の数)
+  float centerKeep = 0.0f;       // 中央にも残す水滴の割合(0 = 完全に開ける、1 = 縁と同じ)
+  float largeBias = 2.0f;        // 大粒のマスクのべき(1 より大きいほど、大粒は縁寄りにだけ出る)
+  float blurRadius = 0.006f;     // 縁のぼかしの最大半径(画面の高さを 1 とする)。0 でぼかし無し
+  // 水滴の数と見た目。暗さでなく、屈折・明るい縁・青みの影で水滴らしさを出す(背景が明るい雲でも灰色の点にならない)
+  float smallDensity = 0.5f;     // 小粒の数の倍率(1 = 縁寄せだけのときの数)
+  float largeDensity = 0.8f;     // 流れる大粒の数の倍率
+  float refractScale = 1.8f;     // 屈折の強さの倍率(水滴の中の像のずれ)
+  float highlightScale = 1.0f;   // 明るい縁と小さなハイライトの強さの倍率
+  float bodyDarken = 0.96f;      // 水滴の中の明るさ(1 = 暗くしない)
+  float rimDarken = 0.35f;       // 影の側の細い縁の暗さ
+  float shadowTint = 0.5f;       // 影の側の、青みの強さ(0〜1)
+};
+
 // 霧とレンズの水滴(TransitionKind::MistLens)の見た目のパラメータ。
 // 霧の量は、物体までの距離と視程から画素ごとに決める(1 - exp(-距離 / 視程))。視程は、覆い具合に応じて遠い値から近い値へ縮む。
 // 霧の色は TransitionStyle::color を使う。
@@ -40,6 +63,7 @@ struct MistLensStyle {
   // 霧の上に、レンズの水滴(2 つ目のパス)を描くか。霧の遷移と、雲を抜ける遷移で使う
   bool lensDrops = false;
   float lensTime = 0.0f;            // 水滴が付き始めてからの秒(同上。水滴の流れる位置に使う)
+  LensEdgeStyle edge;               // 水滴を縁へ寄せる設定
 };
 
 // 画面遷移の見た目のパラメータ(覆い具合 cover 以外の、種類ごとの設定)。
@@ -60,3 +84,14 @@ struct TransitionStyle {
   // MistLens: 霧とレンズの水滴の設定
   MistLensStyle mist;
 };
+
+// ImGui での調整用: 有効にすると、すべての遷移の LensEdgeStyle を、この値で上書きする(Release では使わない)。
+// 遷移ごとの値を決めるまでの、見た目の調整に使う。気に入った値は SceneTransitionTable へ写す
+struct LensEdgeDebugOverride {
+  bool enabled = false;
+  LensEdgeStyle style;
+};
+inline LensEdgeDebugOverride &GetLensEdgeDebugOverride() {
+  static LensEdgeDebugOverride instance;
+  return instance;
+}

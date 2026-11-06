@@ -17,7 +17,7 @@ struct Material
     int enableDissolve;
     float dissolveThreshold;
     float dissolveEdgeRange;
-    float pad2;
+    float dissolveEmber; // 縁を熾火(灰 -> 赤 -> 橙)で光らせる強さ(0 で従来の「縁の色へ混ぜるだけ」)
     float3 dissolveEdgeColor;
     float pad3;
     float3 dissolveMaskColor;
@@ -109,6 +109,24 @@ struct PixelShaderOutput
 static const int LIGHTING_MODE_THIN_SURFACE = 3;
 // 薄い面の環境光の強さ(面の色に掛ける)。光が当たらない側(翅の裏、影の側)の最低限の明るさ
 static const float THIN_SURFACE_AMBIENT = 0.45f;
+
+// ディゾルブの縁を熾火のように光らせる配色(不死鳥が燃え尽きて灰になる見た目)。
+// 帯の中の位置 w(0 = いまにも消える外縁、1 = 帯の内側の端)で、次のように色が変わる:
+//   0 〜 ASH_END        : 灰色(焼け焦げた縁。外縁ほど灰)
+//   ASH_END 〜 GLOW_END : 暗い赤から、縁の色(橙)へ(熾火の光る部分)
+//   GLOW_END 〜 1       : 光が引いて、元の色へ戻る
+static const float3 EMBER_ASH_COLOR = float3(0.30f, 0.28f, 0.26f);  // 灰の色
+static const float3 EMBER_RED_COLOR = float3(0.55f, 0.08f, 0.02f);  // 熾火の暗い赤
+static const float EMBER_ASH_END = 0.25f;
+static const float EMBER_GLOW_END = 0.55f;
+static const float EMBER_INTENSITY = 1.6f;                          // 熾火の明るさ(色に掛ける。出力は 1 で頭打ち)
+
+static float3 ApplyEmber(float3 baseColor, float3 hotColor, float w)
+{
+    float3 glow = lerp(EMBER_RED_COLOR, hotColor, smoothstep(EMBER_ASH_END, EMBER_GLOW_END, w)) * EMBER_INTENSITY;
+    float3 burnt = lerp(EMBER_ASH_COLOR, glow, smoothstep(0.0f, EMBER_ASH_END, w));
+    return lerp(burnt, baseColor, smoothstep(EMBER_GLOW_END, 1.0f, w));
+}
 
 static float3 ComputeDiffuse(float3 N, float3 Ldir, int lightingMode)
 {
@@ -302,7 +320,10 @@ PixelShaderOutput main(VertexShaderOutput input)
         {
             float edgeWeight = (mask - gMaterial.dissolveThreshold) / gMaterial.dissolveEdgeRange;
             float mixFactor = 1.0f - edgeWeight;
-            finalRGB = lerp(finalRGB, gMaterial.dissolveEdgeColor, mixFactor);
+            float3 plainEdge = lerp(finalRGB, gMaterial.dissolveEdgeColor, mixFactor);
+            // 熾火の強さが 0 のとき(敵など)は従来どおり。強さに応じて、熾火の配色へ移る
+            float3 emberEdge = ApplyEmber(finalRGB, gMaterial.dissolveEdgeColor, edgeWeight);
+            finalRGB = lerp(plainEdge, emberEdge, saturate(gMaterial.dissolveEmber));
         }
     }
 

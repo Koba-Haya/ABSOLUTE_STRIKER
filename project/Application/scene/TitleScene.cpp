@@ -16,9 +16,12 @@
 #include "ParticleManager.h"
 #include "ModelResource.h"
 #include "GameAssetPreloader.h"
+#include "AnimationManager.h"
+#include "actor/Player/PlayerModelDefs.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 #include <vector>
 
 namespace {
@@ -61,7 +64,8 @@ const Vector3 kSunDirection{0.30f, 0.22f, 1.0f};
 // 自機もロゴ類と同じく 0 にする
 constexpr int32_t kUnlitMode = 0;
 
-constexpr const char* kPlayerPath = "resources/app/player/dragon/dragon.obj";
+// 自機のモデル。ゲームシーンと同じ蝶(GameAssetPreloader が先に読んで保持するので、読み込みも共有される)
+constexpr const char* kPlayerPath = GameAssetPaths::kPlayerModel;
 constexpr const char* kLogoPath = "resources/app/title/logo.obj";
 constexpr const char* kStartPath = "resources/app/title/start.obj";
 constexpr const char* kFlashPath = "resources/app/title/flash.obj";
@@ -149,6 +153,20 @@ bool InitModel(ModelInstance &instance, const char *path, int32_t lightingMode) 
   ci.lightingMode = lightingMode;
   return instance.Initialize(ci);
 }
+
+// 蝶のモデルに、羽ばたきのアニメーションをループで再生させる。
+// アニメは "dir/file.gltf" を、ディレクトリとファイル名に分けて読む(RebirthButterfly と同じ)。
+// 失敗してもタイトルは止めず、翅を広げた姿勢のまま表示する
+void StartFlapAnimation(ModelInstance &instance, const std::string &modelPath) {
+  const size_t slash = modelPath.find_last_of('/');
+  const std::string directory = slash == std::string::npos ? std::string{} : modelPath.substr(0, slash);
+  const std::string filename = slash == std::string::npos ? modelPath : modelPath.substr(slash + 1);
+  const auto animations = AnimationManager::GetInstance()->LoadAnimationSet(directory, filename);
+  if (!animations) return;
+  if (const auto flap = animations->Find(PlayerAnimation::kFlap)) {
+    instance.PlayAnimation(flap, true);
+  }
+}
 } // namespace
 
 float TitleScene::CalcBlinkAlpha(float time) {
@@ -206,6 +224,7 @@ void TitleScene::Initialize(const SceneServices &services) {
   SetMainCamera(camera);
 
   InitModel(playerModel_, kPlayerPath, kUnlitMode);
+  StartFlapAnimation(playerModel_, kPlayerPath);
   // 自機モデルの大きさ・中心・翼の先端を、頂点から求める(モデルを差し替えても合う)
   if (auto *playerResource = playerModel_.GetResource()) {
     const PlayerModelFit fit = FitPlayerModel(playerResource->GetVertexPositions());
@@ -319,6 +338,7 @@ void TitleScene::Update() {
   GetMainCamera()->SetEye(state.cameraEye);
   GetMainCamera()->SetTarget(state.cameraTarget);
 
+  playerModel_.UpdateAnimation(kDeltaTimeF); // 羽ばたきを進める
   playerModel_.SetWorld(state.playerWorld);
 
   logoModel_.SetWorld(state.logoWorld);
@@ -370,6 +390,11 @@ void TitleScene::Update() {
 void TitleScene::Draw() {
   auto* renderer = Renderer::GetInstance();
   renderer->SetCamera(*GetMainCamera());
+
+  // 蝶は骨つきのモデルなので、描く前にスキニング(頂点を骨で変形する compute)を回す。
+  // Renderer::DrawModel だけを呼ぶと、変形後の頂点バッファが空のままで何も映らない。
+  // 反射用と本編用の 2 回の描画は同じ変形後の頂点を使うので、反射パスの前に 1 回だけ回す
+  renderer->DispatchSkinning(&playerModel_);
 
   // 水面に映る物体を、本編の描画より先に反射用の描画先へ描く(自機だけ。ロゴ類・プルーム・気流は映さない)
   renderer->BeginReflectionPass(kWaterSurfaceHeight);

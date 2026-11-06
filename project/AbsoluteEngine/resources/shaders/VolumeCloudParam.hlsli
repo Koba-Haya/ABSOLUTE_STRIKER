@@ -46,6 +46,9 @@ cbuffer VolumeCloudParam : register(b0) {
     float32_t gImpactRingSpeed;        // 波の縁が外へ広がる速さ(ユニット / 秒)
     float32_t gImpactRefillSeconds;    // くぼみが雲で埋まり戻るまでの秒
     float32_t gImpactRingFadeSeconds;  // 波の縁が消えるまでの秒
+    float32_t gImpactRingEase;         // 波の縁の広がりの減速の度合い(0 = 一定の速さ、1 = 勢いよく出て、だんだん遅くなる。初速は gImpactRingSpeed のまま)
+    float32_t gImpactRingWobble;       // 波の縁の半径を、形のノイズで揺らす量(ユニット)。0 でゆらぎなし
+    float32_t gImpactRingBreak;        // 波の縁を方向ごとに弱める割合(0 = 全周が同じ強さ。大きいほど、弱い方向のむらが強い)
     float32_t gSeaFill;                // 雲海を常に満たす量(0〜1。層のみ。0 で隙間のある雲海)
     float32_t gSeaFillThreshold;       // 満たしきったとき(gSeaFill = 1)の、雲になるしきい値(層のみ。小さいほど隙間が減る)
     float32_t gSeaFillRelief;          // 満たしたとき、大きな周期の濃淡を残す割合(0 = 全部均す、1 = 残す)。起伏(盛り上がり)を保つ

@@ -186,6 +186,8 @@ PlayerDeathDissolve PlayerDeathDirector::GetDissolve() const {
                        (settings_.dissolveEndThreshold - settings_.dissolveStartThreshold) * progress;
   dissolve.edgeRange = settings_.dissolveEdgeRange;
   dissolve.edgeColor = settings_.dissolveEdgeColor;
+  dissolve.emberAmount = settings_.dissolveEmberAmount;
+  dissolve.progress = progress;
   return dissolve;
 }
 

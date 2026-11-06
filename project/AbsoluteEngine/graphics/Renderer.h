@@ -20,6 +20,7 @@
 #include "Matrix.h"
 #include "Method.h"
 #include "BlendMode.h"
+#include "graphics/particle/GPUParticle.h"
 
 class UnifiedPipeline;
 class DirectXCommon;
@@ -183,7 +184,19 @@ public:
                      bool depthTest = false,
                      ParticleDrawFilter filter = ParticleDrawFilter::All);
   // blendMode: GPU パーティクルの描画に使うブレンドモード（デフォルト Alpha）
-  void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha);
+  // writeDepth: true なら粒が深度を書く。ボリューム雲の合成の前に描く粒で、雲のもやでかすませたいときに使う
+  // (雲の合成は深度を見るので、深度を書かない粒は、視線の奥まで続く雲に覆われてしまう)
+  void DrawGPUParticles(BlendMode blendMode = BlendMode::Alpha, bool writeDepth = false);
+  // GPU パーティクルの発光パス: 同じ粒を、加算で、熱さの色・速度の向きの尾・ちらつきつきで描く。
+  // FlushVolumeClouds で雲を合成したあと(描画先が色だけ)に呼ぶ。深度は、シーンの深度を読んで自分で比べる(島などの後ろの粒は隠れる)。
+  // DrawGPUParticles(同じフレームで先に呼ぶ。粒の更新を兼ねる)のあとに呼ぶこと。雲を合成していないフレームは何もしない。
+  // 見出しなどのスプライトより前に呼ぶ(発光が見出しの上に重ならないように)
+  void DrawGPUParticleGlow(const GPUGlowParams &params);
+  // GPU パーティクルを、ボリューム雲の合成のあとに描く(雲の中・雲の前に浮かぶ粒を、雲に隠されないようにする)。
+  // 粒の更新(Emit / Update の compute)は今ここで行い、描画だけを EndRenderScene の雲の合成のあとへ回す。
+  // 雲のあとの描画先は深度が無いので、物体との前後の隠れはなく、粒は常に手前へ重なる(雲の依頼が無いフレームは、通常どおり深度テストする)。
+  // 毎フレーム、描きたいときに呼ぶ。1 フレームに複数回呼ぶと、更新だけが重なるので、1 回にすること
+  void DrawGPUParticlesAfterClouds(BlendMode blendMode = BlendMode::Alpha);
   void DrawLine(const Vector3 &start, const Vector3 &end, const Vector4 &color);
   void DrawGrid(float size, int divisions, const Vector4 &color);
   void RenderPrimitives();
@@ -303,6 +316,8 @@ private:
   std::unique_ptr<UnifiedPipeline> spritePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> spritePipelineAlphaColorOnly_; // 深度バッファなしで描く版(雲の合成のあとに使う)
   bool spriteColorOnly_ = false; // true の間、スプライトは深度なしのパイプラインで描く
+  bool gpuParticlesAfterCloudsPending_ = false; // true の間、EndRenderScene の雲の合成のあとに GPU パーティクルを描く
+  BlendMode gpuParticlesAfterCloudsBlend_ = BlendMode::Alpha;
   std::unique_ptr<UnifiedPipeline> spritePipelineAdd_;
   std::unique_ptr<UnifiedPipeline> spritePipelineSub_;
   std::unique_ptr<UnifiedPipeline> spritePipelineMul_;
@@ -434,6 +449,10 @@ private:
     float mistFog2[4]; // 霧: (深度の無い背景の距離, 最後の覆いを始める覆い具合, 太陽側の明るさ, デバッグ表示の番号)
     float mistDrop[4]; // 水滴: (濡れ具合, 霧の倍率, 水滴が付き始めてからの秒, レンズ水滴のパスを使うか 0 / 1)
     float mistPlane[4]; // 霧: (深度の無い背景の水平面の高さ, 水平面を使うか 0 / 1, 未使用, 未使用)
+    float lensEdge[4];  // 水滴の縁寄せ: (縁の内側, 縁の外側, 揺らぎの幅, 中央に残す割合)
+    float lensEdge2[4]; // 水滴の縁寄せ: (揺らぎの細かさ, 縁のぼかしの最大半径, 大粒のマスクのべき, 縁寄せを使うか 0 / 1)
+    float lensEdge3[4]; // 水滴の数と見た目: (小粒の数の倍率, 大粒の数の倍率, 屈折の倍率, ハイライトの倍率)
+    float lensEdge4[4]; // 水滴の見た目: (中の明るさ, 影の縁の暗さ, 影の青み, 未使用)
   };
   ComPtr<ID3D12Resource> transitionParamCB_;
   TransitionParam* transitionParamMapped_ = nullptr;
@@ -499,6 +518,9 @@ private:
     float impactRingSpeed;
     float impactRefillSeconds;
     float impactRingFadeSeconds;
+    float impactRingEase;
+    float impactRingWobble;
+    float impactRingBreak;
     float seaFill;
     float seaFillThreshold;
     float seaFillRelief;

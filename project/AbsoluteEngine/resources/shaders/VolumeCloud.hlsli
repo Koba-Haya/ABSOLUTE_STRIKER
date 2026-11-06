@@ -100,6 +100,12 @@ static const float32_t kImpactBillowStrength = 0.65f;    // むらで、雲の�
 static const float32_t kImpactBillowLow = 0.25f;         // 細かい模様の値を 0〜1 にならす範囲
 static const float32_t kImpactBillowHigh = 0.75f;
 static const float32_t kImpactFillAmount = 1.5f;         // 波の縁に足す雲の量の倍率(1 で、山の頂上は雲がいっぱいに湧く)
+static const float32_t kImpactRingNoiseFreq = 0.12f;     // 波の縁の方向ノイズ: 円周を引く円の半径(ノイズ座標)。R の格子は 1 辺 4 なので、1 周に約 3 つのむら(G は約 6 つ)。大きくすると花びら状に細かくなる
+static const float32_t kImpactRingNoiseSlice = 0.53f;    // 波の縁の方向ノイズ: ノイズを引く高さ(ノイズ座標)
+static const float32_t kImpactRingArcLow = 0.35f;        // 弧の強さ: 形のノイズ R の値を 0〜1 にならす範囲
+static const float32_t kImpactRingArcHigh = 0.75f;
+static const float32_t kImpactRingEaseSeconds = 0.7f;    // 広がりの減速の時定数(秒)。到達距離は gImpactRingSpeed * この秒 へ近づく
+static const float32_t kImpactRingReachWidths = 5.0f;    // 波の縁の影響が届く範囲(縁の幅に対する倍率。これより外はノイズを引かず、省く)
 static const float32_t kImpactTroughOffset = 1.6f;       // 谷の位置(波の縁の幅に対する倍率。山の内側)
 static const float32_t kLowFbmMean = 0.476f;           // 形のノイズ G/B/A の fbm の平均(生成したノイズの統計。省いたときの寄せ先)
 
@@ -153,7 +159,7 @@ bool IsImpactActive() {
 // 2 つの成分を足す:
 //   くぼみ: 着地点を中心にしたガウス形の凹み。一瞬で凹み(kImpactOnsetSeconds)、gImpactRefillSeconds かけて埋まり戻る
 //   波の縁: 着地点から外へ広がるリング状の盛り上がり。山のすぐ内側に浅い谷を伴う(水面の波のように、盛り上がりの後ろが凹む)。
-//           gImpactRingFadeSeconds かけて消える
+//           gImpactRingFadeSeconds かけて消える。広がりは減速し(ease-out)、半径と強さは向きごとに揺らす(真円にしない)
 // 雲の密度を、高さ方向にずらした位置で引くことで(SampleDensity)、雲の面そのものが動いて見える
 // fill: 波の縁に沿って湧く雲の量(0〜1)。雲の無い隙間でも、波が立つ場所に雲を足す(隙間の上では、面をずらすだけでは何も見えないため)
 float32_t ImpactField(float32_t2 xz, out float32_t fill) {
@@ -174,14 +180,30 @@ float32_t ImpactField(float32_t2 xz, out float32_t fill) {
 
     // 波の縁(くぼみの縁から広がり始める)
     float32_t ringFade = 1.0f - smoothstep(0.0f, max(gImpactRingFadeSeconds, kMinRange), gImpactAge);
-    float32_t ringRadius = gImpactCraterRadius + gImpactRingSpeed * gImpactAge;
+    // 広がりの減速(ease-out): 初速は gImpactRingSpeed のまま、指数的に遅くなる。gImpactRingEase で、一定の速さ(0)との間を混ぜる
+    float32_t easedTravel = gImpactRingSpeed * kImpactRingEaseSeconds * (1.0f - exp(-gImpactAge / kImpactRingEaseSeconds));
+    float32_t ringTravel = lerp(gImpactRingSpeed * gImpactAge, easedTravel, gImpactRingEase);
+    float32_t ringRadius = gImpactCraterRadius + ringTravel;
+
+    // 方向ごとのゆらぎ: 着地点から見た向きの単位円を、形のノイズ空間の円周として引く(1 周して継ぎ目なくつながる)。
+    //   G: 縁の半径のずれ(少しいびつな形)、R: 縁の強さ(弱い向きは少し薄く、むらのある輪になる)
+    // 縁から遠い画素は縁の影響が無いので引かない(層の歩ごとに呼ばれるため、引く回数を抑える)
+    float32_t ringGain = 1.0f;
+    float32_t reach = gImpactRingWidth * kImpactRingReachWidths + gImpactRingWobble;
+    if (ringFade > 0.0f && abs(r - ringRadius) < reach) {
+        float32_t2 dir = (xz - gImpactCenter) / max(r, kMinRange);
+        float32_t3 ringNoisePos = float32_t3(dir * kImpactRingNoiseFreq + gImpactCenter * gNoiseScale, kImpactRingNoiseSlice);
+        float32_t4 ringNoise = gShape.SampleLevel(gWrap, ringNoisePos, 0.0f);
+        ringRadius += (ringNoise.g - kLowFbmMean) * 2.0f * gImpactRingWobble;
+        ringGain = lerp(1.0f - gImpactRingBreak, 1.0f, smoothstep(kImpactRingArcLow, kImpactRingArcHigh, ringNoise.r));
+    }
     float32_t crest = (r - ringRadius) / max(gImpactRingWidth, kMinRange);
     float32_t trough = crest + kImpactTroughOffset;
     float32_t crestProfile = exp(-crest * crest);
-    float32_t ring = gImpactRingHeight * (crestProfile - kImpactTroughRatio * exp(-trough * trough)) * onset * ringFade;
+    float32_t ring = gImpactRingHeight * (crestProfile - kImpactTroughRatio * exp(-trough * trough)) * onset * ringFade * ringGain;
 
     // 波の縁に湧く雲 + 着地点に湧き上がる雲の塊(くぼみの上へ、少し遅れて立ち上がり、埋まり戻る間に薄れる)
-    float32_t ringFill = crestProfile * onset * ringFade;
+    float32_t ringFill = crestProfile * onset * ringFade * ringGain;
     float32_t puffRadius = bowl / kImpactPuffRadiusScale;
     float32_t puffFill = exp(-puffRadius * puffRadius) * puffRise * refill;
     fill = saturate(max(ringFill, puffFill) * gImpactStrength * kImpactFillAmount);

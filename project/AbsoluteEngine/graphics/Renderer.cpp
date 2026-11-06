@@ -1052,6 +1052,9 @@ void Renderer::FillVolumeCloudParam_(VolumeCloudParam &param, const VolumeCloudS
   param.impactRingSpeed = impact.ringSpeed;
   param.impactRefillSeconds = impact.refillSeconds;
   param.impactRingFadeSeconds = impact.ringFadeSeconds;
+  param.impactRingEase = impact.ringEase;
+  param.impactRingWobble = impact.ringWobble;
+  param.impactRingBreak = impact.ringBreak;
   param.seaFill = impactEnabled ? impact.seaFill : 0.0f;
   param.seaFillThreshold = impact.seaFillThreshold;
   param.seaFillRelief = impact.seaFillRelief;
@@ -1239,7 +1242,14 @@ void Renderer::BeginRenderScene() {
 
 void Renderer::EndRenderScene(const Matrix4x4& projInverse) {
     // ボリューム雲(依頼があるときだけ)。深度を読みたいので、深度を読み取り用へ切り替える前に、物体を描き終えたここで行う
-    DrawVolumeCloudPass_();
+    const bool cloudDrawn = DrawVolumeCloudPass_();
+
+    // 雲のあとに描く GPU パーティクル。雲を描いた(または FlushVolumeClouds で描き済みの)ときは、描画先が色だけなので、深度なしで描く
+    if (gpuParticlesAfterCloudsPending_) {
+        gpuParticlesAfterCloudsPending_ = false;
+        GPUParticleManager::GetInstance()->Draw(gpuParticlesAfterCloudsBlend_,
+                                            (cloudDrawn || spriteColorOnly_) ? GPUParticleDepth::None : GPUParticleDepth::Test);
+    }
 
     if (renderTexture_ && depthTexture_) {
         dx_->FinishRenderingWithDepth(renderTexture_.get(), depthTexture_.get());
@@ -1349,6 +1359,25 @@ void Renderer::ApplyTransitionPass_() {
     param->mistPlane[1] = transitionStyle_.mist.backgroundPlane ? 1.0f : 0.0f;
     param->mistPlane[2] = 0.0f;
     param->mistPlane[3] = 0.0f;
+    // 水滴の縁寄せ。ImGui の調整用の上書きが有効なら、そちらを使う
+    const LensEdgeDebugOverride &edgeOverride = GetLensEdgeDebugOverride();
+    const LensEdgeStyle &edge = edgeOverride.enabled ? edgeOverride.style : transitionStyle_.mist.edge;
+    param->lensEdge[0] = edge.innerEdge;
+    param->lensEdge[1] = edge.outerEdge;
+    param->lensEdge[2] = edge.jitter;
+    param->lensEdge[3] = edge.centerKeep;
+    param->lensEdge2[0] = edge.jitterScale;
+    param->lensEdge2[1] = edge.blurRadius;
+    param->lensEdge2[2] = edge.largeBias;
+    param->lensEdge2[3] = edge.enabled ? 1.0f : 0.0f;
+    param->lensEdge3[0] = edge.smallDensity;
+    param->lensEdge3[1] = edge.largeDensity;
+    param->lensEdge3[2] = edge.refractScale;
+    param->lensEdge3[3] = edge.highlightScale;
+    param->lensEdge4[0] = edge.bodyDarken;
+    param->lensEdge4[1] = edge.rimDarken;
+    param->lensEdge4[2] = edge.shadowTint;
+    param->lensEdge4[3] = 0.0f;
 
     // パス1: postProcessTexture_ を読み、遷移の効果をかけて一時のテクスチャへ描く
     auto *cmdList = dx_->GetCommandList();
@@ -1611,9 +1640,25 @@ Microsoft::WRL::ComPtr<ID3D12Resource> Renderer::CreateUAVBuffer(size_t size) {
 }
 
 // GPU パーティクルの更新と描画（blendMode でブレンドモードを選択）
-void Renderer::DrawGPUParticles(BlendMode blendMode) {
+void Renderer::DrawGPUParticles(BlendMode blendMode, bool writeDepth) {
   GPUParticleManager::GetInstance()->Update();
-  GPUParticleManager::GetInstance()->Draw(blendMode);
+  GPUParticleManager::GetInstance()->Draw(blendMode, writeDepth ? GPUParticleDepth::TestAndWrite : GPUParticleDepth::Test);
+}
+
+void Renderer::DrawGPUParticleGlow(const GPUGlowParams &params) {
+  // 雲を合成したあと(描画先が色だけで、深度が読み取り用になっている)だけ描く
+  if (!spriteColorOnly_ || !depthTexture_) {
+    return;
+  }
+  dx_->EnsureDepthReadable(depthTexture_.get());
+  GPUParticleManager::GetInstance()->DrawGlow(params, depthTexture_->GetSrvGpuHandle());
+}
+
+void Renderer::DrawGPUParticlesAfterClouds(BlendMode blendMode) {
+  // 更新だけ今行い、描画は EndRenderScene の雲の合成のあとへ回す
+  GPUParticleManager::GetInstance()->Update();
+  gpuParticlesAfterCloudsPending_ = true;
+  gpuParticlesAfterCloudsBlend_ = blendMode;
 }
 
 void Renderer::DrawLine(const Vector3 &start, const Vector3 &end,

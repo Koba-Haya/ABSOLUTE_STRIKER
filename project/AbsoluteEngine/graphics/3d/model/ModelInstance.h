@@ -44,7 +44,7 @@ public:
     int32_t enableDissolve = 0;
     float dissolveThreshold = 0.0f;
     float dissolveEdgeRange = 0.03f;
-    float pad2 = 0.0f;
+    float dissolveEmber = 0.0f; // 縁を熾火で光らせる強さ(0 で従来どおり。HLSL の dissolveEmber と同じ位置)
     Vector3 dissolveEdgeColor = {1.0f, 0.4f, 0.3f};
     float pad3 = 0.0f;
     Vector3 dissolveMaskColor = {1.0f, 1.0f, 1.0f};
@@ -77,8 +77,10 @@ public:
   void SetSpecularColor(const Vector3 &c);
   void SetShininess(float s);
   void SetEnvironmentCoefficient(float c);
-  void SetDissolveParam(bool enable, float threshold = 0.0f, float edgeRange = 0.03f, 
-                        const Vector3& edgeColor = {1.0f, 0.4f, 0.3f}, const Vector3& maskColor = {1.0f, 1.0f, 1.0f});
+  // emberAmount: 縁を熾火(外縁は灰、内側へ赤、橙)で光らせる強さ(0 〜 1。0 は縁の色へ混ぜるだけ)
+  void SetDissolveParam(bool enable, float threshold = 0.0f, float edgeRange = 0.03f,
+                        const Vector3& edgeColor = {1.0f, 0.4f, 0.3f}, const Vector3& maskColor = {1.0f, 1.0f, 1.0f},
+                        float emberAmount = 0.0f);
 
   void SetWireframe(bool wireframe) { isWireframe_ = wireframe; }
   bool IsWireframe() const { return isWireframe_; }
@@ -101,6 +103,9 @@ public:
   // 再生中のアニメーションが最後まで再生されたか。ループしないアニメーションが終わったときだけ true
   // (ループ再生中や、何も再生していないときは false)。次のアニメーションへ切り替える合図に使う
   bool IsAnimationFinished() const;
+  // 再生中のアニメーションの現在時刻(秒)を直接指定して、その時刻のポーズにする(タイムラインが、時刻を毎フレーム決めるときに使う。
+  // UpdateAnimation は、時間を足して進める)。ループしないアニメは、長さで止まる
+  void SetAnimationTime(float seconds);
   
   SkinCluster* GetSkinCluster() const;
   Skeleton* GetSkeleton() const;

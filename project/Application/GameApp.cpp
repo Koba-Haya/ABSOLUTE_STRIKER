@@ -227,6 +227,25 @@ void GameApp::Update() {
     }
     sceneManager_->RequestChange(sceneManager_->GetCurrentSceneId(), spec);
   }
+  // 水滴を縁へ寄せる設定の調整。有効にすると、すべての遷移の設定を、この値で上書きする(気に入った値は SceneTransitionTable へ写す)
+  ImGui::SeparatorText("Lens Drops Edge");
+  LensEdgeDebugOverride &edgeOverride = GetLensEdgeDebugOverride();
+  ImGui::Checkbox("Override all transitions##LensEdge", &edgeOverride.enabled);
+  ImGui::Checkbox("Edge enabled (off = whole screen)##LensEdge", &edgeOverride.style.enabled);
+  ImGui::SliderFloat("Inner edge", &edgeOverride.style.innerEdge, 0.0f, 1.5f);
+  ImGui::SliderFloat("Outer edge", &edgeOverride.style.outerEdge, 0.0f, 1.5f);
+  ImGui::SliderFloat("Jitter", &edgeOverride.style.jitter, 0.0f, 0.5f);
+  ImGui::SliderFloat("Jitter scale", &edgeOverride.style.jitterScale, 0.5f, 12.0f);
+  ImGui::SliderFloat("Center keep", &edgeOverride.style.centerKeep, 0.0f, 1.0f);
+  ImGui::SliderFloat("Large drop bias", &edgeOverride.style.largeBias, 1.0f, 6.0f);
+  ImGui::SliderFloat("Edge blur radius", &edgeOverride.style.blurRadius, 0.0f, 0.03f, "%.4f");
+  ImGui::SliderFloat("Small drop density", &edgeOverride.style.smallDensity, 0.0f, 2.0f);
+  ImGui::SliderFloat("Large drop density", &edgeOverride.style.largeDensity, 0.0f, 2.0f);
+  ImGui::SliderFloat("Refract scale", &edgeOverride.style.refractScale, 0.0f, 4.0f);
+  ImGui::SliderFloat("Highlight scale", &edgeOverride.style.highlightScale, 0.0f, 3.0f);
+  ImGui::SliderFloat("Body brightness", &edgeOverride.style.bodyDarken, 0.6f, 1.1f);
+  ImGui::SliderFloat("Shadow rim darken", &edgeOverride.style.rimDarken, 0.0f, 1.0f);
+  ImGui::SliderFloat("Shadow blue tint", &edgeOverride.style.shadowTint, 0.0f, 1.0f);
   ImGui::Text("Transition: %s", sceneManager_->IsTransitioning() ? "active" : "idle");
   ImGui::End();
 

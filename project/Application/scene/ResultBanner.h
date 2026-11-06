@@ -31,6 +31,8 @@ public:
   void Update(float deltaTime);
   // 遷移の晴れる進み具合(0〜1)から、現れ具合を決める(遷移で現れる演出用)。毎フレーム呼ぶ
   void SetRevealProgress(float progress);
+  // 現れ具合に掛ける透明度の倍率(1 で通常、0 で消える)。復活の演出で、見出しと案内を消すのに使う
+  void SetOpacityScale(float scale) { opacityScale_ = scale; }
   void Draw();
 
 private:
@@ -41,4 +43,5 @@ private:
   Layout layout_{};
   float time_ = 0.0f;
   float appearance_ = 0.0f; // 現れ具合(0 = 透明、1 = 完全に見える)
+  float opacityScale_ = 1.0f; // 現れ具合に掛ける倍率
 };

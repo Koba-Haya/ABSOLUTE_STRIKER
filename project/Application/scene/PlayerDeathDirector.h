@@ -34,10 +34,11 @@ constexpr float kSlowMotionRampSeconds = 0.25f;
 constexpr float kDissolveStartThreshold = 0.0f;   // 崩壊の始まり(何も消えない)
 constexpr float kDissolveEndThreshold = 1.0f;     // 崩壊の終わり(胴まで、すべて消える)
 constexpr float kDissolveTailSeconds = 0.6f;      // 着地のあと、しきい値が終わりの値へ届くまでの時間(秒)
-constexpr float kDissolveEdgeRange = 0.08f;       // 縁の光る帯の幅(しきい値の単位)
-constexpr float kDissolveEdgeColorR = 1.00f;      // 縁の色(淡い金色)
-constexpr float kDissolveEdgeColorG = 0.82f;
-constexpr float kDissolveEdgeColorB = 0.45f;
+constexpr float kDissolveEdgeRange = 0.12f;       // 縁の光る帯の幅(しきい値の単位。熾火は灰 -> 赤 -> 橙と色が変わるので、やや広く取る)
+constexpr float kDissolveEdgeColorR = 1.00f;      // 縁の色(熾火の橙。帯の中で、外縁の灰と暗い赤へつながる)
+constexpr float kDissolveEdgeColorG = 0.42f;
+constexpr float kDissolveEdgeColorB = 0.08f;
+constexpr float kDissolveEmberAmount = 1.0f;      // 縁を熾火で光らせる強さ(0 で従来の「縁の色へ混ぜるだけ」)
 
 // デバッグ用: true の間、死亡の位置と向きを動かさない(蝶は、死んだ場所に留まって朽ちる)。
 // 崩壊(ディゾルブと破片)だけを、その場で見たいときに使う(通常は false。落下する)
@@ -68,6 +69,7 @@ struct PlayerDeathSettings {
   float dissolveEdgeRange = PlayerDeathDefaults::kDissolveEdgeRange;
   Vector3 dissolveEdgeColor{PlayerDeathDefaults::kDissolveEdgeColorR, PlayerDeathDefaults::kDissolveEdgeColorG,
                             PlayerDeathDefaults::kDissolveEdgeColorB};
+  float dissolveEmberAmount = PlayerDeathDefaults::kDissolveEmberAmount;
   bool debugHoldPlayerPosition = PlayerDeathDefaults::kDebugHoldPlayerPosition;
   float slowMotionScale = PlayerDeathDefaults::kSlowMotionScale;
   float slowMotionRampSeconds = PlayerDeathDefaults::kSlowMotionRampSeconds;
@@ -109,6 +111,9 @@ struct PlayerDeathDissolve {
   float threshold = 0.0f;
   float edgeRange = 0.0f;
   Vector3 edgeColor{1.0f, 1.0f, 1.0f};
+  float emberAmount = 0.0f; // 縁を熾火で光らせる強さ
+  // 崩壊の進み具合のうち、ディゾルブのしきい値が進んだ割合(0 〜 1)。鱗粉の量の目安(縁が進んでいる間だけ粉が出る)
+  float progress = 0.0f;
 };
 
 class PlayerDeathDirector {
