@@ -14,7 +14,7 @@ namespace GameOverIslandDefaults {
 constexpr int32_t kMaxCount = 16;      // 用意するモデルの数の上限(ImGui の数の上限)
 constexpr int32_t kCount = 12;         // 置く数
 constexpr int32_t kSeed = 20261028;    // 配置の乱数のシード(固定。毎回同じ配置になる)
-constexpr float kMinDistance = 15.0f;  // カメラからの水平距離の範囲(ユニット)
+constexpr float kMinDistance = 25.0f;  // カメラからの水平距離の範囲(ユニット)
 constexpr float kMaxDistance = 110.0f;
 constexpr float kSpreadDeg = 42.0f;    // 正面(+z)からの左右の広がり(度)。画面の横の画角は約 81 度なので、縁の外の島も少し混ぜる
 // 島の上面の高さ: 雲の層の下面から上面までの割合の範囲(島の底は 3〜4 ユニット下に伸びる。上面より上へ出ると雲の外になる)
