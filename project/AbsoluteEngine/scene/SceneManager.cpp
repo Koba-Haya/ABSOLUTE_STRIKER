@@ -29,6 +29,11 @@ void SceneManager::Start(const std::string &firstSceneId) {
 }
 
 void SceneManager::RequestChange(const std::string &nextSceneId) {
+  // 荷物なしの要求は、空の荷物つきの要求と同じ扱い(処理を 1 か所にまとめる)
+  RequestChange(nextSceneId, std::any{});
+}
+
+void SceneManager::RequestChange(const std::string &nextSceneId, std::any payload) {
   // 遷移の進行中や要求済みのときは無視する(シーン側が毎フレーム呼んでも、二重に始まらない)
   if (transition_.IsActive() || hasPendingChange_) {
     return;
@@ -37,7 +42,7 @@ void SceneManager::RequestChange(const std::string &nextSceneId) {
   if (current_ && transitionResolver_) {
     spec = transitionResolver_(currentSceneId_, nextSceneId);
   }
-  RegisterChange_(nextSceneId, spec);
+  RegisterChange_(nextSceneId, spec, std::move(payload));
 }
 
 void SceneManager::RequestChange(const std::string &nextSceneId, const TransitionSpec &spec) {
@@ -52,9 +57,11 @@ void SceneManager::RequestChangeImmediate(const std::string &nextSceneId) {
   RegisterChange_(nextSceneId, std::nullopt);
 }
 
-void SceneManager::RegisterChange_(const std::string &nextSceneId, const std::optional<TransitionSpec> &spec) {
+void SceneManager::RegisterChange_(const std::string &nextSceneId, const std::optional<TransitionSpec> &spec,
+                                   std::any payload) {
   hasPendingChange_ = true;
   pendingSceneId_ = nextSceneId;
+  pendingPayload_ = std::move(payload);
   if (spec) {
     // 画面を覆い切るまで、入れ替えは待つ
     switchReady_ = false;
@@ -68,11 +75,13 @@ void SceneManager::RegisterChange_(const std::string &nextSceneId, const std::op
   }
 }
 
-void SceneManager::SetNextSceneById_(const std::string &sceneId) {
+void SceneManager::SetNextSceneById_(const std::string &sceneId, std::any payload) {
   assert(factory_ && "SceneManager: factory is null. Call SetFactory().");
   next_ = factory_->Create(sceneId, services_);
   assert(next_ && "SceneManager: factory returned null. Unknown sceneId?");
   next_->SetSceneId(sceneId);
+  // 荷物は Initialize より前に渡す(Initialize の中で、読み込むファイルの名前などを決めるときに使えるように)
+  next_->SetLaunchPayload(std::move(payload));
   nextSceneId_ = sceneId;
 }
 
@@ -83,9 +92,10 @@ void SceneManager::ApplySceneChangeIfNeeded() {
   }
 
   if (hasPendingChange_) {
-    SetNextSceneById_(pendingSceneId_);
+    SetNextSceneById_(pendingSceneId_, std::move(pendingPayload_));
     hasPendingChange_ = false;
     pendingSceneId_.clear();
+    pendingPayload_.reset(); // 渡し終えた荷物を、次の要求に持ち越さない(ムーブ後の状態に頼らず、明示的に空にする)
     switchReady_ = false;
   }
 

@@ -30,6 +30,7 @@
 #include <string>
 
 class RailCameraComponent;
+struct StageDefinition;
 
 enum class GamePhase {
   InProgress,
@@ -64,7 +65,15 @@ protected:
   // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
   const Camera* GetEditorViewCamera() const override;
 
+  // シーンJSON とタイムラインJSON のファイル名の元になる名前。遊ぶステージの定義(StageDefinition::dataName)から決める。
+  // 荷物なしで入ったときは、先頭のステージ(従来どおり "Game")になる
+  std::string GetDataName() const override;
+
 private:
+  // このシーンで遊ぶステージの定義を返す。荷物(StageLaunchParams)があればその ID のステージ、
+  // 荷物が無い、または ID が一覧に無いときは、先頭のステージ。BaseScene::Initialize より前から呼ばれるので、毎回荷物から求める
+  const StageDefinition &ResolveStage_() const;
+
   // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。
   // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
   void RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
@@ -84,6 +93,9 @@ private:
   void SpawnBoss_();
   // プレイヤー死亡 / ボス撃破でシーン遷移を要求する
   void CheckGameEnd_();
+  // クリア / ゲームオーバーのシーンへの切り替えを要求する。遊んでいるステージの荷物(StageLaunchParams)をつけるので、
+  // 次のシーンは、同じステージのリトライと、ステージ選択へ戻ったときの選択位置を決められる
+  void RequestResultScene_(const std::string &sceneId);
   // 死亡演出を始める(HP が 0 になったとき、または、デバッグのショートカットから)。入力・発射・ロックオンを止め、
   // 演出クラスに、死亡の瞬間の自機の状態を渡す
   void BeginDying_();

@@ -1,4 +1,5 @@
 #pragma once
+#include <any>
 #include <string>
 #include <functional>
 #include <memory>
@@ -33,6 +34,9 @@ public:
 
   void SetSceneManager(SceneManager *sm) { sceneManager_ = sm; }
   void SetSceneId(const std::string& id) { sceneId_ = id; }
+  // 前のシーンから渡された荷物を受け取る。SceneManager が、シーンを作った直後、Initialize の前に呼ぶ。
+  // 荷物なしの切り替えでは、空の std::any が渡る
+  void SetLaunchPayload(std::any payload) { launchPayload_ = std::move(payload); }
 
   virtual void Initialize(const SceneServices &services);
   virtual void Finalize() {}
@@ -79,8 +83,14 @@ protected:
   bool LoadEditorScene();
   std::string GetSceneFilePath() const;
 
-  // タイムラインデータのファイルパスを取得する（sceneId_ + "_timeline.json"）
+  // タイムラインデータのファイルパスを取得する（GetDataName() + "_timeline.json"）
   std::string GetTimelineFilePath() const;
+
+  // シーンJSON と タイムラインJSON のファイル名の元になる名前(拡張子なし)。
+  // 既定はシーンID。同じシーンのクラスが、荷物の内容によって別のデータを読むとき(ステージごとのデータなど)は、
+  // 派生クラスでオーバーライドして、荷物から決めた名前を返す。
+  // 荷物は Initialize より前に入っているので、Initialize の中の読み込みから使ってよい
+  virtual std::string GetDataName() const { return sceneId_; }
 
   // タイムラインデータを保存・読み込みする
   void SaveTimeline();
@@ -105,6 +115,20 @@ protected:
 
 protected:
   void RequestSceneChange(const std::string &sceneId);
+  // 次のシーンへ渡す荷物つきで、シーンの切り替えを要求する。荷物の型はコピーできること。
+  // 受け取るシーンは、TryGetLaunchPayload<同じ型>() で取り出す
+  void RequestSceneChange(const std::string &sceneId, std::any payload);
+  // このシーンが受け取った荷物を、そのまま次のシーンへ引き継いで、切り替えを要求する。
+  // 荷物を受け取っていなければ、荷物なしの切り替えと同じ。「同じ条件でもう一度」や「前の画面へ戻る」のように、
+  // 荷物の中身を知らずに(型を取り出さずに)引き継ぎたいときに使う
+  void RequestSceneChangeKeepingPayload(const std::string &sceneId);
+
+  // 前のシーンから渡された荷物を、型 T で取り出す。荷物が無い、または型が違うときは nullptr(その場合は既定の動作にする)。
+  // 返す参照は、このシーンが生きている間だけ有効
+  template <typename T>
+  const T *TryGetLaunchPayload() const {
+    return std::any_cast<T>(&launchPayload_);
+  }
 
   // 画面遷移の進行状況を問い合わせる（読み取り専用）。SceneManager 自体は派生クラスに公開しない
   // 遷移の進行中か（SceneManager が未設定の場合は false）
@@ -180,6 +204,7 @@ private:
   PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
   float worldTimeScale_ = 1.0f;        // 世界の時間の速さ(SetWorldTimeScale)
   std::string sceneId_ = "";
+  std::any launchPayload_; // 前のシーンから渡された荷物(派生クラスからは TryGetLaunchPayload 経由で扱う)
   std::string backupSceneJson_ = "";
 
   // タイムラインシステム（シーン独立のため BaseScene が所有する）

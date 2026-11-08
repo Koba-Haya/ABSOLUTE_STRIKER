@@ -160,6 +160,10 @@ void GameApp::Update() {
     goTo(SceneId::Title);
   }
   ImGui::SameLine();
+  if (ImGui::Button("Go to StageSelectScene")) {
+    goTo(SceneId::StageSelect);
+  }
+  ImGui::SameLine();
   if (ImGui::Button("Go to GameScene")) {
     goTo(SceneId::Game);
   }

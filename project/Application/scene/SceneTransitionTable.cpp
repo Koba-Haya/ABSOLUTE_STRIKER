@@ -150,6 +150,14 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
   if (fromSceneId == SceneId::Title && toSceneId == SceneId::Game) {
     return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop);
   }
+  // タイトル -> ステージ選択: タイトルの発進演出のまま、外周から雲が流れ込んで覆う(雲突入。タイトルの演出を活かす)
+  if (fromSceneId == SceneId::Title && toSceneId == SceneId::StageSelect) {
+    return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop);
+  }
+  // ステージ選択 -> ゲーム: 雲の形のワイプ(白)で覆う。覆いの中でゲームが始まるので、スタート演出の助走も、覆いが晴れる間に動く
+  if (fromSceneId == SceneId::StageSelect && toSceneId == SceneId::Game) {
+    return MakeNoiseWipe(kWhite, kLongOut, kShortHold, kLongIn);
+  }
   // ゲーム -> クリア: 太陽へ向かって加速し、白へ溶ける(達成感)
   if (fromSceneId == SceneId::Game && toSceneId == SceneId::Clear) {
     return MakeZoomBlur(kWhite, kLongOut, kMediumHold, kMediumIn);
@@ -172,6 +180,14 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
       return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kRebirthSlabBottom, kRebirthSlabTop);
     }
     return MakeFade(kWhite, kRebirthFlashOut, kShortHold, kLongIn);
+  }
+  // クリア -> ステージ選択: クリア -> タイトルと同じ、レンズの水滴
+  if (fromSceneId == SceneId::Clear && toSceneId == SceneId::StageSelect) {
+    return MakeDroplets(kWhite, kDropletsOut, kShortHold, kDropletsIn);
+  }
+  // ゲームオーバー -> ステージ選択: ゲームオーバー -> タイトルと同じ、雲の形のワイプ
+  if (fromSceneId == SceneId::GameOver && toSceneId == SceneId::StageSelect) {
+    return MakeNoiseWipe(kWhite, kLongOut, kShortHold, kLongIn);
   }
   // クリア -> ゲーム(リトライ): 雲の形のワイプ(白)で覆う
   if (fromSceneId == SceneId::Clear && toSceneId == SceneId::Game) {
