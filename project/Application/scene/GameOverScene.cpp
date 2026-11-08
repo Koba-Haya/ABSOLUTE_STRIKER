@@ -105,6 +105,10 @@ void GameOverScene::UpdateInput_() {
   if (GetInput()->TriggerKey(DIK_R) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_B)) {
     BeginRebirth_(); // リトライは、復活の演出を通ってゲームへ戻る(タイトルは通らない)
   }
+  // ステージ選択へ戻る(選んでいたステージにカーソルを合わせる)
+  if (GetInput()->TriggerKey(DIK_S) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_Y)) {
+    RequestSceneChangeKeepingPayload(SceneId::StageSelect);
+  }
 }
 
 void GameOverScene::BeginRebirth_() {
@@ -180,7 +184,7 @@ void GameOverScene::UpdateRebirth_() {
   }
   // 雲の層を抜ける間に、ゲームへ切り替える(雲抜けの遷移が、これをつなぐ)
   if (rebirth_.ConsumeSceneChange()) {
-    RequestSceneChange(SceneId::Game);
+    RequestSceneChangeKeepingPayload(SceneId::Game);
   }
 }
 
@@ -194,6 +198,10 @@ void GameOverScene::DrawDebugWindow_() {
   ImGui::SameLine();
   if (ImGui::Button("Retry", ImVec2(kDebugButtonWidth, kDebugButtonHeight))) {
     BeginRebirth_();
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Stage Select", ImVec2(kDebugButtonWidth, kDebugButtonHeight))) {
+    RequestSceneChangeKeepingPayload(SceneId::StageSelect);
   }
   ImGui::End();
 }

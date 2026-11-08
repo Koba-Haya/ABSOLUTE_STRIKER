@@ -34,6 +34,8 @@
 #include "../actor/Enemy/ChargeOnApproachComponent.h"
 #include "../actor/Enemy/RamAttackComponent.h"
 #include "../actor/Player/PlayerInput.h"
+#include "../stage/StageCatalog.h"
+#include "../stage/StageLaunchParams.h"
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
 #include "VolumeCloudDebugUi.h"
@@ -65,9 +67,8 @@ namespace {
 constexpr float kGameCameraFovY = 0.45f;
 constexpr float kGameCameraNear = 0.1f;
 constexpr float kGameCameraFar = 1000.0f;
-// ステージ名の板のモデルと画像(ステージが増えたら、画像のパスをステージごとの設定へ移す)
+// ステージ名の板のモデル(板に貼る画像は、ステージの定義(StageDefinition::stageNameTexture)が持つ)
 constexpr const char *kStageNameModelPath = "resources/app/stage/stage_name_board.obj";
-constexpr const char *kStageNameTexturePath = "resources/app/stage/stage_name_01.png";
 // 雲の文字のパフの画像(タイトルの雲の粒と同じ)
 constexpr const char *kPuffTexturePath = "resources/app/title/puff.png";
 // 板が割れるときの衝撃点(板の中の座標。板の中心が (0, 0)。横が -1 〜 1、縦が -0.25 〜 0.25)。
@@ -152,10 +153,36 @@ constexpr BYTE kDebugReviveKey = DIK_9;
 constexpr bool kDebugFlowShortcutEnabled = false;
 } // namespace
 
+const StageDefinition &GameScene::ResolveStage_() const {
+  const StageCatalog &catalog = StageCatalog::GetInstance();
+  if (const auto *params = TryGetLaunchPayload<StageLaunchParams>()) {
+    if (const StageDefinition *stage = catalog.Find(params->stageId)) {
+      return *stage;
+    }
+  }
+  return catalog.GetDefault();
+}
+
+std::string GameScene::GetDataName() const {
+  return ResolveStage_().dataName;
+}
+
 void GameScene::Initialize(const SceneServices &services) {
   // 読み込みの各ブロックの時間を測る(タイトルからの遷移で止まる原因の調査用)。
   // 全体の時間は、関数を抜けるときにログへ出る
   CpuTimer::Scope totalScope("GameScene.Initialize(total)");
+
+  // 遊ぶステージを記録する。荷物があるのに ID が一覧に無いときは、先頭のステージで進むので、気づけるよう警告を出す
+  {
+    const StageDefinition &stage = ResolveStage_();
+    const auto *params = TryGetLaunchPayload<StageLaunchParams>();
+    if (params != nullptr && StageCatalog::GetInstance().Find(params->stageId) == nullptr) {
+      Logger::GetInstance().Log("[Stage] unknown stage id '%s' in launch payload; falling back to '%s'",
+                                params->stageId.c_str(), stage.id.c_str());
+    }
+    Logger::GetInstance().Log("[Stage] start: id=%s dataName=%s (payload=%s)", stage.id.c_str(), stage.dataName.c_str(),
+                              params != nullptr ? "yes" : "none");
+  }
 
   BaseScene::Initialize(services);
 
@@ -389,7 +416,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // ステージ名の板(失敗しても、板が出ないだけで、ゲームは進められる)。
   // 見せ方を選んで、壊れるときの準備(雲なら、画像の読み取りとパフの配置。破片なら、ボロノイ分割)まで済ませる。
   // 重い処理なので、画面遷移の覆いの中(シーンを作るとき)に行い、演出が始まる瞬間に止まらないようにする
-  stageNameBoard_.Initialize(kStageNameModelPath, kStageNameTexturePath, kPuffTexturePath);
+  stageNameBoard_.Initialize(kStageNameModelPath, ResolveStage_().stageNameTexture.c_str(), kPuffTexturePath);
   stageNameBoard_.SetStyle(stageNameStyle_, stageCloudSettings_, stageSubtitleCloudSettings_);
   // 雲の文字が壊れたあとの霧のグループ(柔らかい縁で重なるので、「柔らかいアルファ」にして、加算ではなく、アルファブレンドで描く)
   ParticleManager::GetInstance()->CreateParticleGroup(kStageCloudMistGroup, kPuffTexturePath, kStageCloudMistMaxInstances, true);
@@ -831,7 +858,7 @@ void GameScene::CheckDebugFlowShortcut_() {
   }
   if (GetInput()->TriggerKey(DIK_RETURN)) {
     phase_ = GamePhase::Clear;
-    RequestSceneChange(SceneId::Clear);
+    RequestResultScene_(SceneId::Clear);
   } else if (GetInput()->TriggerKey(DIK_BACK)) {
     // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
     KillPlayer_();
@@ -870,6 +897,10 @@ void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
   }
   stageStartDemoReturnRequested_ = true;
   RequestSceneChange(SceneId::Title);
+}
+
+void GameScene::RequestResultScene_(const std::string &sceneId) {
+  RequestSceneChange(sceneId, StageLaunchParams{ResolveStage_().id});
 }
 
 void GameScene::KillPlayer_() {
@@ -945,7 +976,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   // (デバッグで、遷移を要求せずに演出を保つ設定のときは、要求しない)
   if (deathDirector_.ConsumeCoverStart() && !debugHoldAtCover_) {
       phase_ = GamePhase::GameOver;
-      RequestSceneChange(SceneId::GameOver);
+      RequestResultScene_(SceneId::GameOver);
   }
 }
 
@@ -1026,7 +1057,7 @@ void GameScene::CheckGameEnd_() {
           [](const auto& obj) { return obj && obj->GetComponent<BossComponent>(); });
       if (!bossAlive) {
           phase_ = GamePhase::Clear;
-          RequestSceneChange(SceneId::Clear);
+          RequestResultScene_(SceneId::Clear);
       }
   }
 }

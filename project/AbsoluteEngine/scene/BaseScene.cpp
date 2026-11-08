@@ -119,6 +119,17 @@ void BaseScene::RequestSceneChange(const std::string &sceneId) {
   }
 }
 
+void BaseScene::RequestSceneChange(const std::string &sceneId, std::any payload) {
+  if (sceneManager_) {
+    sceneManager_->RequestChange(sceneId, std::move(payload));
+  }
+}
+
+void BaseScene::RequestSceneChangeKeepingPayload(const std::string &sceneId) {
+  // 荷物はコピーして渡す(このシーンが、遷移の間も自分の荷物を読めるように、手元にも残す)
+  RequestSceneChange(sceneId, launchPayload_);
+}
+
 bool BaseScene::IsSceneTransitioning() const {
   return sceneManager_ != nullptr && sceneManager_->IsTransitioning();
 }
@@ -159,8 +170,9 @@ void BaseScene::RestoreScene() {
 }
 
 std::string BaseScene::GetSceneFilePath() const {
-    if (sceneId_.empty()) return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/scene.json");
-    return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/" + sceneId_ + ".json");
+    const std::string dataName = GetDataName();
+    if (dataName.empty()) return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/scene.json");
+    return AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/" + dataName + ".json");
 }
 
 bool BaseScene::LoadEditorScene() {
@@ -435,9 +447,10 @@ void BaseScene::ApplyEditorLightsToRenderer(Renderer* renderer) {
 // ============================================================
 
 std::string BaseScene::GetTimelineFilePath() const {
-    // シーンIDに "_timeline" を付加したJSONファイルを使用する
+    // データ名(既定はシーンID)に "_timeline" を付加したJSONファイルを使用する
     // 例: "devScene" -> "resources/editor/scenes/devScene_timeline.json"
-    const std::string baseName = sceneId_.empty() ? "scene" : sceneId_;
+    const std::string dataName = GetDataName();
+    const std::string baseName = dataName.empty() ? "scene" : dataName;
     return AbsoluteEngine::AssetPath::ResolveEditableData(
         "editor/scenes/" + baseName + "_timeline.json");
 }

@@ -43,7 +43,11 @@ void ClearScene::Update() {
       RequestSceneChange(SceneId::Title);
     }
     if (GetInput()->TriggerKey(DIK_R) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_B)) {
-      RequestSceneChange(SceneId::Game);
+      RequestSceneChangeKeepingPayload(SceneId::Game);
+    }
+    // ステージ選択へ戻る(選んでいたステージにカーソルを合わせる)
+    if (GetInput()->TriggerKey(DIK_S) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_Y)) {
+      RequestSceneChangeKeepingPayload(SceneId::StageSelect);
     }
   }
 
@@ -64,7 +68,11 @@ void ClearScene::Update() {
   }
   ImGui::SameLine();
   if (ImGui::Button("Retry", ImVec2(120, 40))) {
-    RequestSceneChange(SceneId::Game);
+    RequestSceneChangeKeepingPayload(SceneId::Game);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Stage Select", ImVec2(120, 40))) {
+    RequestSceneChangeKeepingPayload(SceneId::StageSelect);
   }
 
   ImGui::End();

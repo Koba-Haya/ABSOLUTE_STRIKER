@@ -80,6 +80,8 @@
     <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
     <ClCompile Include="scene\GameIntroDirector.cpp" />
     <ClCompile Include="scene\StageStartDirector.cpp" />
+    <ClCompile Include="stage\StageCatalog.cpp" />
+    <ClCompile Include="scene\StageSelectScene.cpp" />
     <ClCompile Include="scene\StageNameBoard.cpp" />
     <ClCompile Include="scene\VoronoiFracture.cpp" />
     <ClCompile Include="scene\StageNameFragments.cpp" />
@@ -154,6 +156,10 @@
     <ClInclude Include="scene\VolumeCloudDebugUi.h" />
     <ClInclude Include="scene\GameIntroDirector.h" />
     <ClInclude Include="scene\StageStartDirector.h" />
+    <ClInclude Include="stage\StageCatalog.h" />
+    <ClInclude Include="stage\StageDefinition.h" />
+    <ClInclude Include="stage\StageLaunchParams.h" />
+    <ClInclude Include="scene\StageSelectScene.h" />
     <ClInclude Include="scene\StageNameBoard.h" />
     <ClInclude Include="scene\VoronoiFracture.h" />
     <ClInclude Include="scene\StageNameFragments.h" />

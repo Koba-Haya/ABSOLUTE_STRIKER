@@ -1,4 +1,5 @@
 #pragma once
+#include <any>
 #include <d3d12.h>
 #include <functional>
 #include <memory>
@@ -35,6 +36,11 @@ public:
   // シーンの切り替えを要求する。組み合わせの表(TransitionResolver)に遷移があれば、覆ってから入れ替える。
   // 遷移の進行中や、すでに要求済みのときの呼び出しは無視する(シーン側が毎フレーム呼んでも、二重に始まらない)
   void RequestChange(const std::string &nextSceneId);
+  // 次のシーンへ渡す荷物(payload)つきで、シーンの切り替えを要求する。遷移の扱いは上の RequestChange と同じ。
+  // 荷物は、覆いが完全になって次のシーンを作る時点まで預かり、次のシーンの Initialize より前に渡す。
+  // エンジンは荷物の中身を知らない(型の取り出しは、受け取るシーンが TryGetLaunchPayload で行う)。
+  // 荷物の型はコピーできること(std::any の条件)。要求が無視されたとき(遷移の進行中、要求済み)は、荷物も捨てる
+  void RequestChange(const std::string &nextSceneId, std::any payload);
   // 遷移の設定を指定して切り替える(デバッグ用など)
   void RequestChange(const std::string &nextSceneId, const TransitionSpec &spec);
   // 遷移なしで、すぐに切り替える。進行中の遷移があれば中断する
@@ -55,9 +61,12 @@ public:
   const SceneServices &GetServices() const { return services_; }
 
 private:
-  void SetNextSceneById_(const std::string &sceneId);
-  // 切り替えの要求を登録する。spec があれば遷移を始め、なければ即座に切り替える状態にする
-  void RegisterChange_(const std::string &nextSceneId, const std::optional<TransitionSpec> &spec);
+  // 次のシーンを作り、ID と荷物を渡す(荷物は、次のシーンの Initialize より前に渡るようここで設定する)
+  void SetNextSceneById_(const std::string &sceneId, std::any payload = {});
+  // 切り替えの要求を登録する。spec があれば遷移を始め、なければ即座に切り替える状態にする。
+  // payload は、入れ替えの時点まで pendingPayload_ に預ける
+  void RegisterChange_(const std::string &nextSceneId, const std::optional<TransitionSpec> &spec,
+                       std::any payload = {});
 
 private:
   SceneServices services_{};
@@ -68,6 +77,7 @@ private:
   std::string nextSceneId_;
   bool hasPendingChange_ = false;
   std::string pendingSceneId_;
+  std::any pendingPayload_; // 要求された切り替えに付いた荷物(入れ替えの時点で、次のシーンへ渡す)
 
   // 画面遷移
   TransitionResolver transitionResolver_;

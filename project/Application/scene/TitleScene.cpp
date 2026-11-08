@@ -306,7 +306,7 @@ void TitleScene::Update() {
     } else if (!leaving_ && launchTime_ >= kLaunchDurationSec * kSceneChangeRequestRatio) {
       // 演出の途中で一度だけ、ゲームへの切り替えを要求する。以降の覆い(雲突入)は画面遷移の層が行う
       leaving_ = true;
-      RequestSceneChange(SceneId::Game);
+      RequestSceneChange(SceneId::StageSelect);
     }
   }
 
