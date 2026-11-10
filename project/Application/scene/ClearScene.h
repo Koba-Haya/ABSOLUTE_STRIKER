@@ -2,6 +2,7 @@
 #include "BaseScene.h"
 #include "ResultBackdrop.h"
 #include "ResultBanner.h"
+#include "ui/ResultMenu.h"
 
 class ClearScene final : public BaseScene {
 public:
@@ -20,5 +21,6 @@ protected:
 private:
   float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れてからの経過(秒)
   ResultBanner banner_;     // 見出し(スプライト)
+  ResultMenu menu_;         // 結果メニュー(もう一度、ステージ選択へ、タイトルへ)
   ResultBackdrop backdrop_; // 背景の空(遷移の覆いが描画を通るようにもする)
 };

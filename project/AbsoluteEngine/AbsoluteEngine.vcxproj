@@ -139,6 +139,8 @@
     <ClCompile Include="graphics\VolumeCloudQuality.cpp" />
     <ClCompile Include="graphics\Skybox.cpp" />
     <ClCompile Include="graphics\2d\Sprite.cpp" />
+    <ClCompile Include="graphics\2d\BitmapFont.cpp" />
+    <ClCompile Include="graphics\2d\SpriteBatchDrawer.cpp" />
     <ClCompile Include="graphics\2d\SpriteManager.cpp" />
     <ClCompile Include="graphics\2d\SpriteResource.cpp" />
     <ClCompile Include="graphics\3d\AssetLoader.cpp" />
@@ -219,6 +221,8 @@
     <ClInclude Include="graphics\VolumeCloudQuality.h" />
     <ClInclude Include="graphics\Skybox.h" />
     <ClInclude Include="graphics\2d\Sprite.h" />
+    <ClInclude Include="graphics\2d\BitmapFont.h" />
+    <ClInclude Include="graphics\2d\SpriteBatchDrawer.h" />
     <ClInclude Include="graphics\2d\SpriteManager.h" />
     <ClInclude Include="graphics\2d\SpriteResource.h" />
     <ClInclude Include="graphics\3d\AssetLoader.h" />

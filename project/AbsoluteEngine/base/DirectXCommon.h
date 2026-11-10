@@ -41,6 +41,9 @@ public:
 
 	// 参照用のゲッタ
 	ID3D12Device* GetDevice() const { return device_.Get(); }
+	// フレーム番号(PostDraw のたびに 1 増える)。「フレームが変わったか」の判定に使う。
+	// 毎フレームの終わりに GPU の完了を待つので、番号が変わった時点で前のフレームのデータは使い終わっている
+	uint64_t GetFrameCount() const { return fenceValue_; }
 	ID3D12GraphicsCommandList* GetCommandList() const {
 		return commandList_.Get();
 	}

@@ -11,16 +11,16 @@
 //   2. Vignette(黒)         : プレイヤー被弾時の画面の暗転
 //   3. GaussianFilter        : ボス出現演出
 //   4. Vignette(赤)         : プレイヤー瀕死(HP が 1 のあいだ)。画面の周囲の枠だけが、ゆっくり脈打つように赤くなる
-//                              (被弾の暗転とボス出現の演出の下、ボス戦のアウトラインの上。ボス戦でも見えるように)
-//   5. LuminanceBasedOutline : ボス戦中
-//   6. Normal
+//                              (被弾の暗転とボス出現の演出の下。ボス戦でも見えるように)
+//   5. Normal
+//   (ボス戦中のアウトライン(LuminanceBasedOutline)は、HUD の文字まで縁取られて読みにくいため、使わない)
 class PostEffectDirector {
 public:
   // 毎フレームの状態（チェーンの常時系エフェクトと被弾検知に使う）
   struct FrameState {
     bool hasPlayer = false;       // プレイヤーが存在するか（false の間は playerHp を無視する）
     int  playerHp = 0;            // プレイヤーの現在HP
-    bool isBossPhase = false;     // ボス戦中か
+    bool isBossPhase = false;     // ボス戦中か(いまは、優先度チェーンでは使っていない。将来のボス戦の演出のために残す)
     float speedBlur = 0.0f;       // 加速中のブラーの強さ(0 〜 1。0 でブラーなし)。ステージ開始演出のブースト量を渡す
     Vector2 speedBlurCenterUv{ 0.5f, 0.5f }; // 加速のブラーの中心(スクリーン座標 UV 0〜1。自機のいる辺り)
   };

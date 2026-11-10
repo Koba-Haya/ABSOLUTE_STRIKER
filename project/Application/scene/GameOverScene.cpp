@@ -17,16 +17,15 @@ namespace {
 constexpr float kFrameDeltaSeconds = 1.0f / 60.0f;
 // 見出しの画像と、操作の案内の画像
 constexpr const char *kBannerTexturePath = "resources/app/result/gameOver.png";
-constexpr const char *kPromptTexturePath = "resources/app/result/gameOver_prompt.png";
 
-// 見出しと案内の中心の高さ(画面の高さに対する割合。0 が上端)。降下の終点で、画面の中央から下の広い範囲に巣(と、集まる灰)が見えるよう、
-// 見出しは上寄り、案内は下端寄りにする
+// 見出しの中心の高さ(画面の高さに対する割合。0 が上端)。降下の終点で、画面の中央から下の広い範囲に巣(と、集まる灰)が見えるよう、
+// 見出しは上寄りにする(下端は、結果メニューのために空ける)
 constexpr float kBannerCenterYRatio = 0.15f;
-constexpr float kPromptCenterYRatio = 0.90f;
 // 見出しの配置と、現れる区間(遷移の晴れる進み具合 0〜1。雲が薄くなって見通しが開き始めた頃に、先に見出しが現れる)
 constexpr ResultBanner::Layout kBannerLayout{720.0f, 180.0f, kBannerCenterYRatio, 0.25f, 0.65f};
-// 案内の配置(元画像は 4:1)と、現れる区間(見出しのあとに、見通しがほぼ開いた頃に現れる)
-constexpr ResultBanner::Layout kPromptLayout{600.0f, 150.0f, kPromptCenterYRatio, 0.60f, 0.95f};
+// 結果メニューが現れ始める、遷移の晴れる進み具合(0〜1)。以前の操作の案内の画像が現れ終わっていた進み具合(0.95)に合わせる。
+// 見出しが現れ、雲が薄くなって見通しがほぼ開いてから出すので、降下と灰の集まりの見せ場を隠さない
+constexpr float kMenuOpenRevealProgress = 0.95f;
 
 #ifdef USE_IMGUI
 // デバッグ窓の位置と、ボタンの大きさ
@@ -41,7 +40,7 @@ void GameOverScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
   backdrop_.Initialize();
   banner_.Initialize(kBannerTexturePath, kBannerLayout);
-  prompt_.Initialize(kPromptTexturePath, kPromptLayout);
+  menu_.Initialize();
   butterfly_.Initialize();
   ash_.Initialize(backdrop_.GetNestCenter()); // 灰が集まる先は、巣の島のくぼみの中心
 }
@@ -61,9 +60,12 @@ void GameOverScene::Update() {
   // 灰の流れ: 降下が始まったら巣へ集まり始める(降下の経過秒で台本が進む)
   ash_.Update(worldDelta, backdrop_.GetSettledSeconds());
 
-  // 見出しと案内は、雲が薄くなって見通しが開くのに合わせて現れる
+  // 見出しは、雲が薄くなって見通しが開くのに合わせて現れる
   banner_.SetRevealProgress(revealProgress);
-  prompt_.SetRevealProgress(revealProgress);
+  // 結果メニューは、見通しがほぼ開いたら、1 回だけ現れ始める(展示中は操作を受け付けないので出さない)
+  if (!ExhibitionMode::kEnabled && !menu_.IsOpen() && revealProgress >= kMenuOpenRevealProgress) {
+    menu_.Open();
+  }
 
   if (ExhibitionMode::kEnabled) {
     UpdateExhibition_();
@@ -97,17 +99,21 @@ void GameOverScene::UpdateExhibition_() {
 }
 
 void GameOverScene::UpdateInput_() {
-  // 遷移の最中は受け付けない(死ぬ瞬間に押していたボタンで、すぐに抜けてしまうのを防ぐ)
-  if (!GetInput() || IsSceneTransitioning() || rebirthStarted_) return;
-  if (GetInput()->TriggerKey(DIK_SPACE) || GetInput()->TriggerKey(DIK_RETURN) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_A)) {
-    RequestSceneChange(SceneId::Title);
-  }
-  if (GetInput()->TriggerKey(DIK_R) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_B)) {
-    BeginRebirth_(); // リトライは、復活の演出を通ってゲームへ戻る(タイトルは通らない)
-  }
-  // ステージ選択へ戻る(選んでいたステージにカーソルを合わせる)
-  if (GetInput()->TriggerKey(DIK_S) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_Y)) {
+  if (!GetInput()) return;
+  // 遷移の最中は受け付けない(死ぬ瞬間に押していたボタンで、すぐに抜けてしまうのを防ぐ)。復活の演出の最中も、メニューが入力を読まない
+  switch (menu_.Update(GetInput(), !IsSceneTransitioning() && !rebirthStarted_)) {
+  case ResultMenu::Choice::Retry:
+    BeginRebirth_(); // もう一度は、復活の演出を通ってゲームへ戻る(タイトルは通らない)
+    break;
+  case ResultMenu::Choice::StageSelect:
+    // 選んでいたステージにカーソルを合わせる
     RequestSceneChangeKeepingPayload(SceneId::StageSelect);
+    break;
+  case ResultMenu::Choice::Title:
+    RequestSceneChange(SceneId::Title);
+    break;
+  case ResultMenu::Choice::None:
+    break;
   }
 }
 
@@ -141,9 +147,9 @@ void GameOverScene::UpdateRebirth_() {
   ash_.SetConvergeScale(state.convergeScale);
   ash_.SetCoreBoost(state.coreBoost);
   ash_.SetCoreSizeScale(state.coreSizeScale);
-  // 見出しと案内は消える
+  // 見出しと結果メニューは消える
   banner_.SetOpacityScale(state.uiOpacity);
-  prompt_.SetOpacityScale(state.uiOpacity);
+  menu_.SetOpacityScale(state.uiOpacity);
   // カメラ(バーストの寄りを含む)と雲
   if (state.cameraOverride) {
     backdrop_.SetCameraOverride(state.cameraEye, state.cameraTarget);
@@ -218,9 +224,7 @@ void GameOverScene::Draw() {
   // 灰と核の発光(雲のあとに加算で描く。雲のもやで色が薄まらず、見出しの下に描く)
   ash_.DrawGlow();
   banner_.Draw();
-  // 展示中は操作を受け付けないので、案内は出さない
-  if (!ExhibitionMode::kEnabled) {
-    prompt_.Draw();
-  }
+  // 結果メニュー(展示中は、現れ始めないので何も描かない)
+  menu_.Draw();
   backdrop_.End();
 }

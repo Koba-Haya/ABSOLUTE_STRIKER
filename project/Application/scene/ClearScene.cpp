@@ -15,12 +15,19 @@ constexpr float kBackdropTargetHeight = 0.30f;
 constexpr float kFrameDeltaSeconds = 1.0f / 60.0f;
 // 見出しの画像
 constexpr const char *kBannerTexturePath = "resources/app/result/gameClear.png";
+// メニューが現れ始めるまでの時間(秒。シーンの開始から)。見出しが完全に現れる(ResultBanner の遅れ 0.4 + 0.8 = 1.2 秒)のを待ってから出す
+constexpr float kMenuOpenDelaySec = 1.4f;
 } // namespace
 
 void ClearScene::Initialize(const SceneServices &services) {
   BaseScene::Initialize(services);
   backdrop_.Initialize(kBackdropTargetHeight);
   banner_.Initialize(kBannerTexturePath);
+  // 展示中は操作を受け付けないので、メニューは出さない
+  menu_.Initialize();
+  if (!ExhibitionMode::kEnabled) {
+    menu_.Open(kMenuOpenDelaySec);
+  }
 }
 
 void ClearScene::Finalize() {}
@@ -38,16 +45,22 @@ void ClearScene::Update() {
         RequestSceneChange(SceneId::Title);
       }
     }
-  } else if (GetInput()) {
-    if (GetInput()->TriggerKey(DIK_SPACE) || GetInput()->TriggerKey(DIK_RETURN) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_A)) {
-      RequestSceneChange(SceneId::Title);
-    }
-    if (GetInput()->TriggerKey(DIK_R) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_B)) {
+  } else {
+    // 決定は、メニューの 1 つのボタンだけ(Space / Enter / パッド A)。遷移の最中は受け付けない
+    // (前のシーンで押していたボタンで、すぐに決定してしまうのを防ぐ)
+    switch (menu_.Update(GetInput(), !IsSceneTransitioning())) {
+    case ResultMenu::Choice::Retry:
       RequestSceneChangeKeepingPayload(SceneId::Game);
-    }
-    // ステージ選択へ戻る(選んでいたステージにカーソルを合わせる)
-    if (GetInput()->TriggerKey(DIK_S) || GetInput()->WasPadPressed(XINPUT_GAMEPAD_Y)) {
+      break;
+    case ResultMenu::Choice::StageSelect:
+      // 選んでいたステージにカーソルを合わせる
       RequestSceneChangeKeepingPayload(SceneId::StageSelect);
+      break;
+    case ResultMenu::Choice::Title:
+      RequestSceneChange(SceneId::Title);
+      break;
+    case ResultMenu::Choice::None:
+      break;
     }
   }
 
@@ -82,5 +95,6 @@ void ClearScene::Update() {
 void ClearScene::Draw() {
   backdrop_.Begin();
   banner_.Draw();
+  menu_.Draw();
   backdrop_.End();
 }

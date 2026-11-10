@@ -29,6 +29,10 @@ void ResultBackdrop::Initialize(float targetHeight) {
   time_ = 0.0f;
 }
 
+void ResultBackdrop::SetTargetHeight(float targetHeight) {
+  if (camera_) camera_->SetTarget({0.0f, targetHeight, 1.0f});
+}
+
 void ResultBackdrop::Begin() {
   auto *renderer = Renderer::GetInstance();
   renderer->SetCamera(*camera_);
