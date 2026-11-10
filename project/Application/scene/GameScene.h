@@ -188,6 +188,7 @@ private:
   VolumeCloudSettings volumeCloudSea_ = MakeSeaLayerSettings();
   bool volumeCloudEditSea_ = true; // 調整 UI で、雲海の層(true)と箱(false)のどちらを調整するか
   StageIslands stageIslands_;      // 雲海の上へ頭を出す浮島の群れ(レールに沿って置く。距離感と速度感を出す)
+  IslandOccluders islandOccluders_; // 浮島の遮蔽物(円柱)。OcclusionWorld へ登録して、ロックオンと弾が問い合わせる
   IslandTurretSpawner islandTurrets_; // タレットの島の上へ、自機が近づいたらタレットを出す
 
   // アクター関連

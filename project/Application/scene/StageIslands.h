@@ -1,5 +1,6 @@
 #pragma once
 #include "StageIsland.h"
+#include "Application/occlusion/IslandOccluders.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -134,10 +135,15 @@ public:
   };
   const std::vector<TurretSlot> &GetTurretSlots() const { return turretSlots_; }
 
+  // 置いた島すべてを、遮蔽物(円柱)として out へ足す。描く範囲の外の島も含める(敵や弾は、画面外の島の陰にもいるため)。
+  // 島の位置と大きさは、置いた島そのものから取るので、配置と遮蔽がずれない。形の決め方は IslandOccluders の仕事
+  void BuildOccluders(IslandOccluders &out) const;
+
 private:
   struct Entry {
     std::unique_ptr<StageIsland> island; // ModelInstance は動かせないので、ポインタで持つ
     float distance = 0.0f;               // 島の、レール上の距離(昇順に並べる)
+    IslandModelKind kind = IslandModelKind::Small; // 島のモデルの種類(遮蔽の形を選ぶのに使う)
   };
   std::vector<Entry> entries_;
   std::vector<TurretSlot> turretSlots_;

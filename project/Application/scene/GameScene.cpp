@@ -61,6 +61,7 @@
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "graphics/particle/EffectManager.h"
 #include "component/ExplosionLightComponent.h"
+#include "Application/occlusion/OcclusionWorld.h"
 
 namespace {
 // ゲームのカメラの投影(画角・ニア・ファー)
@@ -432,12 +433,17 @@ void GameScene::Initialize(const SceneServices &services) {
   if (const auto *rail = FindRailCamera_()) {
     stageIslands_.Initialize(*rail, volumeCloudSea_.layerTop);
   }
+  // 島を遮蔽物として登録する(前のシーンの登録は消す)。島が 1 つも無ければ、空のまとまりが登録されるだけで、何も遮らない
+  OcclusionWorld::GetInstance().Clear();
+  stageIslands_.BuildOccluders(islandOccluders_);
+  OcclusionWorld::GetInstance().Register(&islandOccluders_);
 
   // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
   BeginIntro_();
 }
 
 void GameScene::Finalize() {
+  OcclusionWorld::GetInstance().Unregister(&islandOccluders_); // このシーンが消えたあと、遮蔽物を指すポインタを残さない
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
