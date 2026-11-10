@@ -1,6 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "Type/Vector.h"
+#include "EnemyShootUtil.h"
 #include <string>
 
 /// <summary>
@@ -24,6 +25,7 @@ private:
 
     float shootInterval_ = 2.5f;  // バースト間のクールダウン
     float cooldownTimer_ = 0.0f;
+    EnemyShootUtil::IslandHideGate islandGate_; // 島に隠れている間は撃たない。出てきてから少し待つ
 
     int burstCount_ = 3;           // 1バーストの発射数
     int burstShotsRemaining_ = 0;  // 現在のバーストで残っている発射数

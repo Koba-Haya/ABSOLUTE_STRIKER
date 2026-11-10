@@ -2,6 +2,7 @@
 #include "AbsoluteEngine/scene/Component.h"
 #include "AbsoluteEngine/camera/ITimelineCamera.h"
 #include "Type/Vector.h"
+#include "EnemyShootUtil.h"
 #include <string>
 
 class EnemyShootComponent : public AbsoluteEngine::IComponent {
@@ -29,6 +30,7 @@ public:
 private:
     float shootInterval_ = 2.0f; // デフォルトは2秒に1回
     float shootTimer_ = 0.0f;
+    EnemyShootUtil::IslandHideGate islandGate_; // 島に隠れている間は撃たない。出てきてから少し待つ
     bool wantToShoot_ = false;
 
     // 進行方向追跞用（マジックナンバー不要で動的に取得）

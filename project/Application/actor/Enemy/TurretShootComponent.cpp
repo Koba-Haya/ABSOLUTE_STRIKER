@@ -9,6 +9,9 @@
 void TurretShootComponent::Update(float deltaTime) {
     if (!owner_) return;
 
+    // 島の陰に隠れているかを毎フレーム追う(島の上のタレットは、島の円柱より上にいるので、隠れない)
+    islandGate_.Update(owner_->GetTransform().translate, deltaTime);
+
     if (burstShotsRemaining_ > 0) {
         // バースト中: burstDelay_間隔で残弾を消化する（クールダウンタイマーは進めない）
         burstTimer_ += deltaTime;
@@ -63,6 +66,9 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
 
     constexpr float ndcMargin = 1.2f;
     if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return false;
+
+    // 島に隠れている(または、出てきたばかりの)敵は撃たない。クールダウンは進んだままなので、待ち時間が過ぎたら撃てる
+    if (!islandGate_.CanShoot()) return false;
 
     // --- プレイヤーを探す ---
     std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;

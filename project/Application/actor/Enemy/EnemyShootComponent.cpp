@@ -31,6 +31,9 @@ void EnemyShootComponent::Update(float deltaTime) {
     prevPos_    = currentPos;
     hasPrevPos_ = true;
 
+    // 島の陰に隠れているかを毎フレーム追う(隠れている間は撃たない。出てきてから少し待つ)
+    islandGate_.Update(currentPos, deltaTime);
+
     // タイマー更新
     shootTimer_ += deltaTime;
     if (shootTimer_ < shootInterval_) return;
@@ -60,6 +63,9 @@ void EnemyShootComponent::Update(float deltaTime) {
     // NDC ±1.2 の範囲外は発射しない（画面外ギリギリの敵も少し猶予を持たせる）
     constexpr float ndcMargin = 1.2f;
     if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return;
+
+    // 島に隠れている(または、出てきたばかりの)敵は撃たない。隠れている間に来た発射の時刻は、捨てる
+    if (!islandGate_.CanShoot()) return;
 
     // --- プレイヤーを探す ---
     std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;

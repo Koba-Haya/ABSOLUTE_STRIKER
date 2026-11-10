@@ -3,6 +3,7 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Player/PlayerComponent.h"
 #include "GameCamera.h"
+#include "Application/occlusion/OcclusionWorld.h"
 
 namespace {
 // 画面内判定で、カメラ背後(クリップ空間の w が 0 以下)とみなす下限。既存の射撃コンポーネントと同じ値
@@ -37,6 +38,21 @@ std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer(const BaseScene& scene) {
         }
     }
     return nullptr;
+}
+
+bool IsHiddenByIsland(const Vector3& position) {
+    const auto* scene = BaseScene::GetActiveScene();
+    const auto* camera = scene ? scene->GetMainCamera() : nullptr;
+    if (!camera) return false;
+    return OcclusionWorld::GetInstance().IsSegmentBlocked(camera->GetEye(), position, OccluderKind::kIsland);
+}
+
+void IslandHideGate::Update(const Vector3& position, float deltaTime) {
+    if (IsHiddenByIsland(position)) {
+        visibleTime_ = 0.0f; // 隠れた。出てきたら、待ち時間を最初から数える
+    } else {
+        visibleTime_ += deltaTime;
+    }
 }
 
 } // namespace EnemyShootUtil

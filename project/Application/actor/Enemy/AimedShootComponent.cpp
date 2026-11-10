@@ -71,7 +71,11 @@ void AimedShootComponent::Update(float deltaTime) {
 
     // 画面外にいる間は、タイマーを進めない(入ってから firstShotDelay_ 待つ。出ている間に弾がたまらない)
     const Vector3 myPos = owner_->GetTransform().translate;
+    islandGate_.Update(myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
     if (!EnemyShootUtil::IsInsideScreen(*scene, myPos, screenMargin_)) return;
+
+    // 島に隠れている(または、出てきたばかりの)間は撃たない。画面外と同じく、タイマーも進めない
+    if (!islandGate_.CanShoot()) return;
 
     // ---- タイマーの更新 ----
     visibleTime_ += deltaTime;

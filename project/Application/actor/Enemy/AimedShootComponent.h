@@ -19,6 +19,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "Type/Vector.h"
+#include "EnemyShootUtil.h"
 #include <memory>
 #include <random>
 #include <string>
@@ -55,6 +56,7 @@ private:
     float screenMargin_ = 1.0f;
 
     // ---- 状態 ----
+    EnemyShootUtil::IslandHideGate islandGate_; // 島に隠れている間は撃たない。出てきてから少し待つ
     float visibleTime_ = 0.0f;        // 画面内にいた時間の合計(最初の1発までの待ちに使う)
     bool hasShot_ = false;            // 1発でも撃ったか
     float sinceLastShot_ = 0.0f;      // 前の発射からの時間(画面内にいる間だけ進む)
