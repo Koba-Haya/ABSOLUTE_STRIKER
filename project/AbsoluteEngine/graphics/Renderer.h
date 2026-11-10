@@ -306,12 +306,6 @@ private:
   ComPtr<ID3D12Resource> spotLightCB_;
   SpotLightGroupCB *spotLightMapped_ = nullptr;
 
-  struct SkinningInformation {
-    uint32_t numVertices;
-  };
-  ComPtr<ID3D12Resource> skinningInformationCB_;
-  SkinningInformation* skinningInformationMapped_ = nullptr;
-
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> objPipelineMirrored_; // 反射パス用(鏡映で巻き順が逆になるので、表裏の判定を反転)

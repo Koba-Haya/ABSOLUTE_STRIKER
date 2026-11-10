@@ -35,6 +35,16 @@ bool SkinCluster::Initialize(DirectXCommon* dx, uint32_t jointCount, uint32_t ve
 
   device->CreateShaderResourceView(paletteResource.Get(), &srvDesc, srvAlloc.Cpu(srvIndex));
 
+  // --- CS の定数バッファ(頂点数)。値は変わらないので、作るときに 1 回だけ書く ---
+  // 定数バッファのサイズは 256 バイトの倍数にする
+  constexpr size_t kConstantBufferAlignment = 256;
+  infoResource = Renderer::GetInstance()->CreateUploadBuffer(kConstantBufferAlignment);
+  if (!infoResource) return false;
+  uint32_t* mappedInfo = nullptr;
+  if (FAILED(infoResource->Map(0, nullptr, reinterpret_cast<void**>(&mappedInfo)))) return false;
+  mappedInfo[0] = vertexCount;
+  infoResource->Unmap(0, nullptr);
+
   // --- CS出力用バッファの生成 ---
   size_t vbSize = sizeof(VertexData) * vertexCount;
   skinnedVertexBuffer = Renderer::GetInstance()->CreateUAVBuffer(vbSize);
