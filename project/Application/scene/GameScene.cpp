@@ -26,6 +26,7 @@
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "../actor/Enemy/StraightMoveComponent.h"
 #include "../actor/Enemy/EnemyComponent.h"
+#include "../actor/Enemy/EnemyModelAnimatorComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
 #include "../actor/Enemy/FormationMemberComponent.h"
@@ -242,6 +243,7 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyModelAnimatorComponent", []() { return std::make_unique<EnemyModelAnimatorComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("TurretShootComponent", []() { return std::make_unique<TurretShootComponent>(); });

@@ -4,13 +4,13 @@
         {
             "color": {
                 "x": 1.0,
-                "y": 0.25,
-                "z": 0.2,
+                "y": 1.0,
+                "z": 1.0,
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
-            "modelPath": "resources/app/cube/cube.obj",
-            "texturePath": "resources/app/cube/white100x100.png",
+            "modelPath": "resources/app/enemy/enemy_spider.gltf",
+            "texturePath": "resources/app/enemy/enemy_palette.png",
             "type": "ModelComponent"
         },
         {

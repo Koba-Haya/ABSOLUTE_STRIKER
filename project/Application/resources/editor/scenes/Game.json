@@ -222,12 +222,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.6499999761581421,
-                        "z": 0.05000000074505806
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bird.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -257,6 +257,9 @@
                 },
                 {
                     "type": "RamAttackComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyHoming.json",
@@ -267,9 +270,9 @@
                     "z": 0.0
                 },
                 "scale": {
-                    "x": 0.6000000238418579,
-                    "y": 0.6000000238418579,
-                    "z": 1.7999999523162842
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
                 },
                 "translate": {
                     "x": 0.0,
@@ -284,12 +287,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -343,12 +346,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -402,12 +405,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -461,12 +464,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -520,12 +523,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -578,13 +581,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -608,6 +611,9 @@
                 },
                 {
                     "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -634,13 +640,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -667,6 +673,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -693,13 +702,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -726,6 +735,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -752,13 +764,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -785,6 +797,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -811,13 +826,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -844,6 +859,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -871,12 +889,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -927,12 +945,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.6499999761581421,
-                        "z": 0.05000000074505806
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bird.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -962,6 +980,9 @@
                 },
                 {
                     "type": "RamAttackComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\EnemyHoming.json",
@@ -972,9 +993,9 @@
                     "z": 0.0
                 },
                 "scale": {
-                    "x": 0.6000000238418579,
-                    "y": 0.6000000238418579,
-                    "z": 1.7999999523162842
+                    "x": 1.0,
+                    "y": 1.0,
+                    "z": 1.0
                 },
                 "translate": {
                     "x": 0.0,
@@ -989,12 +1010,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1048,12 +1069,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1107,12 +1128,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1166,12 +1187,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1225,12 +1246,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1283,13 +1304,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1313,6 +1334,9 @@
                 },
                 {
                     "type": "EnemyShootComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1339,13 +1363,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1372,6 +1396,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1398,13 +1425,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1431,6 +1458,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1457,13 +1487,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1490,6 +1520,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1516,13 +1549,13 @@
                 {
                     "color": {
                         "w": 1.0,
-                        "x": 0.4000000059604645,
-                        "y": 0.75,
+                        "x": 1.0,
+                        "y": 1.0,
                         "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_bee.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {
@@ -1549,6 +1582,9 @@
                 },
                 {
                     "type": "StraightMoveComponent"
+                },
+                {
+                    "type": "EnemyModelAnimatorComponent"
                 }
             ],
             "prefabPath": "C:/Users/haya2/source/repos/CG2/project/Application/resources/prefabs\\Enemy.json",
@@ -1576,12 +1612,12 @@
                     "color": {
                         "w": 1.0,
                         "x": 1.0,
-                        "y": 0.25,
-                        "z": 0.20000000298023224
+                        "y": 1.0,
+                        "z": 1.0
                     },
                     "environmentCoefficient": 0.0,
-                    "modelPath": "resources/app/cube/cube.obj",
-                    "texturePath": "resources/app/cube/white100x100.png",
+                    "modelPath": "resources/app/enemy/enemy_spider.gltf",
+                    "texturePath": "resources/app/enemy/enemy_palette.png",
                     "type": "ModelComponent"
                 },
                 {

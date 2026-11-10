@@ -4,13 +4,13 @@
         {
             "color": {
                 "x": 1.0,
-                "y": 0.65,
-                "z": 0.05,
+                "y": 1.0,
+                "z": 1.0,
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
-            "modelPath": "resources/app/cube/cube.obj",
-            "texturePath": "resources/app/cube/white100x100.png",
+            "modelPath": "resources/app/enemy/enemy_bird.gltf",
+            "texturePath": "resources/app/enemy/enemy_palette.png",
             "type": "ModelComponent"
         },
         {
@@ -39,6 +39,9 @@
         },
         {
             "type": "RamAttackComponent"
+        },
+        {
+            "type": "EnemyModelAnimatorComponent"
         }
     ],
     "name": "EnemyHoming",
