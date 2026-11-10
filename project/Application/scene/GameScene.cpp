@@ -71,6 +71,12 @@ namespace {
 constexpr float kGameCameraFovY = 0.45f;
 constexpr float kGameCameraNear = 0.1f;
 constexpr float kGameCameraFar = 1000.0f;
+// 箱の雲(volumeCloud_)を置く、レール上の距離(ユニット)。レールが直線だったころの位置(ワールド z=267、始点が z=-50)と同じ地点。
+// 箱はワールド固定ではなく、この地点のレールの上に置く(レールを曲げても、カメラが箱の中を通り抜ける)
+constexpr float kVolumeCloudRailDistance = 317.0f;
+// 箱の中心の、レールの高さからの相対の高さ(負は下)。以前は、レールが y=0 で、箱の中心が y=-2.8 だった。
+// レールが上下しても、カメラが箱の同じ位置(やや上寄り)を通るよう、レール基準にした
+constexpr float kVolumeCloudHeightFromRail = -2.8f;
 // ステージ名の板のモデル(板に貼る画像は、ステージの定義(StageDefinition::stageNameTexture)が持つ)
 constexpr const char *kStageNameModelPath = "resources/app/stage/stage_name_board.obj";
 // 雲の文字のパフの画像(タイトルの雲の粒と同じ)
@@ -438,6 +444,9 @@ void GameScene::Initialize(const SceneServices &services) {
   // 浮島。レールの形から配置を決めるので、レールカメラを読み込んだあとに行う(失敗しても、島が出ないだけで、ゲームは進められる)
   if (const auto *rail = FindRailCamera_()) {
     stageIslands_.Initialize(*rail, volumeCloudSea_.layerTop);
+    // 箱の雲を、レール上の決めた地点へ置く(x と z と高さをレールに合わせる。大きさと向きは変えない)
+    const AbsoluteEngine::RailFrame cloudFrame = rail->GetRailFrame(kVolumeCloudRailDistance);
+    volumeCloud_.center = {cloudFrame.position.x, cloudFrame.position.y + kVolumeCloudHeightFromRail, cloudFrame.position.z};
   }
   // 島を遮蔽物として登録する(前のシーンの登録は消す)。島が 1 つも無ければ、空のまとまりが登録されるだけで、何も遮らない
   OcclusionWorld::GetInstance().Clear();

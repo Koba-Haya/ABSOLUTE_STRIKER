@@ -66,14 +66,18 @@ std::vector<Vector3> SampleRail(const RailCameraComponent &rail, float totalLeng
   return samples;
 }
 
-// 島の上面の縁が、レールの通り道(片側 kCorridorHalfWidth)へ入るなら true。
-// 島の中心から、レール上の各点までの水平の距離の最短を、島の半径 + 通り道の幅と比べる。
+// 島が、レールの通り道(水平は片側 kCorridorHalfWidth、縦はレールの上下 kCorridorHalfHeight)へ入るなら true。
+// 島の中心から、レール上の各点までの水平の距離を、島の半径 + 通り道の幅と比べる。ただし、点の高さが島の上下の範囲(通り道の縦の幅を足す)に入る点だけを見る(3 次元)。
 // カーブの内側では、レールの別の部分が、島のすぐ近くを通るので、距離を置いた位置でも、ここで見つかる
 bool IntrudesIntoRail(const std::vector<Vector3> &railSamples, const Vector3 &islandPosition, float scale) {
   const float limit = StageIslandDefaults::kCorridorHalfWidth + scale * StageIslandDefaults::kTopRadiusPerScale -
                       StageIslandDefaults::kRailClearanceTolerance;
   const float limitSq = limit * limit;
+  // 島の上下の範囲に、通り道の縦の幅を足した範囲。レールの点の高さがこの範囲に入らなければ、水平に近くても食い込まない
+  const float lowestY = islandPosition.y - scale * StageIslandDefaults::kIslandDepthPerScale - StageIslandDefaults::kCorridorHalfHeight;
+  const float highestY = islandPosition.y + scale * StageIslandDefaults::kIslandTopPerScale + StageIslandDefaults::kCorridorHalfHeight;
   for (const Vector3 &point : railSamples) {
+    if (point.y < lowestY || point.y > highestY) continue;
     const float dx = point.x - islandPosition.x;
     const float dz = point.z - islandPosition.z;
     if (dx * dx + dz * dz < limitSq) {
@@ -131,7 +135,7 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
       const float side = (index % 2 == 0) ? 1.0f : -1.0f;
       const float lateral = StageIslandDefaults::kCorridorHalfWidth + scale * StageIslandDefaults::kTopRadiusPerScale +
                             unit(rng) * StageIslandDefaults::kLateralRange;
-      const float height = cloudLayerTop + Lerp(StageIslandDefaults::kHeightAboveCloudMin, StageIslandDefaults::kHeightAboveCloudMax, unit(rng));
+      const float heightDraw = unit(rng); // 高さの種類(雲に埋まる / 浮く)と高さを、この 1 つの値で決める
       const float yaw = unit(rng) * kTwoPi;
       const float tiltX = (unit(rng) * 2.0f - 1.0f) * StageIslandDefaults::kMaxTiltRad;
       const float tiltZ = (unit(rng) * 2.0f - 1.0f) * StageIslandDefaults::kMaxTiltRad;
@@ -153,7 +157,13 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
       if (nearGate) continue;
 
       Vector3 position = PointBesideRail(rail, totalLength, distance, lateral * side);
-      position.y = height; // 島は、レールの高さではなく、雲の上面を基準の高さにする
+      // 高さ: 値が小さいほうは、従来どおり雲の上面が基準(下側が雲に埋まる)。残りは、レールの高さが基準で、空に浮く
+      if (heightDraw < StageIslandDefaults::kSunkFraction) {
+        position.y = cloudLayerTop + Lerp(StageIslandDefaults::kHeightAboveCloudMin, StageIslandDefaults::kHeightAboveCloudMax, heightDraw / StageIslandDefaults::kSunkFraction);
+      } else {
+        const float floatT = (heightDraw - StageIslandDefaults::kSunkFraction) / (1.0f - StageIslandDefaults::kSunkFraction);
+        position.y += Lerp(StageIslandDefaults::kFloatHeightMin, StageIslandDefaults::kFloatHeightMax, floatT); // position.y は、その距離のレールの高さ
+      }
       // カーブの内側で、道へ食い込む島は置かない(乱数は引いたあとなので、ほかの島の配置は変わらない)
       if (IntrudesIntoRail(railSamples, position, scale)) {
         ++rejectedByRail;
@@ -169,7 +179,10 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
   if (auto turretResource = assets->Load<ModelResource>(kTurretModelPath)) {
     for (const auto &spec : StageIslandDefaults::kTurretIslands) {
       Vector3 position = PointBesideRail(rail, totalLength, spec.distance, spec.lateral);
-      position.y = cloudLayerTop + StageIslandDefaults::kTurretIslandHeightAboveCloud;
+      // position.y は、その距離のレールの高さ。レール基準で置くが、雲の上面より低くはしない
+      const float heightFromRail = position.y + StageIslandDefaults::kTurretIslandHeightFromRail;
+      const float minHeight = cloudLayerTop + StageIslandDefaults::kTurretIslandMinHeightAboveCloud;
+      position.y = heightFromRail > minHeight ? heightFromRail : minHeight;
       const float yaw = std::fmod(spec.distance, kTwoPi);
       if (auto island = MakeIsland(turretResource, position, spec.scale, {0.0f, yaw, 0.0f})) {
         entries_.push_back({std::move(island), spec.distance, IslandModelKind::Rock});
@@ -223,7 +236,6 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
       }
     }
   }
-  Logger::GetInstance().Log("[StageIslands] placed=%d rejectedByRail=%d", static_cast<int>(entries_.size()), rejectedByRail);
   return !entries_.empty();
 }
 
