@@ -10,6 +10,7 @@
 #include "../actor/Bullet/BulletComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../hud/GameHUD.h"
+#include "../hud/HudStatusView.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "TextureResource.h"
 #include "Animation.h"
@@ -237,4 +238,5 @@ private:
   PlayerDeathSettings deathSettings_;       // 死亡演出の設定(ステージごとの値へ差し替えられる)
 
   std::unique_ptr<GameHUD> gameHUD_;
+  HudStatusView hudStatus_; // HUD の文字(目的、スコア、進行バー)
 };

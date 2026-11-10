@@ -126,6 +126,12 @@
     <ClCompile Include="graphics\2d\Sprite.cpp">
       <Filter>engine\graphics\2d</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\2d\BitmapFont.cpp">
+      <Filter>engine\graphics\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\2d\SpriteBatchDrawer.cpp">
+      <Filter>engine\graphics\2d</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\2d\SpriteManager.cpp">
       <Filter>engine\graphics\2d</Filter>
     </ClCompile>
@@ -325,6 +331,12 @@
       <Filter>engine\graphics</Filter>
     </ClInclude>
     <ClInclude Include="graphics\2d\Sprite.h">
+      <Filter>engine\graphics\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\2d\BitmapFont.h">
+      <Filter>engine\graphics\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\2d\SpriteBatchDrawer.h">
       <Filter>engine\graphics\2d</Filter>
     </ClInclude>
     <ClInclude Include="graphics\2d\SpriteManager.h">

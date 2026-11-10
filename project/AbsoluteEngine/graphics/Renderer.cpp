@@ -13,6 +13,7 @@
 #include "ShaderCompilerUtils.h"
 #include "Skybox.h"
 #include "Sprite.h"
+#include "SpriteBatchDrawer.h"
 #include "SpriteResource.h"
 #include "TextureResource.h"
 #include "SkinCluster.h"
@@ -316,6 +317,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   // Ribbon Drawer(軌跡の帯。頂点バッファは全リボンで共有)
   ribbonDrawer_ = std::make_unique<RibbonDrawer>();
   ribbonDrawer_->Initialize(device, kMaxRibbonVertices);
+
+  // Sprite Batch Drawer(文字など、たくさんの四角形を 1 回の描画命令で描くための共有バッファ)
+  spriteBatchDrawer_ = std::make_unique<SpriteBatchDrawer>();
+  spriteBatchDrawer_->Initialize(this);
 
   auto align256 = [](size_t size) -> size_t { return (size + 255) & ~255; };
 
@@ -809,6 +814,37 @@ void Renderer::DrawSprite(Sprite *sprite) {
 
   cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
   cmdList->DrawIndexedInstanced(res->GetIndexCount(), 1, 0, 0, 0);
+}
+
+void Renderer::DrawSpriteQuads(const SpriteVertex *vertices, uint32_t quadCount,
+                               D3D12_GPU_DESCRIPTOR_HANDLE texture, const Vector4 &color,
+                               BlendMode blendMode) {
+  if (!spriteBatchDrawer_ || !vertices || quadCount == 0)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 頂点は画面ピクセル座標で渡されるので、変換は DrawSprite の「ワールド行列が単位行列」の場合と同じ(正射影のみ)
+  const Matrix4x4 orthoProj =
+      MakeOrthographicMatrix(0.0f, 0.0f, GetScreenWidth(), GetScreenHeight(), 0.0f, 100.0f);
+
+  SpriteBatchDrawer::Submission submission;
+  if (!spriteBatchDrawer_->Submit(dx_->GetFrameCount(), vertices, quadCount, color, orthoProj,
+                                  &submission)) {
+    return;
+  }
+
+  GetSpritePipeline_(blendMode)->SetPipelineState(cmdList);
+  cmdList->IASetVertexBuffers(0, 1, &submission.vertexBufferView);
+  cmdList->IASetIndexBuffer(&submission.indexBufferView);
+  cmdList->SetGraphicsRootConstantBufferView(0, submission.materialCB);
+  cmdList->SetGraphicsRootConstantBufferView(1, submission.transformCB);
+
+  ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+  cmdList->SetDescriptorHeaps(1, heaps);
+  cmdList->SetGraphicsRootDescriptorTable(2, texture);
+
+  cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+  cmdList->DrawIndexedInstanced(submission.indexCount, 1, 0, submission.baseVertex, 0);
 }
 
 void Renderer::DrawSkybox(Skybox *skybox) {

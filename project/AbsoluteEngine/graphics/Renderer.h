@@ -29,6 +29,8 @@ class Sprite;
 class Skybox;
 class PrimitiveDrawer;
 class RibbonDrawer;
+class SpriteBatchDrawer;
+struct SpriteVertex;
 class RibbonTrail;
 class ParticleManager;
 class Camera;
@@ -139,6 +141,15 @@ public:
   // 描画メソッド群
   void DrawModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
+  // たくさんの四角形(文字など)を、1 回の描画命令でまとめて描く(BitmapFont が使う)。
+  // vertices は quadCount * 4 個で、1 クワッドの並びは Sprite の単位四角形と同じ(左下、左上、右下、右上)。
+  // 位置は画面ピクセル座標(Sprite と同じ座標系)。texture はアトラスの SRV、color は全クワッド共通の乗算色。
+  // 頂点は内部の共有バッファへコピーされるので、呼び出し後に配列を使い回してよい。
+  // 1 フレームの上限(SpriteBatchDrawer::kMaxQuads / kMaxDraws)を超えた分は描かない。
+  // 雲の合成のあとは、DrawSprite と同じく深度なしのパイプラインに切り替わる
+  void DrawSpriteQuads(const SpriteVertex *vertices, uint32_t quadCount,
+                       D3D12_GPU_DESCRIPTOR_HANDLE texture, const Vector4 &color,
+                       BlendMode blendMode = BlendMode::Alpha);
   void DrawSkybox(Skybox *skybox);
   // 手続き生成の空(グラデーション・太陽・雲)を全画面で描く(最奥)。sunDirection は太陽へ向かう向き、
   // time は雲が風で流れるアニメーション用の秒。雲の位置はカメラ位置から求める。
@@ -349,6 +360,7 @@ private:
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;
+  std::unique_ptr<SpriteBatchDrawer> spriteBatchDrawer_; // 文字などのクワッドをまとめて描く(共有バッファ)
   ComPtr<ID3D12Resource> ribbonTransformCB_;
   TransformCB *ribbonTransformMapped_ = nullptr;
   std::unique_ptr<UnifiedPipeline> cylinderPipeline_;

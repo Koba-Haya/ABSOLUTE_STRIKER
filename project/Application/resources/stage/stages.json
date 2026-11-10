@@ -2,10 +2,20 @@
   "stages": [
     {
       "id": "stage01",
-      "displayName": "Cloud Sea",
+      "displayName": "雲海",
+      "description": "どこまでも続く、雲の海。\n蝶となって、雲の上を駆け抜けよう。",
+      "backdrop": "cloudSea",
       "dataName": "Game",
       "stageNameTexture": "resources/app/stage/stage_name_01.png",
       "unlocked": true
+    },
+    {
+      "id": "stage02",
+      "displayName": "？？？",
+      "description": "まだ、行けない場所。",
+      "backdrop": "cloudSea",
+      "dataName": "Game",
+      "unlocked": false
     }
   ]
 }

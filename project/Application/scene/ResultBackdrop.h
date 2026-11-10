@@ -11,6 +11,9 @@ public:
   // targetHeight: 注視点の高さ(カメラの前方 1 ユニットに対する y)。正で空を見上げ(太陽が見える)、
   //               負で地平線の下を見下ろす(暗く霞んだ色になる)
   void Initialize(float targetHeight);
+  // 注視点の高さを変える(ステージ選択で、選んだステージの世界観に合わせて空の見え方を切り替えるのに使う)。
+  // Initialize のあとで呼ぶ。カメラの向きだけを変えるので、重い初期化はやり直さない
+  void SetTargetHeight(float targetHeight);
   void Update(float deltaTime) { time_ += deltaTime; }
   // 空を描き始める(この呼び出しのあとに、見出しなどのスプライトを Draw してよい)
   void Begin();
