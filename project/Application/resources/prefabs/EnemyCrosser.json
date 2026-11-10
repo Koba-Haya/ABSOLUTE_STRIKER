@@ -1,0 +1,71 @@
+{
+    "children": [],
+    "components": [
+        {
+            "color": {
+                "w": 1.0,
+                "x": 1.0,
+                "y": 0.6,
+                "z": 0.15
+            },
+            "environmentCoefficient": 0.0,
+            "modelPath": "resources/app/cube/cube.obj",
+            "texturePath": "resources/app/cube/white100x100.png",
+            "type": "ModelComponent"
+        },
+        {
+            "centerOffset": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "colliderType": 2,
+            "radius": 1.0,
+            "size": {
+                "x": 0.5,
+                "y": 0.5,
+                "z": 0.5
+            },
+            "type": "ColliderComponent"
+        },
+        {
+            "type": "EnemyComponent"
+        },
+        {
+            "aheadSpeed": 0.0,
+            "lateralSpeed": 10.0,
+            "lifetime": 6.0,
+            "mirrorWithStartSide": true,
+            "type": "RailAnchorComponent",
+            "verticalSpeed": 0.0
+        },
+        {
+            "aimErrorDegrees": 4.0,
+            "bulletSpeed": 14.0,
+            "firstShotDelay": 0.8,
+            "recoverAfterBulletGone": 1.0,
+            "screenMargin": 1.0,
+            "shootInterval": 2.8,
+            "type": "AimedShootComponent"
+        }
+    ],
+    "name": "EnemyCrosser",
+    "tag": "Enemy",
+    "transform": {
+        "rotate": {
+            "x": 0.0,
+            "y": -0.0,
+            "z": 0.0
+        },
+        "scale": {
+            "x": 1.0,
+            "y": 1.0,
+            "z": 1.0
+        },
+        "translate": {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0
+        }
+    }
+}

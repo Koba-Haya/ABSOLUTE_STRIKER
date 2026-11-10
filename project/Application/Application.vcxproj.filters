@@ -55,6 +55,9 @@
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
     <ClCompile Include="actor\Enemy\EnemyShootComponent.cpp" />
     <ClCompile Include="actor\Enemy\StraightMoveComponent.cpp" />
+    <ClCompile Include="actor\Enemy\RailAnchorComponent.cpp" />
+    <ClCompile Include="actor\Enemy\AimedShootComponent.cpp" />
+    <ClCompile Include="actor\Enemy\EnemyShootUtil.cpp" />
     <ClCompile Include="actor\Enemy\FormationSpawnEvent.cpp" />
     <ClCompile Include="actor\Enemy\TurretShootComponent.cpp" />
     <ClCompile Include="actor\Enemy\ChargeOnApproachComponent.cpp" />
@@ -140,6 +143,9 @@
     <ClInclude Include="actor\Enemy\EnemyComponent.h" />
     <ClInclude Include="actor\Enemy\EnemyShootComponent.h" />
     <ClInclude Include="actor\Enemy\StraightMoveComponent.h" />
+    <ClInclude Include="actor\Enemy\RailAnchorComponent.h" />
+    <ClInclude Include="actor\Enemy\AimedShootComponent.h" />
+    <ClInclude Include="actor\Enemy\EnemyShootUtil.h" />
     <ClInclude Include="actor\Enemy\FormationMemberComponent.h" />
     <ClInclude Include="actor\Enemy\FormationSpawnEvent.h" />
     <ClInclude Include="actor\Enemy\TurretShootComponent.h" />

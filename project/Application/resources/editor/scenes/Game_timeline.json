@@ -60,6 +60,33 @@
                 },
                 {
                     "eventType": "SpawnEvent",
+                    "prefabId": "EnemyCrosser",
+                    "rail": {
+                        "ahead": 50.0,
+                        "lateral": -26.0,
+                        "vertical": 2.0
+                    },
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "triggerTime": 9.0
+                },
+                {
+                    "eventType": "SpawnEvent",
                     "prefabId": "Enemy",
                     "rail": {
                         "ahead": 80.0,
@@ -140,6 +167,33 @@
                         }
                     },
                     "triggerTime": 18.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyCrosser",
+                    "rail": {
+                        "ahead": 50.0,
+                        "lateral": 26.0,
+                        "vertical": 0.0
+                    },
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "triggerTime": 20.0
                 },
                 {
                     "eventType": "SpawnEvent",
@@ -252,6 +306,33 @@
                     "triggerTime": 34.0
                 },
                 {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyCrosser",
+                    "rail": {
+                        "ahead": 50.0,
+                        "lateral": -26.0,
+                        "vertical": -1.0
+                    },
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "triggerTime": 36.0
+                },
+                {
                     "basePosition": {
                         "rotate": {
                             "x": 0.0,
@@ -335,6 +416,33 @@
                         "vertical": 0.0
                     },
                     "triggerTime": 46.0
+                },
+                {
+                    "eventType": "SpawnEvent",
+                    "prefabId": "EnemyCrosser",
+                    "rail": {
+                        "ahead": 50.0,
+                        "lateral": 26.0,
+                        "vertical": 2.0
+                    },
+                    "spawnTransform": {
+                        "rotate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        },
+                        "scale": {
+                            "x": 1.0,
+                            "y": 1.0,
+                            "z": 1.0
+                        },
+                        "translate": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "z": 0.0
+                        }
+                    },
+                    "triggerTime": 48.0
                 },
                 {
                     "eventType": "SpawnEvent",
