@@ -1,0 +1,27 @@
+{
+    "pickup": {
+        "pullRadius": 10.0,
+        "pickupRadius": 2.2,
+        "pullSpeed": 28.0,
+        "lifetimeSeconds": 25.0,
+        "spinSpeed": 2.5,
+        "bobAmplitude": 0.25,
+        "bobSpeed": 3.0,
+        "collectSeconds": 0.25,
+        "collectScaleUp": 1.4
+    },
+    "upgrade": {
+        "lockOnMaxCap": 6,
+        "carryOverBetweenStages": false
+    },
+    "items": [
+        {
+            "id": "lockOnPlus",
+            "effect": "lockOnMax",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette.png",
+            "scale": 1.2
+        }
+    ]
+}

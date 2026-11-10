@@ -29,6 +29,7 @@
 #include "../actor/Enemy/AimedShootComponent.h"
 #include "../actor/Enemy/EnemyComponent.h"
 #include "../actor/Enemy/EnemyModelAnimatorComponent.h"
+#include "../actor/Enemy/TelegraphComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
 #include "../actor/Enemy/FormationMemberComponent.h"
@@ -247,6 +248,7 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyModelAnimatorComponent", []() { return std::make_unique<EnemyModelAnimatorComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("TelegraphComponent", []() { return std::make_unique<TelegraphComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RailAnchorComponent", []() { return std::make_unique<RailAnchorComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("AimedShootComponent", []() { return std::make_unique<AimedShootComponent>(); });
@@ -306,6 +308,8 @@ void GameScene::Initialize(const SceneServices &services) {
   } else {
       playerComp->Initialize();
   }
+  // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
+  itemSystem_.BeginStage(playerObj_);
 
   // -----------------------------------------------------------------------
   // 自機のモデルを、蝶に差し替える。
@@ -747,9 +751,17 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
     }
 
-    enemyComp->onDestroyed = [this, formationComp](const Vector3& hitPos) {
-        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+    // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
+    enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
+        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
         hitEffects_.Spawn(*this, hitPos);
+
+        // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
+        // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
+        if (reason != EnemyDestroyReason::Player) return;
+
+        // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
+        itemSystem_.OnEnemyDestroyed(*this, enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();

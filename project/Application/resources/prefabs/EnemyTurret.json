@@ -3,9 +3,9 @@
     "components": [
         {
             "color": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0,
+                "x": 0.8,
+                "y": 0.8,
+                "z": 0.8,
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
@@ -33,7 +33,31 @@
             "type": "EnemyComponent"
         },
         {
-            "type": "TurretShootComponent"
+            "type": "TurretShootComponent",
+            "shootInterval": 2.5,
+            "burstCount": 3,
+            "burstDelay": 0.25,
+            "bulletSpeed": 30.0,
+            "fireRange": 90.0,
+            "leadAim": true
+        },
+        {
+            "type": "TelegraphComponent",
+            "glowMode": "muzzle",
+            "duration": 0.4,
+            "muzzleOffset": {
+                "x": 0.0,
+                "y": 0.17,
+                "z": -0.52
+            },
+            "glowColor": {
+                "x": 1.0,
+                "y": 0.55,
+                "z": 0.15,
+                "w": 1.0
+            },
+            "orbScaleStart": 0.1,
+            "orbScaleEnd": 0.35
         }
     ],
     "name": "EnemyTurret",

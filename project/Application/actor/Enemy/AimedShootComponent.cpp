@@ -4,6 +4,7 @@
 #include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
+#include "TelegraphComponent.h"
 #include "Method.h"
 #include <algorithm>
 #include <cmath>
@@ -86,6 +87,21 @@ void AimedShootComponent::Update(float deltaTime) {
         sinceBulletGone_ += deltaTime;
     }
 
+    // ---- 予備動作(体の光) ----
+    // 次に撃てるまでの秒数(最初の 1 発は、待ちの残り。以降は、間隔の残りと、弾が消えてからの間の残りの、長いほう)。
+    // 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
+    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    if (telegraph) {
+        float secondsUntilFire = firstShotDelay_ - visibleTime_;
+        if (hasShot_) {
+            secondsUntilFire = shootInterval_ - sinceLastShot_;
+            if (!IsLastBulletAlive_()) {
+                secondsUntilFire = std::max(secondsUntilFire, recoverAfterBulletGone_ - sinceBulletGone_);
+            }
+        }
+        if (telegraph->HoldFire(secondsUntilFire)) return;
+    }
+
     // ---- 発射してよいか ----
     if (!hasShot_) {
         if (visibleTime_ < firstShotDelay_) return;
@@ -111,6 +127,7 @@ void AimedShootComponent::Update(float deltaTime) {
     lastBullet_ = bullet;
     scene->AddRootObject(bullet);
 
+    if (telegraph) telegraph->End();
     hasShot_ = true;
     sinceLastShot_ = 0.0f;
     sinceBulletGone_ = 0.0f;
