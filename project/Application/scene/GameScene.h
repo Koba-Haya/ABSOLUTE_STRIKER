@@ -26,6 +26,8 @@
 #include "StageNameBoard.h"
 #include "StageImpactEffects.h"
 #include "SpeedStreaks.h"
+#include "StageIslands.h"
+#include "IslandTurretSpawner.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -185,6 +187,8 @@ private:
   SeaSkySettings seaSky_;
   VolumeCloudSettings volumeCloudSea_ = MakeSeaLayerSettings();
   bool volumeCloudEditSea_ = true; // 調整 UI で、雲海の層(true)と箱(false)のどちらを調整するか
+  StageIslands stageIslands_;      // 雲海の上へ頭を出す浮島の群れ(レールに沿って置く。距離感と速度感を出す)
+  IslandTurretSpawner islandTurrets_; // タレットの島の上へ、自機が近づいたらタレットを出す
 
   // アクター関連
   std::shared_ptr<AbsoluteEngine::GameObject> playerObj_;

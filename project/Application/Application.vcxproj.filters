@@ -102,6 +102,9 @@
     <ClCompile Include="scene\ResultBackdrop.cpp" />
     <ClCompile Include="scene\GameOverBackdrop.cpp" />
     <ClCompile Include="scene\GameOverIslands.cpp" />
+    <ClCompile Include="scene\StageIsland.cpp" />
+    <ClCompile Include="scene\StageIslands.cpp" />
+    <ClCompile Include="scene\IslandTurretSpawner.cpp" />
     <ClCompile Include="scene\RebirthDirector.cpp" />
     <ClCompile Include="scene\RebirthButterfly.cpp" />
     <ClCompile Include="scene\ResultBanner.cpp" />
@@ -192,6 +195,9 @@
     <ClInclude Include="scene\ResultBackdrop.h" />
     <ClInclude Include="scene\GameOverBackdrop.h" />
     <ClInclude Include="scene\GameOverIslands.h" />
+    <ClInclude Include="scene\StageIsland.h" />
+    <ClInclude Include="scene\StageIslands.h" />
+    <ClInclude Include="scene\IslandTurretSpawner.h" />
     <ClInclude Include="scene\RebirthDirector.h" />
     <ClInclude Include="scene\RebirthButterfly.h" />
     <ClInclude Include="scene\ResultBanner.h" />

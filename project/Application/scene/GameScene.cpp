@@ -425,6 +425,11 @@ void GameScene::Initialize(const SceneServices &services) {
   stageImpact_.Initialize(kImpactFlashModelPath);
   speedStreaks_.Initialize(kSpeedStreakModelPath);
 
+  // 浮島。レールの形から配置を決めるので、レールカメラを読み込んだあとに行う(失敗しても、島が出ないだけで、ゲームは進められる)
+  if (const auto *rail = FindRailCamera_()) {
+    stageIslands_.Initialize(*rail, volumeCloudSea_.layerTop);
+  }
+
   // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
   BeginIntro_();
 }
@@ -1192,6 +1197,11 @@ void GameScene::Update() {
 
       RemoveExpiredObjects_();
 
+      // 島のタレット: 自機(カメラ)がタレットの島へ近づいたら、島の上へ出す
+      if (const auto *rail = FindRailCamera_()) {
+          islandTurrets_.Update(*this, stageIslands_, rail->GetProgress() * rail->GetTotalLength());
+      }
+
       // パーティクルの更新（爆発エフェクト等）
       // 世界の時間の速さに合わせる(ヒットストップで止まり、スローモーションで遅くなる)
       const float worldDeltaTime = deltaTime * GetWorldTimeScale();
@@ -1332,6 +1342,12 @@ void GameScene::Draw() {
   VolumeCloudSettings impactPuff;
   if (cloudImpact_.BuildPuff(impactPuff)) {
       renderer->AddVolumeCloud(impactPuff, sunDirection, time_); // 着地点に湧く雲の塊(手前の雲として、最後に追加する)
+  }
+
+  // 浮島。雲の依頼のあと、物体の描画の前(雲の合成が深度を見るので、島の下側は雲に埋まる)。
+  // 描く範囲は、自機(カメラ)のいるレール上の距離で決まる
+  if (const auto *rail = FindRailCamera_()) {
+      stageIslands_.Draw(renderer, rail->GetProgress() * rail->GetTotalLength());
   }
 
   // エディタ上で配置したオブジェクト群の描画
