@@ -108,9 +108,12 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
 
   // 飾りのモデルは 1 度だけ読み込んで共有する(AssetManager のキャッシュ)。読み込めた種類だけを使う
   std::vector<std::shared_ptr<ModelResource>> resources;
-  for (const char *path : kDecorModelPaths) {
-    if (auto resource = assets->Load<ModelResource>(path)) {
+  std::vector<IslandModelKind> resourceKinds; // resources と同じ並び。読み込めた種類を、遮蔽の形の選択に引き継ぐ
+  constexpr IslandModelKind kDecorKinds[] = {IslandModelKind::Small, IslandModelKind::Medium, IslandModelKind::Forest}; // kDecorModelPaths と同じ順
+  for (size_t i = 0; i < std::size(kDecorModelPaths); ++i) {
+    if (auto resource = assets->Load<ModelResource>(kDecorModelPaths[i])) {
       resources.push_back(resource);
+      resourceKinds.push_back(kDecorKinds[i]);
     }
   }
   const int32_t kindCount = static_cast<int32_t>(resources.size());
@@ -157,7 +160,7 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
         continue;
       }
       if (auto island = MakeIsland(resources[kind], position, scale, {tiltX, yaw, tiltZ})) {
-        entries_.push_back({std::move(island), distance});
+        entries_.push_back({std::move(island), distance, resourceKinds[kind]});
       }
     }
   }
@@ -169,7 +172,7 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
       position.y = cloudLayerTop + StageIslandDefaults::kTurretIslandHeightAboveCloud;
       const float yaw = std::fmod(spec.distance, kTwoPi);
       if (auto island = MakeIsland(turretResource, position, spec.scale, {0.0f, yaw, 0.0f})) {
-        entries_.push_back({std::move(island), spec.distance});
+        entries_.push_back({std::move(island), spec.distance, IslandModelKind::Rock});
       }
     }
   }
@@ -203,7 +206,8 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
         continue;
       }
       if (auto island = MakeIsland(resource, position, spec.scale, {0.0f, spec.yaw, 0.0f})) {
-        entries_.push_back({std::move(island), gate.distance});
+        // GateIslandKind と IslandModelKind は、同じ並び(Small, Medium, Forest, Rock)なので、そのまま変換できる
+        entries_.push_back({std::move(island), gate.distance, static_cast<IslandModelKind>(spec.kind)});
       }
     }
   }
@@ -221,6 +225,13 @@ bool StageIslands::Initialize(const RailCameraComponent &rail, float cloudLayerT
   }
   Logger::GetInstance().Log("[StageIslands] placed=%d rejectedByRail=%d", static_cast<int>(entries_.size()), rejectedByRail);
   return !entries_.empty();
+}
+
+void StageIslands::BuildOccluders(IslandOccluders &out) const {
+  out.Clear();
+  for (const Entry &entry : entries_) {
+    out.AddIsland(entry.kind, entry.island->GetPosition(), entry.island->GetScale());
+  }
 }
 
 void StageIslands::Draw(Renderer *renderer, float railDistance) {

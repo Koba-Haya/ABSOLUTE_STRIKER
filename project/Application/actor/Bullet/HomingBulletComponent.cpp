@@ -2,6 +2,7 @@
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
 #include "RibbonTrailComponent.h"
+#include "Application/occlusion/OcclusionWorld.h"
 #include <cmath>
 
 // -----------------------------------------------------------------------
@@ -75,6 +76,15 @@ void HomingBulletComponent::Update(float deltaTime) {
         coeff0 * startPos_.y   + coeff1 * controlPos_.y + coeff2 * p2.y,
         coeff0 * startPos_.z   + coeff1 * controlPos_.z + coeff2 * p2.z
     };
+
+    // --- 島に遮られたら消える ---
+    // 前フレームの座標から今フレームの座標までの線分で調べる(ベジェ曲線は、フレームごとの短い直線で近似している)。
+    // ロック対象が島の陰に入った場合も、特別な処理はせず、この判定で弾が島に当たって消える(尾は Finish_ が切り離して残す)。
+    // 弾が島の上や横を回り込んで届くなら、そのまま当たる。雲は含めない(雲の裏へは弾が届く)
+    if (OcclusionWorld::GetInstance().IsSegmentBlocked(prevPos_, newPos, OccluderKind::kIsland)) {
+        Finish_();
+        return;
+    }
 
     // --- 進行方向への回転（前フレーム座標との差分ベクトルで算出） ---
     auto& trans = owner_->GetTransform();

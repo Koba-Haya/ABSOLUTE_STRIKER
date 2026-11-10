@@ -107,6 +107,8 @@
     <ClCompile Include="scene\GameOverIslands.cpp" />
     <ClCompile Include="scene\StageIsland.cpp" />
     <ClCompile Include="scene\StageIslands.cpp" />
+    <ClCompile Include="occlusion\IslandOccluders.cpp" />
+    <ClCompile Include="occlusion\OcclusionWorld.cpp" />
     <ClCompile Include="scene\IslandTurretSpawner.cpp" />
     <ClCompile Include="scene\RebirthDirector.cpp" />
     <ClCompile Include="scene\RebirthButterfly.cpp" />
@@ -203,6 +205,9 @@
     <ClInclude Include="scene\GameOverIslands.h" />
     <ClInclude Include="scene\StageIsland.h" />
     <ClInclude Include="scene\StageIslands.h" />
+    <ClInclude Include="occlusion\Occluder.h" />
+    <ClInclude Include="occlusion\IslandOccluders.h" />
+    <ClInclude Include="occlusion\OcclusionWorld.h" />
     <ClInclude Include="scene\IslandTurretSpawner.h" />
     <ClInclude Include="scene\RebirthDirector.h" />
     <ClInclude Include="scene\RebirthButterfly.h" />

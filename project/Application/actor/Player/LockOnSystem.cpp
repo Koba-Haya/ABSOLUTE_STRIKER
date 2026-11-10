@@ -6,6 +6,7 @@
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
 #include "../Bullet/HomingBulletComponent.h"
+#include "Application/occlusion/OcclusionWorld.h"
 #include <algorithm>
 #include <cmath>
 
@@ -13,6 +14,12 @@ namespace {
 // ロックオン対象を判別するタグ(GameObject::GetTag の値)
 constexpr const char* kEnemyTag = "Enemy";
 constexpr const char* kBossTag  = "Boss";
+
+// カメラから敵までの視線が、遮蔽物に遮られているか。ロックオンは、島と雲(将来)のどちらに遮られても狙えない
+// (島: 見えない。雲: 見えるが、ロックオンはできない、という決定)。通常弾の判定とは、遮る種類が違う
+bool IsHiddenFromCamera(const Vector3& eye, const Vector3& targetPos) {
+    return OcclusionWorld::GetInstance().IsSegmentBlocked(eye, targetPos, OccluderKind::kAll);
+}
 } // namespace
 
 void LockOnSystem::Initialize() {
@@ -24,9 +31,10 @@ void LockOnSystem::Initialize() {
 void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
     if (!camera || !scene) return;
 
-    // 既に死んでいる・または破棄されている敵をロックオン対象から外す
+    // 既に死んでいる・または破棄されている・島や雲に隠れた敵をロックオン対象から外す
+    const Vector3 eye = camera->GetEye();
     lockedTargets_.erase(std::remove_if(lockedTargets_.begin(), lockedTargets_.end(),
-        [](const std::weak_ptr<AbsoluteEngine::GameObject>& weak) {
+        [&eye](const std::weak_ptr<AbsoluteEngine::GameObject>& weak) {
             // weak_ptr.lock()で生存確認（破棄済みなら自動でtrue=除外）
             auto obj = weak.lock();
             if (!obj) return true;
@@ -35,6 +43,11 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, Ba
             if (enemyComp && enemyComp->IsDead()) return true;
             auto bossComp = obj->GetComponent<BossComponent>();
             if (bossComp && bossComp->GetHp() <= 0) return true;
+            // すでにロックしていた敵が、島の陰に入ったら、ロックを外す。
+            // 理由: (1) 見えない敵に枠が残ると、隠れている位置が分かってしまう。(2) そのまま撃つと、ロック弾は島に当たって消えるので、
+            // 枠を 1 つ無駄にする。外した枠は空くので、別の敵を捕まえられる。敵が島の陰から出てきて、カーソルの範囲に入れば、
+            // 長押しのまま、また捕まえられる(検索は長押しの間、毎フレーム行われる)
+            if (IsHiddenFromCamera(eye, obj->GetTransform().translate)) return true;
             return false;
         }), lockedTargets_.end());
 
@@ -120,6 +133,10 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             
             // 範囲の半径(kLockRadiusPixels)以内の場合ロックオン
             if (distSq <= kLockRadiusPixels * kLockRadiusPixels) {
+                // カメラ(自機の視点)から敵までの線分が、島や雲に遮られているなら、対象にしない(見えない敵は狙えない)。
+                // 画面の判定を通ったものだけに行うので、遮蔽の問い合わせは、カーソルの近くの敵の数だけで済む
+                if (IsHiddenFromCamera(camera->GetEye(), worldPos)) continue;
+
                 // shared_ptr → weak_ptr に変換して安全に保持
                 lockedTargets_.push_back(obj);
                 
