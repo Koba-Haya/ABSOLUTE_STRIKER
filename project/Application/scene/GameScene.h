@@ -15,6 +15,7 @@
 #include "TextureResource.h"
 #include "Animation.h"
 #include "HitEffectSpawner.h"
+#include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
 #include "CloudImpact.h"
@@ -200,6 +201,7 @@ private:
   HitEffectSpawner hitEffects_;    // 敵撃破時のヒットエフェクト
   PostEffectDirector postEffects_; // ポストエフェクト・カメラシェイクの発火とタイマー
   ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
+  ItemSystem itemSystem_;          // ドロップアイテム(敵を倒したときの出現、取得、強化)
 
   float time_ = 0.0f;
 

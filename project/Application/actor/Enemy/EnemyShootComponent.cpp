@@ -4,6 +4,7 @@
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
+#include "TelegraphComponent.h"
 #include <cmath>
 
 void EnemyShootComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame) {
@@ -33,8 +34,12 @@ void EnemyShootComponent::Update(float deltaTime) {
 
     // タイマー更新
     shootTimer_ += deltaTime;
+    // 予備動作(針の光): 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
+    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    if (telegraph && telegraph->HoldFire(shootInterval_ - shootTimer_)) return;
     if (shootTimer_ < shootInterval_) return;
     shootTimer_ -= shootInterval_;
+    if (telegraph) telegraph->End();
         
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return;

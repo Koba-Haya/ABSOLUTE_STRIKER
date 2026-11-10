@@ -13,6 +13,7 @@ void RamAttackComponent::OnCollision(AbsoluteEngine::GameObject* other) {
 
     // プレイヤーに衝突した瞬間に確実に自爆撃破する（現在のHPに関わらず）
     if (auto* enemyComp = owner_->GetComponent<EnemyComponent>()) {
-        enemyComp->OnHit(enemyComp->GetMaxHp());
+        // 自機に当たって壊れるのは、自機が倒したのではない(スコア、アイテムは出さない。爆発は出る)
+        enemyComp->OnHit(enemyComp->GetMaxHp(), EnemyDestroyReason::SelfDestruct);
     }
 }

@@ -47,6 +47,17 @@
             "screenMargin": 1.0,
             "shootInterval": 2.8,
             "type": "AimedShootComponent"
+        },
+        {
+            "type": "TelegraphComponent",
+            "glowMode": "body",
+            "duration": 0.4,
+            "bodyGlowTint": {
+                "x": 2.0,
+                "y": 1.5,
+                "z": 0.6,
+                "w": 1.0
+            }
         }
     ],
     "name": "EnemyCrosser",

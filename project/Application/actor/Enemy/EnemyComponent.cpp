@@ -30,7 +30,7 @@ void EnemyComponent::Update(float deltaTime) {
         // -----------------------------------------------------------------------
         if (!effectFired_ && onDestroyed) {
             effectFired_ = true;
-            onDestroyed(owner_->GetTransform().translate);
+            onDestroyed(owner_->GetTransform().translate, destroyReason_);
         }
 
         // ディゾルブアニメーションを進める
@@ -55,11 +55,12 @@ void EnemyComponent::Update(float deltaTime) {
     }
 }
 
-void EnemyComponent::OnHit(int damage) {
+void EnemyComponent::OnHit(int damage, EnemyDestroyReason reason) {
     if (isDead_) return;
 
     hp_ -= damage;
     if (hp_ <= 0) {
+        destroyReason_ = reason;
         isDead_    = true;
         isActive_  = false;
         dissolveTimer_ = 0.0f;
