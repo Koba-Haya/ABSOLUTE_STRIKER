@@ -1,5 +1,6 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
+#include "AbsoluteEngine/camera/ITimelineCamera.h"
 #include "Type/Vector.h"
 #include <string>
 
@@ -9,6 +10,11 @@ public:
     ~EnemyShootComponent() override = default;
 
     void Update(float deltaTime) override;
+
+    // レール座標の指定で出現したとき、進行方向の初期値を「レールの進行方向の逆(自機側を向く)」にする。
+    // 動かない敵は、位置の変化から向きを推定できないので、この初期値のまま「正面の自機だけを撃つ」判定に使う。
+    // 世界座標の指定で出現したときは呼ばれず、既定の向き(世界の -Z)のまま
+    void OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame) override;
 
     std::string GetTypeName() const override { return "EnemyShootComponent"; }
 

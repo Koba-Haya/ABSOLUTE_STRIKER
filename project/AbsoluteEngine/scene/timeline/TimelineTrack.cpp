@@ -57,7 +57,7 @@ void TimelineTrack::SortEntries() {
         });
 }
 
-void TimelineTrack::Update(float currentTime, float previousTime) {
+void TimelineTrack::Update(float currentTime, float previousTime, const ITimelineCamera* camera) {
     if (entries_.empty()) return;
 
     const bool isForward = (currentTime >= previousTime); // 前進方向かどうか
@@ -67,7 +67,11 @@ void TimelineTrack::Update(float currentTime, float previousTime) {
         // 区間判定ではなく isFired フラグで管理するため、シークで飛ばした場合も正確に発火する
         for (auto& entry : entries_) {
             if (entry.triggerTime <= currentTime && !entry.isFired) {
-                entry.event->Fire();
+                // 発火時刻は、実際に呼ばれた時刻ではなく、イベントに設定された時刻を渡す(出現位置がぶれないように)
+                TimelineFireContext context;
+                context.triggerTime = entry.triggerTime;
+                context.camera = camera;
+                entry.event->Fire(context);
                 entry.isFired = true;
             }
         }

@@ -52,7 +52,7 @@ public:
     // タイムラインはカメラの進行度をこのポインタ経由で同期する
     void SetCamera(ITimelineCamera* camera) { timelineCamera_ = camera; }
 
-    // ComputeSpawnAnchorTransform()でカメラ前方に自動配置する際の距離（ワールド単位）を設定する
+    // ComputeSpawnAnchorRail()でカメラ前方に自動配置する際の距離（レールに沿ったユニット）を設定する
     // プレイヤーとカメラの位置関係・狙わせたい距離感はゲームごとに異なるため、
     // 既定値（80.0f）はあくまで暫定値。ゲーム側の実際のプレイヤー/照準距離に合わせて呼び出すこと
     void SetSpawnAheadDistance(float distance) { spawnAheadDistance_ = distance; }
@@ -61,10 +61,14 @@ public:
     // スポーン位置の自動算出
     // -----------------------------------------------------------
 
-    // 発火時刻に対応するレール上の想定プレイヤー位置から、前方向へ少し奥へ進めた位置を算出する
-    // SpawnEvent追加時のデフォルト出現位置に使う（座標を手入力する代わりに自動配置する）
-    // カメラ未接続の場合は原点のTransformを返す
-    Transform ComputeSpawnAnchorTransform(float triggerTime) const;
+    // SpawnEvent追加時のデフォルト出現位置（レール座標）を返す。
+    // 発火時刻のカメラ位置から、レールに沿って spawnAheadDistance_ だけ奥(横・縦は 0)。
+    // 世界座標ではなくレール座標なので、発火時刻にも、レールの形にも依存しない
+    RailSpawnPoint ComputeSpawnAnchorRail() const;
+
+    // 発火時刻 triggerTime のイベントに渡す文脈(発火時刻と、タイムラインのレール)を作る。
+    // エディタのプレビューが、実際の Fire() と同じ手順で出現位置を求めるために使う
+    TimelineFireContext MakeFireContext(float triggerTime) const;
 
     // -----------------------------------------------------------
     // 再生制御
@@ -206,7 +210,7 @@ private:
     // カメラへの非所有ポインタ（実体の寿命はBaseSceneが管理）
     ITimelineCamera* timelineCamera_ = nullptr;
 
-    // ComputeSpawnAnchorTransform()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
+    // ComputeSpawnAnchorRail()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
     float spawnAheadDistance_ = 80.0f;
 
     // 現在選択中のイベントへの非所有ポインタ（タスク14）

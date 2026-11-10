@@ -5,6 +5,11 @@
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -46,11 +51,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 5,
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 7.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -92,11 +107,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 4,
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 14.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -119,6 +144,11 @@
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -160,11 +190,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 3,
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 26.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -187,6 +227,11 @@
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -228,11 +273,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 4,
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 38.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -274,11 +329,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 3,
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 46.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -301,6 +366,11 @@
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -342,11 +412,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 5,
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 56.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -388,11 +468,21 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 4,
                     "prefabId": "EnemyTurret",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 62.0
                 },
                 {
                     "eventType": "SpawnEvent",
                     "prefabId": "EnemyHoming",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
@@ -434,6 +524,11 @@
                     "eventType": "FormationSpawnEvent",
                     "memberCount": 3,
                     "prefabId": "Enemy",
+                    "rail": {
+                        "ahead": 80.0,
+                        "lateral": 0.0,
+                        "vertical": 0.0
+                    },
                     "triggerTime": 68.0
                 }
             ],

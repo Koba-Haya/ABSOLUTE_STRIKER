@@ -485,16 +485,13 @@ void TimelineEditorWindow::DrawAddEventPopup() {
     if (!pendingEvent_ || selectedEventTypeIndex_ != prevTypeIndex) {
         pendingEvent_ = TimelineEventFactory::GetInstance().Create(eventTypeNames[static_cast<size_t>(selectedEventTypeIndex_)]);
         if (pendingEvent_) {
-            pendingEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addEventTime_));
+            pendingEvent_->SetSpawnAnchorRail(manager_->ComputeSpawnAnchorRail());
         }
     }
 
-    // 発火時刻を変更したら、その時刻のタイムラインカメラ前方アンカーに位置を追従させる
-    if (ImGui::InputFloat("発火時刻 (s)", &addEventTime_, 0.1f, 1.0f, "%.2f")) {
-        if (pendingEvent_) {
-            pendingEvent_->SetSpawnAnchorTransform(manager_->ComputeSpawnAnchorTransform(addEventTime_));
-        }
-    }
+    // 発火時刻の入力。出現位置はレール座標(カメラ前方 ahead)なので、発火時刻を変えても位置の指定は変わらない
+    // (出現時に、その時刻のカメラ位置から ahead だけ奥へ変換される)
+    ImGui::InputFloat("発火時刻 (s)", &addEventTime_, 0.1f, 1.0f, "%.2f");
     ImGui::Separator();
 
     // 型固有の入力フィールドは ITimelineEvent::DrawCreationUI() をポリモーフィックに呼んで描画する

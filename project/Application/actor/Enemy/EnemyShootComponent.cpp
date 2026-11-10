@@ -6,6 +6,11 @@
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
 #include <cmath>
 
+void EnemyShootComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame) {
+    // レールの進行方向の逆 = 自機側へ向かう向き(世界の -Z 固定だと、レールが +Z 以外を向くと撃たなくなる)
+    facingDir_ = { -frame.forward.x, -frame.forward.y, -frame.forward.z };
+}
+
 void EnemyShootComponent::Update(float deltaTime) {
     if (!owner_) return;
 

@@ -26,25 +26,19 @@ float TimelineManager::GetDuration() const {
 // スポーン位置の自動算出
 // -----------------------------------------------------------
 
-Transform TimelineManager::ComputeSpawnAnchorTransform(float triggerTime) const {
-    Transform t{};
-    if (!timelineCamera_) return t;
-
-    const float duration = GetDuration();
-    const float progress = (duration > 0.0f) ? std::clamp(triggerTime / duration, 0.0f, 1.0f) : 0.0f;
-
-    Vector3 pos{};
-    Vector3 forward{};
-    timelineCamera_->GetPointAndForward(progress, pos, forward);
-
-    // カメラ位置から前方向へ spawnAheadDistance_ だけ進めた位置に出現させる
+RailSpawnPoint TimelineManager::ComputeSpawnAnchorRail() const {
+    // カメラ前方 spawnAheadDistance_ だけ奥の、道の真ん中(横・縦は 0)に出現させる
     // （距離の妥当な値はゲームのプレイヤー/照準距離次第なので SetSpawnAheadDistance() で調整する）
-    t.translate = {
-        pos.x + forward.x * spawnAheadDistance_,
-        pos.y + forward.y * spawnAheadDistance_,
-        pos.z + forward.z * spawnAheadDistance_
-    };
-    return t;
+    RailSpawnPoint rail;
+    rail.ahead = spawnAheadDistance_;
+    return rail;
+}
+
+TimelineFireContext TimelineManager::MakeFireContext(float triggerTime) const {
+    TimelineFireContext context;
+    context.triggerTime = triggerTime;
+    context.camera = timelineCamera_;
+    return context;
 }
 
 // -----------------------------------------------------------
@@ -100,7 +94,7 @@ void TimelineManager::Seek(float targetTime) {
 
     // 各トラックにスイープ判定を実行させる（Forward/Rewindを自動判断）
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_);
+        track->Update(currentTime_, previousTime_, timelineCamera_);
     }
 
     // カメラの進行度を即時同期する（Lerpによる遅延ワープを防ぐため直接設定）
@@ -125,7 +119,7 @@ void TimelineManager::Update(float deltaTime) {
 
         // 末尾のイベントを発火させてから停止する
         for (auto& track : tracks_) {
-            track->Update(currentTime_, previousTime_);
+            track->Update(currentTime_, previousTime_, timelineCamera_);
         }
 
         if (holdAtEnd_) {
@@ -147,7 +141,7 @@ void TimelineManager::Update(float deltaTime) {
 
     // 各トラックを更新してスイープ判定を実行する
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_);
+        track->Update(currentTime_, previousTime_, timelineCamera_);
     }
 
     // カメラの進行度を同期する

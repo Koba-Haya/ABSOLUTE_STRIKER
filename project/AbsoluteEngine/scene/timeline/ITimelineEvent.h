@@ -6,6 +6,8 @@
 #pragma once
 #include "../../../externals/nlohmann/json.hpp"
 #include "../../Type/Transform.h"
+#include "TimelineFireContext.h"
+#include "RailSpawnPoint.h"
 
 namespace AbsoluteEngine {
 
@@ -28,7 +30,8 @@ public:
     // -----------------------------------------------------------
 
     // 発火: タイムラインが発火時刻を前進方向に通過したときに呼ばれる
-    virtual void Fire() = 0;
+    // context: 発火時刻と、その時刻のレール上の距離を得るための情報(レール座標の出現位置の変換に使う)
+    virtual void Fire(const TimelineFireContext& context) = 0;
 
     // 巻き戻し: タイムラインが発火時刻を後退方向に通過したとき（シーク時など）に呼ばれる
     // 実装側は Fire() で生成したオブジェクト等を安全に破棄しなければならない
@@ -69,12 +72,12 @@ public:
     // -----------------------------------------------------------
     // スポーン位置の自動配置（エディタの「追加」操作から呼ばれる）
     // -----------------------------------------------------------
-    // 新規追加時に、その発火時刻におけるレールカメラ前方のアンカー座標
-    // （TimelineManager::ComputeSpawnAnchorTransform()の結果）を渡す。
+    // 新規追加時に、既定の出現位置(レール座標。カメラ前方 ahead、横・縦は 0)を渡す
+    // （TimelineManager::ComputeSpawnAnchorRail()の結果）。
     // スポーン系イベント（SpawnEvent/FormationSpawnEvent等）はこれをオーバーライドして
-    // 自身の位置フィールドに反映する。エディタ側は具象クラスの位置フィールド名を
+    // レール座標の指定を有効にし、自身の位置フィールドに反映する。エディタ側は具象クラスの位置フィールド名を
     // 知らなくてよい（DrawInspectorUIと同じ考え方のポリモーフィックなフック）。
-    virtual void SetSpawnAnchorTransform(const Transform& t) {}
+    virtual void SetSpawnAnchorRail(const RailSpawnPoint& rail) {}
 };
 
 } // namespace AbsoluteEngine
