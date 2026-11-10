@@ -56,8 +56,22 @@ public:
     // タイムラインエディタでのスポーンイベント初期位置の自動配置などに使う
     void GetPointAndForward(float progress, Vector3& outPos, Vector3& outForward) const override;
 
+    // レール上の距離 s(弧長、ユニット)から、位置・前・右・上を返す(読み取り専用)。
+    // 範囲をクランプしない: s < 0 は始点から接線の逆方向へ、s > 全長 は終点から接線方向へ、直線で外挿する。
+    // 前方向はレールの接線(カメラの先読み注視点への弦ではない)。曲がっていない区間では両者は一致する。
+    // 右・上は前方向と世界の上(0,1,0)から求める。前方向が真上・真下に近く右が定まらないときは、
+    // 世界の +X を右とする固定の代替を使う(状態を持たないので、どの s から呼んでも同じ結果になる)。
+    AbsoluteEngine::RailFrame GetRailFrame(float distance) const override;
+
+    // 進行度(0-1)と距離(ユニット)の相互変換。レールが無い(全長0)ときは0を返す。範囲はクランプしない
+    float ProgressToDistance(float progress) const { return progress * GetTotalLength(); }
+    float DistanceToProgress(float distance) const {
+        const float length = GetTotalLength();
+        return (length > 0.0f) ? (distance / length) : 0.0f;
+    }
+
     // レール全体の弧長（実距離）を取得する
-    float GetTotalLength() const { return arcLengthTable_.GetTotalLength(); }
+    float GetTotalLength() const override { return arcLengthTable_.GetTotalLength(); }
 
     // レールを最初から最後まで等速で走破するのに必要な秒数を取得する（TimelineManagerのDuration算出に使用）
     // speed_ が0以下、またはウェイポイントが不足している場合は0を返す
@@ -82,6 +96,10 @@ private:
     // 指定progressにおける位置・注視点（look-ahead込み）を計算する共通ヘルパー
     // ApplyCameraTransform_とGetPointAndForwardの両方から呼ばれる
     void ComputePositionAndTarget_(float progress, Vector3& outPos, Vector3& outTarget) const;
+
+    // 弧長距離 d(0..全長の範囲内)におけるレール上の位置と、接線方向(長さ1)を返す。GetRailFrameの部品
+    Vector3 PointAtDistance_(float distance) const;
+    Vector3 TangentAtDistance_(float distance) const;
 
     // カメラ位置の計算とSet処理を共通化したヘルパー（UpdateとSetProgressから呼ばれる）
     void ApplyCameraTransform_();
