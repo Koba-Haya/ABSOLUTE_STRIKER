@@ -247,8 +247,8 @@ void BaseScene::UpdateEditor() {
                         if (previewObj) {
                             // プレビューフラグを立ててシリアライズ対象から除外する
                             previewObj->SetTimelinePreview(true);
-                            // スポーン位置に配置する
-                            previewObj->GetTransform() = spawnEv->spawnTransform_;
+                            // スポーン位置に配置する(レール座標の指定なら、実際の出現と同じ手順で世界座標へ変換した位置)
+                            previewObj->GetTransform() = ResolveTimelineSpawnPreview(*spawnEv);
                             // シーンに追加してギズモ操作対象に登録する
                             AddRootObject(previewObj);
                             editorUIManager_->SetSelectedObject(previewObj);
@@ -264,7 +264,16 @@ void BaseScene::UpdateEditor() {
         if (auto previewObj = timelinePreviewObject_.lock()) {
             if (auto* spawnEv = dynamic_cast<AbsoluteEngine::SpawnEvent*>(currentSelectedEvent)) {
                 // ギズモまたはインスペクタで変更された Transform をイベントの値に書き戻す
-                spawnEv->spawnTransform_ = previewObj->GetTransform();
+                if (spawnEv->useRail_) {
+                    // レール座標の指定のときは、位置はレール座標(ahead, lateral, vertical)だけで決まる。
+                    // ギズモで動かしても位置は書き戻さず(世界座標へ戻すと、レール座標の指定が崩れる)、
+                    // 回転とスケールだけを書き戻す。プレビューの位置は、毎フレーム、レール座標から求め直す
+                    spawnEv->spawnTransform_.rotate = previewObj->GetTransform().rotate;
+                    spawnEv->spawnTransform_.scale = previewObj->GetTransform().scale;
+                    previewObj->GetTransform().translate = ResolveTimelineSpawnPreview(*spawnEv).translate;
+                } else {
+                    spawnEv->spawnTransform_ = previewObj->GetTransform();
+                }
             }
         }
     }
@@ -495,6 +504,18 @@ void BaseScene::SetTimelineCamera(AbsoluteEngine::ITimelineCamera* camera) {
 void BaseScene::SetTimelineSpawnAheadDistance(float distance) {
     if (!timelineManager_) return;
     timelineManager_->SetSpawnAheadDistance(distance);
+}
+
+Transform BaseScene::ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent& spawnEvent) const {
+    Transform placed = spawnEvent.spawnTransform_;
+    if (!timelineManager_) return placed;
+
+    // 実際の出現(Fire)と同じ手順で、発火時刻のレール位置から世界座標を求める
+    float triggerTime = 0.0f;
+    timelineManager_->GetEventTriggerTime(&spawnEvent, triggerTime);
+    AbsoluteEngine::RailFrame unusedFrame{};
+    spawnEvent.ResolveSpawnTransform(timelineManager_->MakeFireContext(triggerTime), placed, unusedFrame);
+    return placed;
 }
 
 void BaseScene::SetTimelineHoldAtEnd(bool hold) {

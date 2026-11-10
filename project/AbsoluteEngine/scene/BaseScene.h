@@ -18,6 +18,7 @@ namespace AbsoluteEngine {
     class EditorCamera;
     class CommandManager;
     class ITimelineCamera;
+    class SpawnEvent;
 }
 
 class SceneManager;
@@ -197,6 +198,10 @@ protected:
   // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: timelineEditorWindow_ は timelineManager_ を参照する）を
   // 崩さないよう、順序を変えないこと
 private:
+  // エディタのタイムライン・プレビュー用: SpawnEvent の出現位置を世界座標で返す。
+  // レール座標の指定のときは、実際の出現(Fire)と同じ手順で、発火時刻のレール位置から変換する
+  Transform ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent &spawnEvent) const;
+
   SceneManager *sceneManager_ = nullptr;
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 

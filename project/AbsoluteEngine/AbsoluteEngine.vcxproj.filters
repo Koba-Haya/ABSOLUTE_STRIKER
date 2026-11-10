@@ -262,6 +262,9 @@
     <ClCompile Include="scene\timeline\SpawnEvent.cpp">
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
+    <ClCompile Include="scene\timeline\RailSpawnPoint.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
     <ClCompile Include="scene\timeline\TimelineTrack.cpp">
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
@@ -509,6 +512,12 @@
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\SpawnEvent.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\RailSpawnPoint.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\TimelineFireContext.h">
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\TimelineTrack.h">

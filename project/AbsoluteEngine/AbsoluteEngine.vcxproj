@@ -191,6 +191,7 @@
     <!-- タイムラインシステム -->
     <ClCompile Include="scene\timeline\PrefabRegistry.cpp" />
     <ClCompile Include="scene\timeline\SpawnEvent.cpp" />
+    <ClCompile Include="scene\timeline\RailSpawnPoint.cpp" />
     <ClCompile Include="scene\timeline\TimelineTrack.cpp" />
     <ClCompile Include="scene\timeline\TimelineManager.cpp" />
     <ClCompile Include="scene\timeline\TimelineEditorWindow.cpp" />
@@ -288,6 +289,8 @@
     <ClInclude Include="scene\timeline\ITimelineEvent.h" />
     <ClInclude Include="scene\timeline\PrefabRegistry.h" />
     <ClInclude Include="scene\timeline\SpawnEvent.h" />
+    <ClInclude Include="scene\timeline\RailSpawnPoint.h" />
+    <ClInclude Include="scene\timeline\TimelineFireContext.h" />
     <ClInclude Include="scene\timeline\TimelineEventFactory.h" />
     <ClInclude Include="scene\timeline\TimelineTrack.h" />
     <ClInclude Include="scene\timeline\TimelineManager.h" />
