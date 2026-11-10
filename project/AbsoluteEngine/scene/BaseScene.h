@@ -104,6 +104,14 @@ protected:
   // 既定値はエンジン側の暫定値なので、ゲームのプレイヤー/照準距離に合わせて派生クラスから呼ぶ
   void SetTimelineSpawnAheadDistance(float distance);
 
+  // タイムラインが終端に着いたとき、先頭へ戻らず、終端で止めて保つかを設定する(既定は戻る)。
+  // 保つと、カメラの進行度が 1.0 のまま残る。ゲームのボス戦など、終端の先でレールを再走させたくないときに使う
+  void SetTimelineHoldAtEnd(bool hold);
+
+  // タイムラインが終端に到達して止まったか(SetTimelineHoldAtEnd(true) のとき)。
+  // 「終点に到達した」という明示の合図。タイムラインが無いシーンでは常に false
+  bool HasTimelineReachedEnd() const;
+
   // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
   void UpdateTimeline(float deltaTime);
 

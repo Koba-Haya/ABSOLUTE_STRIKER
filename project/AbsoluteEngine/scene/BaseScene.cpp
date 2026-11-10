@@ -497,6 +497,15 @@ void BaseScene::SetTimelineSpawnAheadDistance(float distance) {
     timelineManager_->SetSpawnAheadDistance(distance);
 }
 
+void BaseScene::SetTimelineHoldAtEnd(bool hold) {
+    if (!timelineManager_) return;
+    timelineManager_->SetHoldAtEnd(hold);
+}
+
+bool BaseScene::HasTimelineReachedEnd() const {
+    return timelineManager_ && timelineManager_->HasReachedEnd();
+}
+
 void BaseScene::UpdateTimeline(float deltaTime) {
     if (!timelineManager_) return;
     timelineManager_->Update(deltaTime);

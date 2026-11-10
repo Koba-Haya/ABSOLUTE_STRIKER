@@ -82,6 +82,16 @@ public:
     // 現在の再生状態を取得する
     TimelinePlayState GetPlayState() const { return playState_; }
 
+    // 終端での動きを選ぶ(既定は false)。
+    //   false: 終端に着くと Stop() する(先頭へ戻り、カメラの進行度も 0 に戻る。エディタの従来の動き)
+    //   true : 終端で止まり、時間とカメラの進行度は終端(進行度 1.0)のまま保つ。イベントは巻き戻す(出した敵は消える)
+    // ゲーム側は true にして、終端の先(ボス戦など)でレールが再走しないようにする
+    void SetHoldAtEnd(bool hold) { holdAtEnd_ = hold; }
+
+    // 終端に到達して、SetHoldAtEnd(true) の動きで止まったか。
+    // 「終点に到達した」という明示の合図として使う(進行度の値の比較に頼らない)。Stop / Seek / 読み込みで false に戻る
+    bool HasReachedEnd() const { return reachedEnd_; }
+
     // -----------------------------------------------------------
     // シーク（時間ジャンプ）
     // -----------------------------------------------------------
@@ -182,6 +192,10 @@ private:
 
     // 直前フレームの再生時間（スイープ判定に使用）
     float previousTime_ = 0.0f;
+
+    // 終端で止まったまま保つか(SetHoldAtEnd)。終端に到達して保った状態か(HasReachedEnd)
+    bool holdAtEnd_ = false;
+    bool reachedEnd_ = false;
 
     // 再生状態
     TimelinePlayState playState_ = TimelinePlayState::Stopped;
