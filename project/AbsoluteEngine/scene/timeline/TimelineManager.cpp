@@ -70,6 +70,7 @@ void TimelineManager::Pause() {
 
 void TimelineManager::Stop() {
     playState_ = TimelinePlayState::Stopped;
+    reachedEnd_ = false;
 
     // 全イベントをRewindして状態をクリーンにする
     RewindAllEvents();
@@ -89,6 +90,9 @@ void TimelineManager::Stop() {
 void TimelineManager::Seek(float targetTime) {
     // 有効範囲にクランプ
     targetTime = std::clamp(targetTime, 0.0f, GetDuration());
+
+    // 終端から動かしたので、「終端に到達した」状態は解除する
+    reachedEnd_ = false;
 
     // スイープ判定のために以前の時間を保存する
     previousTime_ = currentTime_;
@@ -122,6 +126,18 @@ void TimelineManager::Update(float deltaTime) {
         // 末尾のイベントを発火させてから停止する
         for (auto& track : tracks_) {
             track->Update(currentTime_, previousTime_);
+        }
+
+        if (holdAtEnd_) {
+            // 終端で止まる。Stop() と違い、時間を先頭へ戻さないので、カメラの進行度は 1.0 のまま保たれる。
+            // イベントは巻き戻す(Stop と同じく、出した敵などを片づける)。
+            // 巻き戻したあとも時間は終端のままで、状態が Stopped なので、イベントが再び発火することはない
+            playState_ = TimelinePlayState::Stopped;
+            RewindAllEvents();
+            previousTime_ = currentTime_;
+            reachedEnd_ = true;
+            SyncCameraProgress();
+            return;
         }
 
         // 末端到達で自動停止
@@ -245,6 +261,7 @@ bool TimelineManager::LoadFromFile(const std::string& filePath) {
     // 読み込み後は先頭にリセットする
     currentTime_ = 0.0f;
     previousTime_ = 0.0f;
+    reachedEnd_ = false;
     playState_ = TimelinePlayState::Stopped;
 
     std::cout << "[TimelineManager] タイムラインデータを読み込みました: " << filePath

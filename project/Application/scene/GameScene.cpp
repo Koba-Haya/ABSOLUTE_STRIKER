@@ -400,6 +400,9 @@ void GameScene::Initialize(const SceneServices &services) {
   // SpawnEventの自動配置距離: このゲームではプレイヤーはカメラから約22ユニット前方、
   // 遠レティクルはさらに約60ユニット先にあるため、その付近に出現するよう80ユニットにする
   SetTimelineSpawnAheadDistance(80.0f);
+  // タイムラインが終端に着いたら、先頭へ戻らず終端で止める。
+  // 戻ると、カメラの進行度が 0 になり、ボス戦の間レールが始点から再走してしまう
+  SetTimelineHoldAtEnd(true);
   // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
   {
     CpuTimer::Scope scope("GameScene.LoadTimeline");
@@ -1210,15 +1213,10 @@ void GameScene::Update() {
       // EffectManagerの更新（RingEffectなど）
       EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
 
-      // ボスフェーズ移行
-      float railProgress = 0.0f;
-      for (const auto& obj : GetRootObjects()) {
-          if (auto comp = obj->GetComponent<RailCameraComponent>()) {
-              railProgress = comp->GetProgress();
-              break;
-          }
-      }
-      if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
+      // ボスフェーズ移行: タイムラインが終点に到達した合図で行う(進行度の値の比較には頼らない)。
+      // 到達後は、タイムラインが終端で止まり、レールの進行度は 1.0 のまま保たれる(レール自身の進行も 1.0 で頭打ち)ので、
+      // ボス戦の間、レールは動かず、島の描画範囲や島のタレットも再スタートしない
+      if (phase_ == GamePhase::InProgress && HasTimelineReachedEnd()) {
           phase_ = GamePhase::Boss;
           SpawnBoss_();
       }
