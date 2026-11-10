@@ -163,6 +163,7 @@ Vector3 RailCameraComponent::TangentAtDistance_(float distance) const {
 
 AbsoluteEngine::RailFrame RailCameraComponent::GetRailFrame(float distance) const {
     AbsoluteEngine::RailFrame frame;
+    frame.distance = distance; // 要求された距離をそのまま記録する(範囲外・フォールバックでも同じ)
 
     // レールが成り立たない(通過点不足、全長0)ときの既定値。GetPointAndForwardと同じく原点、+Z向き
     if (waypoints_.size() < 2 || GetTotalLength() <= 0.0f) {
