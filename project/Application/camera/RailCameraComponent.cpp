@@ -10,6 +10,12 @@
 #include <algorithm>
 #include <string>
 
+namespace {
+    // 注視点までの既定の距離(ユニット)。以前は「全長の 2%」で、今のステージ(全長 約 1250)ではちょうど 25 だった。
+    // 距離指定にしたので、全長が変わっても、曲がり角でのカメラの追従は同じになる
+    constexpr float kDefaultLookAheadDistance = 25.0f;
+}
+
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
@@ -27,7 +33,7 @@ RailCameraComponent::RailCameraComponent() {
         { 0.0f,  5.0f, 220.0f}  // P4: ゴールへと向かう直進路
     };
     speed_ = 15.0f; // 秒速15ユニットで走破する（ロックオンの余裕を持たせた速度）
-    lookAheadOffset_ = 0.02f;
+    lookAheadDistance_ = kDefaultLookAheadDistance;
     RebuildArcLengthTable_();
 }
 
@@ -97,18 +103,18 @@ void RailCameraComponent::ComputePositionAndTarget_(float progress, Vector3& out
     // 現在地点の計算
     outPos = Spline::GetPoint(waypoints_, t);
 
-    // 注視点の計算 (Look-ahead)：弧長ベースで一定割合先の地点を見るようにする
+    // 注視点の計算 (Look-ahead)：レールに沿って、一定の距離(lookAheadDistance_)先の地点を見るようにする
     if (progress >= 1.0f - 0.001f) {
         // 終点付近では、少し手前の点から終点への方向を向くようにする
-        const float sBeforeEnd = std::max(1.0f - lookAheadOffset_, 0.0f);
-        const float tBeforeEnd = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sBeforeEnd * totalLength) : sBeforeEnd;
+        const float distBeforeEnd = std::max(totalLength - lookAheadDistance_, 0.0f);
+        const float tBeforeEnd = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(distBeforeEnd) : 0.0f;
         Vector3 p1 = Spline::GetPoint(waypoints_, tBeforeEnd);
         Vector3 p2 = Spline::GetPoint(waypoints_, 1.0f);
         Vector3 diff = { p2.x - p1.x, p2.y - p1.y, p2.z - p1.z };
         outTarget = { outPos.x + diff.x, outPos.y + diff.y, outPos.z + diff.z };
     } else {
-        const float sTarget = std::min(progress + lookAheadOffset_, 1.0f);
-        const float tTarget = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sTarget * totalLength) : sTarget;
+        const float distTarget = std::min(progress * totalLength + lookAheadDistance_, totalLength);
+        const float tTarget = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(distTarget) : progress;
         outTarget = Spline::GetPoint(waypoints_, tTarget);
     }
 }

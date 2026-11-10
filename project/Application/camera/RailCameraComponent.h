@@ -43,7 +43,11 @@ public:
     // speed_ は秒速ユニット（ワールド座標系での実距離/秒）。弧長ベースで等速移動する
     void SetSpeed(float speed) { speed_ = speed; }
     float GetSpeed() const { return speed_; }
-    void SetLookAhead(float offset) { lookAheadOffset_ = offset; }
+    // 注視点を、現在地からレールに沿って何ユニット先にするか(距離指定)。
+    // 進行度(全長に対する割合)ではなく距離にしているのは、レールの全長や曲がり方を変えても、先読みの距離が一定で、
+    // 曲がり角でのカメラの向きの追従(曲がる前から曲がる向きを向き始める早さ)が変わらないようにするため
+    void SetLookAheadDistance(float distance) { lookAheadDistance_ = distance; }
+    float GetLookAheadDistance() const { return lookAheadDistance_; }
     void ResetProgress() { progress_ = 0.0f; }
     // progress_ は弧長（実距離）ベースの進行割合(0-1)。生のスプラインパラメータtとは異なる
     float GetProgress() const { return progress_; }
@@ -111,7 +115,7 @@ private:
     Spline::ArcLengthTable arcLengthTable_;
     float progress_ = 0.0f;
     float speed_ = 10.0f;
-    float lookAheadOffset_ = 0.01f;
+    float lookAheadDistance_ = 25.0f; // 注視点までのレール上の距離(ユニット)。コンストラクタで kDefaultLookAheadDistance を入れる
 
     // エディタ操作用
     int selectedPointIndex_ = -1;
