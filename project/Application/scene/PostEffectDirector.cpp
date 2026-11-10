@@ -72,8 +72,6 @@ void PostEffectDirector::Update(float deltaTime, const FrameState& state) {
     const float strength = kCriticalStrengthMin + (kCriticalStrengthMax - kCriticalStrengthMin) * wave;
     renderer->SetVignetteParam(kCriticalVignetteScale, kCriticalVignettePow, kCriticalColor, strength);
     nextMode = Renderer::PostProcessMode::Vignette;
-  } else if (state.isBossPhase) {
-    nextMode = Renderer::PostProcessMode::LuminanceBasedOutline;
   }
   renderer->SetPostProcessMode(nextMode);
 }

@@ -26,6 +26,11 @@ constexpr float kMinHorizontalLength = 1e-4f;
 } // namespace
 
 bool StageNameBoard::Initialize(const char *modelPath, const char *texturePath, const char *puffTexturePath) {
+  // 画像のパスが空のときは「ステージ名の画像なし」。読み込みを試みず、板を出さない状態(ready_ = false)のままにする
+  if (texturePath == nullptr || texturePath[0] == '\0') {
+    return false;
+  }
+
   auto *assets = AbsoluteEngine::AssetManager::GetInstance();
 
   auto resource = assets->Load<ModelResource>(modelPath);

@@ -381,6 +381,7 @@ void GameScene::Initialize(const SceneServices &services) {
     // HUDの初期化
     gameHUD_ = std::make_unique<GameHUD>();
     gameHUD_->Initialize();
+    hudStatus_.Initialize();
   }
 
   // -----------------------------------------------------------------------
@@ -423,6 +424,11 @@ void GameScene::Initialize(const SceneServices &services) {
   stageNameBoard_.BuildFracture(kStageNameImpactPoint, stageNameBoardSettings_, stageNameFractureSettings_, stageNameFragmentSettings_);
   stageImpact_.Initialize(kImpactFlashModelPath);
   speedStreaks_.Initialize(kSpeedStreakModelPath);
+
+  // 浮島。レールの形から配置を決めるので、レールカメラを読み込んだあとに行う(失敗しても、島が出ないだけで、ゲームは進められる)
+  if (const auto *rail = FindRailCamera_()) {
+    stageIslands_.Initialize(*rail, volumeCloudSea_.layerTop);
+  }
 
   // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
   BeginIntro_();
@@ -1068,17 +1074,51 @@ void GameScene::UpdateHud_() {
   Camera* hudCam = GetGameplayCamera_();
   auto* pComp = playerObj_ ? playerObj_->GetComponent<PlayerComponent>() : nullptr;
 
+  // HUD の文字に出す値(スコア、撃破数、目的、バーの割合)
+  HudStatus status;
+  status.score = scoreTracker_.GetScore();
+  status.kills = scoreTracker_.GetKillCount();
+  status.objective = phase_ == GamePhase::Boss ? HudObjective::DefeatBoss : HudObjective::Advance;
+  if (phase_ == GamePhase::Boss) {
+    // ボス戦は、バーを進行度からボスの体力へ切り替える(出現した直後でまだ見つからないときは満タン)
+    status.gauge = HudGauge::BossHp;
+    status.gaugeRatio = 1.0f;
+    for (const auto &obj : GetRootObjects()) {
+      const auto *boss = obj ? obj->GetComponent<BossComponent>() : nullptr;
+      if (boss && boss->GetMaxHp() > 0) {
+        status.gaugeRatio = static_cast<float>(boss->GetHp()) / static_cast<float>(boss->GetMaxHp());
+        break;
+      }
+    }
+  } else if (const auto *rail = FindRailCamera_()) {
+    status.gaugeRatio = rail->GetProgress();
+  }
+  // HP は「現在 / 最大」の割合で渡す(最大 HP がいくつでも、バーは同じ作りで描ける)
+  if (pComp && pComp->GetMaxHp() > 0) {
+    status.hpRatio = std::clamp(static_cast<float>(pComp->GetHp()) / static_cast<float>(pComp->GetMaxHp()), 0.0f, 1.0f);
+  } else {
+    status.hpRatio = 0.0f;
+  }
+  // ロックオンの表示に出す値(輪の半径は、判定と同じ定数)。捕まえている敵の画面座標は、HUD の更新にも使うので 1 回だけ求める
+  status.lockRadius = LockOnSystem::kLockRadiusPixels;
+  if (pComp) {
+    const LockOnSystem &lockOn = pComp->GetLockOn();
+    status.lockingMode = lockOn.IsLockingMode();
+    status.cursorPos = pComp->GetCursorPos();
+    status.lockedPositions = lockOn.GetLockedScreenPositions(GetMainCamera());
+    status.lockedCount = lockOn.GetLockedCount();
+    status.lockMax = lockOn.GetMaxLockTargets();
+  }
+  hudStatus_.SetStatus(status);
+
   if (!pComp) {
-      gameHUD_->Update(0, 0, {}, false, { ScreenSize::kCenterX, ScreenSize::kCenterY },
-                       hudCam, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 });
+      gameHUD_->Update(false, hudCam, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 });
       return;
   }
 
   const bool isLockingMode = pComp->GetLockOn().IsLockingMode();
 
-  gameHUD_->Update(pComp->GetHp(), pComp->GetMaxHp(),
-                   pComp->GetLockOn().GetLockedScreenPositions(GetMainCamera()), isLockingMode,
-                   pComp->GetCursorPos(), hudCam,
+  gameHUD_->Update(isLockingMode, hudCam,
                    pComp->GetNearReticleWorldPos(), pComp->GetMidReticleWorldPos(), pComp->GetFarReticleWorldPos());
 }
 
@@ -1156,6 +1196,11 @@ void GameScene::Update() {
       // EnemyComponent::Update 内から自動的に発火されるため、ここでのポーリングは不要。
 
       RemoveExpiredObjects_();
+
+      // 島のタレット: 自機(カメラ)がタレットの島へ近づいたら、島の上へ出す
+      if (const auto *rail = FindRailCamera_()) {
+          islandTurrets_.Update(*this, stageIslands_, rail->GetProgress() * rail->GetTotalLength());
+      }
 
       // パーティクルの更新（爆発エフェクト等）
       // 世界の時間の速さに合わせる(ヒットストップで止まり、スローモーションで遅くなる)
@@ -1299,6 +1344,12 @@ void GameScene::Draw() {
       renderer->AddVolumeCloud(impactPuff, sunDirection, time_); // 着地点に湧く雲の塊(手前の雲として、最後に追加する)
   }
 
+  // 浮島。雲の依頼のあと、物体の描画の前(雲の合成が深度を見るので、島の下側は雲に埋まる)。
+  // 描く範囲は、自機(カメラ)のいるレール上の距離で決まる
+  if (const auto *rail = FindRailCamera_()) {
+      stageIslands_.Draw(renderer, rail->GetProgress() * rail->GetTotalLength());
+  }
+
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : GetRootObjects()) {
       if (!obj) continue;
@@ -1376,8 +1427,13 @@ void GameScene::Draw() {
   renderer->RenderPrimitives();
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !stageStart_.IsActive() && !deathDirector_.IsActive()) {
+  // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive()) {
+      // 雲は通常 EndRenderScene で描かれるため、先に描いた HUD が雲に隠れてしまう。
+      // HUD を描く前に雲を合成しておく(GameOverBackdrop::ResolveClouds と同じ方法)。以降の 2D は、深度なしのパイプラインで描かれる
+      renderer->FlushVolumeClouds();
       gameHUD_->Draw();
+      hudStatus_.Draw();
   }
 
   Matrix4x4 projInverse;

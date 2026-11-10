@@ -46,7 +46,7 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, Ba
 }
 
 void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
-    if (lockedTargets_.size() >= maxLockTargets_) return; // 既に上限
+    if (GetLockedCount() >= maxLockTargets_) return; // 既に上限
 
     Matrix4x4 viewMat = camera->GetViewMatrix();
     Matrix4x4 projMat = camera->GetProjectionMatrix();
@@ -97,12 +97,12 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             float dy = sy - cursorPos.y;
             float distSq = dx * dx + dy * dy;
             
-            // 半径75ピクセル以内の場合ロックオン (75*75 = 5625)
-            if (distSq <= 5625.0f) {
+            // 範囲の半径(kLockRadiusPixels)以内の場合ロックオン
+            if (distSq <= kLockRadiusPixels * kLockRadiusPixels) {
                 // shared_ptr → weak_ptr に変換して安全に保持
                 lockedTargets_.push_back(obj);
                 
-                if (lockedTargets_.size() >= maxLockTargets_) {
+                if (GetLockedCount() >= maxLockTargets_) {
                     break;
                 }
             }
