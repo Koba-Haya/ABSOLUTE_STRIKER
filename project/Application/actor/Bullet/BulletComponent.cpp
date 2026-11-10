@@ -27,6 +27,12 @@ void BulletComponent::Update(float deltaTime) {
   t.translate.z += velocity_.z * deltaTime;
 }
 
+namespace {
+// 弾のタグ(GameObject::GetTag の値)
+constexpr const char* kEnemyBulletTag  = "EnemyBullet";
+constexpr const char* kPlayerBulletTag = "PlayerBullet";
+} // namespace
+
 void BulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_ || !owner_) return;
 
@@ -34,15 +40,28 @@ void BulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     const std::string& ownerTag = owner_->GetTag();
     const std::string& otherTag = other->GetTag();
 
-    if (ownerTag == "EnemyBullet") {
-        // 敵弾 → プレイヤー本体にのみ反応（プレイヤー弾とは相殺しない）
+    // 相手が「通常弾」か。ロックオン弾(ホーミング)も同じ PlayerBullet タグだが、BulletComponent を持たない。
+    // そのため BulletComponent を持つ PlayerBullet = 通常弾、と区別できる(ホーミング弾は敵弾と相殺しない)
+    const auto* otherBullet = other->GetComponent<BulletComponent>();
+
+    if (ownerTag == kEnemyBulletTag) {
         if (otherTag == "Player") {
+            // 敵弾 → プレイヤー本体に当たって消える
+            isActive_ = false;
+            owner_->Destroy();
+        } else if (otherTag == kPlayerBulletTag && otherBullet && canBeShotDown_) {
+            // 敵弾 → 通常弾に撃ち落とされる(撃ち落とせない弾は、そのまま飛び続ける)
             isActive_ = false;
             owner_->Destroy();
         }
-    } else if (ownerTag == "PlayerBullet") {
-        // プレイヤー弾 → 敵・ボス本体にのみ反応（敵弾とは相殺しない）
+    } else if (ownerTag == kPlayerBulletTag) {
         if (otherTag == "Enemy" || otherTag == "Boss") {
+            // プレイヤー弾 → 敵・ボス本体に当たって消える
+            isActive_ = false;
+            owner_->Destroy();
+        } else if (otherTag == kEnemyBulletTag && otherBullet) {
+            // 通常弾 → 敵弾に当たって消える。撃ち落とせない弾でも、通常弾のほうは消える。
+            // 敵弾側も自分の OnCollision で同じ判定をするので、両方が自分自身だけを消す(二重処理にならない)
             isActive_ = false;
             owner_->Destroy();
         }

@@ -2,6 +2,7 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "../Bullet/HomingBulletComponent.h"
 #include <algorithm>
 
 namespace {
@@ -88,7 +89,8 @@ void EnemyComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_ || isDead_) return;
 
     // タグ判定：自機弾が当たったらダメージを受ける
-    if (other->GetTag() == "PlayerBullet") {
+    // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない。ほかの敵は通り抜けさせる
+    if (other->GetTag() == "PlayerBullet" && HomingBulletComponent::CanHit(*other, owner_)) {
         OnHit();
     }
 }

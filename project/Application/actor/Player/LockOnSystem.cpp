@@ -5,8 +5,15 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
+#include "../Bullet/HomingBulletComponent.h"
 #include <algorithm>
 #include <cmath>
+
+namespace {
+// ロックオン対象を判別するタグ(GameObject::GetTag の値)
+constexpr const char* kEnemyTag = "Enemy";
+constexpr const char* kBossTag  = "Boss";
+} // namespace
 
 void LockOnSystem::Initialize() {
     lockedTargets_.clear();
@@ -53,13 +60,24 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
     Matrix4x4 vpMat = Multiply(viewMat, projMat);
 
     const auto& objects = scene->GetRootObjects();
+
+    // すでにロックオン弾(ホーミング弾)が飛んでいる敵は、対象にしない(1体の敵にロックオンは1回だけ)。
+    // 撃ったあとは lockedTargets_ が空になるため、これがないと、弾の飛行中に同じ敵をもう一度ロックできてしまう
+    std::vector<const AbsoluteEngine::GameObject*> aimedTargets;
+    for (const auto& obj : objects) {
+        if (!obj) continue;
+        const auto* homing = obj->GetComponent<HomingBulletComponent>();
+        if (!homing || !homing->IsActive()) continue;
+        if (const auto aimed = homing->GetTarget().lock()) aimedTargets.push_back(aimed.get());
+    }
+
     for (const auto& obj : objects) {
         if (!obj) continue;
         
-        // 敵またはボスのみ対象
-        if (obj->GetTag() != "Enemy" && obj->GetTag() != "Boss" &&
-            obj->GetName().find("Enemy") == std::string::npos && 
-            obj->GetName().find("Boss") == std::string::npos) {
+        // 敵またはボスのみ対象。判定はタグだけで行う。
+        // 名前の部分一致を使うと、敵弾(名前が EnemyBullet)まで対象になり、ロックオンの枠を取られてしまう。
+        // 敵のプレハブはすべてタグ Enemy、ボスは GameScene が生成時にタグ Boss を付ける
+        if (obj->GetTag() != kEnemyTag && obj->GetTag() != kBossTag) {
             continue;
         }
 
@@ -75,6 +93,9 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
                 return weak.lock() == obj;
             });
         if (alreadyLocked) continue;
+
+        // 飛行中のロックオン弾に狙われている敵は、対象にしない
+        if (std::find(aimedTargets.begin(), aimedTargets.end(), obj.get()) != aimedTargets.end()) continue;
 
         // スクリーン内にいるか判定
         Vector3 worldPos = obj->GetTransform().translate;

@@ -114,11 +114,28 @@ void HomingBulletComponent::Update(float deltaTime) {
 void HomingBulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_) return;
 
-    // タグのみで判定する（名前に「Enemy」が含まれる敵弾を誤って消滅させるバグを防ぐ）
+    // タグのみで判定する（名前に「Enemy」が含まれる敵弾を誤って消滅させるバグを防ぐ）。
+    // ロック対象だけに当たり、道中のロックしていない敵は通り抜ける
     const std::string& otherTag = other->GetTag();
-    if (otherTag == "Enemy" || otherTag == "Boss") {
+    if ((otherTag == "Enemy" || otherTag == "Boss") && IsAimingAt(other)) {
         Finish_();
     }
+}
+
+// -----------------------------------------------------------------------
+// IsAimingAt（この弾のロック対象か）
+// -----------------------------------------------------------------------
+bool HomingBulletComponent::IsAimingAt(const AbsoluteEngine::GameObject* victim) const {
+    return victim && target_.lock().get() == victim;
+}
+
+// -----------------------------------------------------------------------
+// CanHit（敵・ボスの被弾判定用。ホーミング弾はロック対象にだけ当たる）
+// -----------------------------------------------------------------------
+bool HomingBulletComponent::CanHit(const AbsoluteEngine::GameObject& bulletObj,
+                                   const AbsoluteEngine::GameObject* victim) {
+    const auto* homing = bulletObj.GetComponent<HomingBulletComponent>();
+    return !homing || homing->IsAimingAt(victim);
 }
 
 // -----------------------------------------------------------------------

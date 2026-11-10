@@ -3,6 +3,7 @@
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "../Bullet/BulletFactory.h"
+#include "../Bullet/HomingBulletComponent.h"
 #include "../Player/PlayerComponent.h"
 #include "GameCamera.h"
 #include <cmath>
@@ -222,7 +223,9 @@ void BossComponent::TakeDamage(int damage) {
 void BossComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_ || !other) return;
 
-    if (other->GetName().find("PlayerBullet") != std::string::npos || other->GetTag() == "PlayerBullet") {
+    // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない
+    if ((other->GetName().find("PlayerBullet") != std::string::npos || other->GetTag() == "PlayerBullet") &&
+        HomingBulletComponent::CanHit(*other, owner_)) {
         TakeDamage(1);
     }
 }
