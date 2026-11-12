@@ -15,6 +15,9 @@ struct BulletSpec {
   float radius = 0.5f;                  // コライダー半径
   std::optional<Vector4> color;         // 弾モデルの色（未指定ならモデル既定）
   std::string name;                     // GameObject名（空ならファクトリ既定）
+  // 自機の通常弾で撃ち落とせるか(敵弾にだけ意味がある。自機の弾では使われない)。
+  // false の弾は、通常弾が当たっても消えず、通常弾のほうだけが消える。今の敵はすべて既定(撃ち落とせる)のまま
+  bool canBeShotDown = true;
 };
 
 // ホーミング弾（ベジェ曲線で追尾）の生成パラメータ

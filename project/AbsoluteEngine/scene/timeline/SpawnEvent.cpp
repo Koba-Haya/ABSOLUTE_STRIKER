@@ -48,7 +48,16 @@ std::string SpawnEvent::GetLabel() const {
     return "Spawn: " + (prefabId_.empty() ? "(未設定)" : prefabId_);
 }
 
-void SpawnEvent::Fire() {
+bool SpawnEvent::ResolveSpawnTransform(const TimelineFireContext& context, Transform& outTransform, RailFrame& outFrame) const {
+    outTransform = spawnTransform_;
+    if (!useRail_) {
+        return false;
+    }
+    // レールが無いとき(ResolveRailTransform が false)は、世界座標の spawnTransform_ のまま置く
+    return ResolveRailTransform(rail_, context, outTransform, outFrame);
+}
+
+void SpawnEvent::Fire(const TimelineFireContext& context) {
     // 既にスポーン済みのオブジェクトが存在する場合はスキップ（二重スポーン防止）
     if (!spawnedObject_.expired()) {
         return;
@@ -68,8 +77,15 @@ void SpawnEvent::Fire() {
         return;
     }
 
-    // スポーン位置に配置する
-    obj->GetTransform() = spawnTransform_;
+    // スポーン位置に配置する(レール座標の指定なら、発火時刻のレール上の位置から世界座標へ変換する)
+    RailFrame railFrame{};
+    Transform placed{};
+    const bool placedOnRail = ResolveSpawnTransform(context, placed, railFrame);
+    obj->GetTransform() = placed;
+    // レール上に出したことを、コンポーネントへ知らせる(進行方向に依存する動きが、向きを決める)
+    if (placedOnRail) {
+        NotifySpawnedOnRail(*obj, railFrame);
+    }
 
     // アクティブシーンのルートオブジェクトに追加する
     BaseScene* activeScene = BaseScene::GetActiveScene();
@@ -100,6 +116,10 @@ void SpawnEvent::Rewind() {
 void SpawnEvent::Serialize(nlohmann::json& j) const {
     j["prefabId"] = prefabId_;
     j["spawnTransform"] = TransformToJson(spawnTransform_);
+    // レール座標の指定があるときだけ書く(無ければ、従来と同じ形の JSON になる)
+    if (useRail_) {
+        j["rail"] = RailSpawnPointToJson(rail_);
+    }
 }
 
 void SpawnEvent::Deserialize(const nlohmann::json& j) {
@@ -107,6 +127,9 @@ void SpawnEvent::Deserialize(const nlohmann::json& j) {
     if (j.contains("spawnTransform")) {
         spawnTransform_ = JsonToTransform(j["spawnTransform"]);
     }
+    // 「rail」項目があればレール座標の指定。無ければ従来の世界座標(後方互換)
+    useRail_ = j.contains("rail") && j["rail"].is_object();
+    rail_ = useRail_ ? RailSpawnPointFromJson(j["rail"]) : RailSpawnPoint{};
 }
 
 void SpawnEvent::DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) {
@@ -118,12 +141,16 @@ void SpawnEvent::DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) {
 
     // スポーン位置 (Spawn Offset) の編集 - XYZ個別のDragFloat
     ImGui::Text("Spawn Offset:");
-    float pos[3] = { spawnTransform_.translate.x, spawnTransform_.translate.y, spawnTransform_.translate.z };
-    if (ImGui::DragFloat3("Position##SpawnOffset", pos, 0.1f)) {
-        spawnTransform_.translate = { pos[0], pos[1], pos[2] };
+    // レール座標(前方・横・縦)か、世界座標かを選ぶ。レール座標のときは、世界座標の欄は出さない
+    DrawRailSpawnPointUI(useRail_, rail_, activated, deactivatedAfterEdit);
+    if (!useRail_) {
+        float pos[3] = { spawnTransform_.translate.x, spawnTransform_.translate.y, spawnTransform_.translate.z };
+        if (ImGui::DragFloat3("Position##SpawnOffset", pos, 0.1f)) {
+            spawnTransform_.translate = { pos[0], pos[1], pos[2] };
+        }
+        activated |= ImGui::IsItemActivated();
+        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
     }
-    activated |= ImGui::IsItemActivated();
-    deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
 
     float rot[3] = { spawnTransform_.rotate.x, spawnTransform_.rotate.y, spawnTransform_.rotate.z };
     if (ImGui::DragFloat3("Rotation##SpawnOffset", rot, 0.01f)) {

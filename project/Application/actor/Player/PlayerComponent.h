@@ -20,6 +20,8 @@ public:
 
   // ロックオンの状態を読み取り専用で取得する（HUD の表示など）。ロックの操作は PlayerComponent の中だけで行う
   const LockOnSystem& GetLockOn() const { return lockon_; }
+  // ロックオンできる数の上限を変える(アイテムなどの強化用。ロックの操作そのものは、ここでは行わない)
+  void SetMaxLockTargets(int maxTargets) { lockon_.SetMaxLockTargets(maxTargets); }
 
   void Initialize();
   void Update(float deltaTime) override;

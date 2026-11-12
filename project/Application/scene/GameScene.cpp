@@ -25,7 +25,11 @@
 #include "AbsoluteEngine/scene/timeline/TimelineEventFactory.h"
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "../actor/Enemy/StraightMoveComponent.h"
+#include "../actor/Enemy/RailAnchorComponent.h"
+#include "../actor/Enemy/AimedShootComponent.h"
 #include "../actor/Enemy/EnemyComponent.h"
+#include "../actor/Enemy/EnemyModelAnimatorComponent.h"
+#include "../actor/Enemy/TelegraphComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
 #include "../actor/Enemy/FormationMemberComponent.h"
@@ -61,12 +65,19 @@
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "graphics/particle/EffectManager.h"
 #include "component/ExplosionLightComponent.h"
+#include "Application/occlusion/OcclusionWorld.h"
 
 namespace {
 // ゲームのカメラの投影(画角・ニア・ファー)
 constexpr float kGameCameraFovY = 0.45f;
 constexpr float kGameCameraNear = 0.1f;
 constexpr float kGameCameraFar = 1000.0f;
+// 箱の雲(volumeCloud_)を置く、レール上の距離(ユニット)。レールが直線だったころの位置(ワールド z=267、始点が z=-50)と同じ地点。
+// 箱はワールド固定ではなく、この地点のレールの上に置く(レールを曲げても、カメラが箱の中を通り抜ける)
+constexpr float kVolumeCloudRailDistance = 317.0f;
+// 箱の中心の、レールの高さからの相対の高さ(負は下)。以前は、レールが y=0 で、箱の中心が y=-2.8 だった。
+// レールが上下しても、カメラが箱の同じ位置(やや上寄り)を通るよう、レール基準にした
+constexpr float kVolumeCloudHeightFromRail = -2.8f;
 // ステージ名の板のモデル(板に貼る画像は、ステージの定義(StageDefinition::stageNameTexture)が持つ)
 constexpr const char *kStageNameModelPath = "resources/app/stage/stage_name_board.obj";
 // 雲の文字のパフの画像(タイトルの雲の粒と同じ)
@@ -242,7 +253,11 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BulletComponent", []() { return std::make_unique<BulletComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyModelAnimatorComponent", []() { return std::make_unique<EnemyModelAnimatorComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("TelegraphComponent", []() { return std::make_unique<TelegraphComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailAnchorComponent", []() { return std::make_unique<RailAnchorComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().Register("AimedShootComponent", []() { return std::make_unique<AimedShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("TurretShootComponent", []() { return std::make_unique<TurretShootComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("ChargeOnApproachComponent", []() { return std::make_unique<ChargeOnApproachComponent>(); });
@@ -299,6 +314,8 @@ void GameScene::Initialize(const SceneServices &services) {
   } else {
       playerComp->Initialize();
   }
+  // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
+  itemSystem_.BeginStage(playerObj_);
 
   // -----------------------------------------------------------------------
   // 自機のモデルを、蝶に差し替える。
@@ -400,6 +417,9 @@ void GameScene::Initialize(const SceneServices &services) {
   // SpawnEventの自動配置距離: このゲームではプレイヤーはカメラから約22ユニット前方、
   // 遠レティクルはさらに約60ユニット先にあるため、その付近に出現するよう80ユニットにする
   SetTimelineSpawnAheadDistance(80.0f);
+  // タイムラインが終端に着いたら、先頭へ戻らず終端で止める。
+  // 戻ると、カメラの進行度が 0 になり、ボス戦の間レールが始点から再走してしまう
+  SetTimelineHoldAtEnd(true);
   // タイムラインデータを読み込む（ファイルが無ければ空の状態で開始）
   {
     CpuTimer::Scope scope("GameScene.LoadTimeline");
@@ -428,13 +448,21 @@ void GameScene::Initialize(const SceneServices &services) {
   // 浮島。レールの形から配置を決めるので、レールカメラを読み込んだあとに行う(失敗しても、島が出ないだけで、ゲームは進められる)
   if (const auto *rail = FindRailCamera_()) {
     stageIslands_.Initialize(*rail, volumeCloudSea_.layerTop);
+    // 箱の雲を、レール上の決めた地点へ置く(x と z と高さをレールに合わせる。大きさと向きは変えない)
+    const AbsoluteEngine::RailFrame cloudFrame = rail->GetRailFrame(kVolumeCloudRailDistance);
+    volumeCloud_.center = {cloudFrame.position.x, cloudFrame.position.y + kVolumeCloudHeightFromRail, cloudFrame.position.z};
   }
+  // 島を遮蔽物として登録する(前のシーンの登録は消す)。島が 1 つも無ければ、空のまとまりが登録されるだけで、何も遮らない
+  OcclusionWorld::GetInstance().Clear();
+  stageIslands_.BuildOccluders(islandOccluders_);
+  OcclusionWorld::GetInstance().Register(&islandOccluders_);
 
   // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
   BeginIntro_();
 }
 
 void GameScene::Finalize() {
+  OcclusionWorld::GetInstance().Unregister(&islandOccluders_); // このシーンが消えたあと、遮蔽物を指すポインタを残さない
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
@@ -732,9 +760,17 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
     }
 
-    enemyComp->onDestroyed = [this, formationComp](const Vector3& hitPos) {
-        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）
+    // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
+    enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
+        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
         hitEffects_.Spawn(*this, hitPos);
+
+        // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
+        // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
+        if (reason != EnemyDestroyReason::Player) return;
+
+        // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
+        itemSystem_.OnEnemyDestroyed(*this, enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();
@@ -1210,15 +1246,10 @@ void GameScene::Update() {
       // EffectManagerの更新（RingEffectなど）
       EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
 
-      // ボスフェーズ移行
-      float railProgress = 0.0f;
-      for (const auto& obj : GetRootObjects()) {
-          if (auto comp = obj->GetComponent<RailCameraComponent>()) {
-              railProgress = comp->GetProgress();
-              break;
-          }
-      }
-      if (phase_ == GamePhase::InProgress && railProgress >= 1.0f) {
+      // ボスフェーズ移行: タイムラインが終点に到達した合図で行う(進行度の値の比較には頼らない)。
+      // 到達後は、タイムラインが終端で止まり、レールの進行度は 1.0 のまま保たれる(レール自身の進行も 1.0 で頭打ち)ので、
+      // ボス戦の間、レールは動かず、島の描画範囲や島のタレットも再スタートしない
+      if (phase_ == GamePhase::InProgress && HasTimelineReachedEnd()) {
           phase_ = GamePhase::Boss;
           SpawnBoss_();
       }

@@ -3,14 +3,14 @@
     "components": [
         {
             "color": {
-                "x": 1.0,
-                "y": 0.65,
-                "z": 0.05,
+                "x": 0.8,
+                "y": 0.8,
+                "z": 0.8,
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
-            "modelPath": "resources/app/cube/cube.obj",
-            "texturePath": "resources/app/cube/white100x100.png",
+            "modelPath": "resources/app/enemy/enemy_bird.gltf",
+            "texturePath": "resources/app/enemy/enemy_palette.png",
             "type": "ModelComponent"
         },
         {
@@ -39,6 +39,22 @@
         },
         {
             "type": "RamAttackComponent"
+        },
+        {
+            "type": "EnemyModelAnimatorComponent"
+        },
+        {
+            "type": "TelegraphComponent",
+            "glowMode": "body",
+            "duration": 0.5,
+            "bodyGlowTint": {
+                "x": 2.6,
+                "y": 0.6,
+                "z": 0.5,
+                "w": 1.0
+            },
+            "shakeAmplitudeDeg": 8.0,
+            "shakeFrequency": 24.0
         }
     ],
     "name": "EnemyHoming",

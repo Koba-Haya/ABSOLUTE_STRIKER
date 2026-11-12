@@ -52,7 +52,7 @@ public:
     // タイムラインはカメラの進行度をこのポインタ経由で同期する
     void SetCamera(ITimelineCamera* camera) { timelineCamera_ = camera; }
 
-    // ComputeSpawnAnchorTransform()でカメラ前方に自動配置する際の距離（ワールド単位）を設定する
+    // ComputeSpawnAnchorRail()でカメラ前方に自動配置する際の距離（レールに沿ったユニット）を設定する
     // プレイヤーとカメラの位置関係・狙わせたい距離感はゲームごとに異なるため、
     // 既定値（80.0f）はあくまで暫定値。ゲーム側の実際のプレイヤー/照準距離に合わせて呼び出すこと
     void SetSpawnAheadDistance(float distance) { spawnAheadDistance_ = distance; }
@@ -61,10 +61,14 @@ public:
     // スポーン位置の自動算出
     // -----------------------------------------------------------
 
-    // 発火時刻に対応するレール上の想定プレイヤー位置から、前方向へ少し奥へ進めた位置を算出する
-    // SpawnEvent追加時のデフォルト出現位置に使う（座標を手入力する代わりに自動配置する）
-    // カメラ未接続の場合は原点のTransformを返す
-    Transform ComputeSpawnAnchorTransform(float triggerTime) const;
+    // SpawnEvent追加時のデフォルト出現位置（レール座標）を返す。
+    // 発火時刻のカメラ位置から、レールに沿って spawnAheadDistance_ だけ奥(横・縦は 0)。
+    // 世界座標ではなくレール座標なので、発火時刻にも、レールの形にも依存しない
+    RailSpawnPoint ComputeSpawnAnchorRail() const;
+
+    // 発火時刻 triggerTime のイベントに渡す文脈(発火時刻と、タイムラインのレール)を作る。
+    // エディタのプレビューが、実際の Fire() と同じ手順で出現位置を求めるために使う
+    TimelineFireContext MakeFireContext(float triggerTime) const;
 
     // -----------------------------------------------------------
     // 再生制御
@@ -81,6 +85,16 @@ public:
 
     // 現在の再生状態を取得する
     TimelinePlayState GetPlayState() const { return playState_; }
+
+    // 終端での動きを選ぶ(既定は false)。
+    //   false: 終端に着くと Stop() する(先頭へ戻り、カメラの進行度も 0 に戻る。エディタの従来の動き)
+    //   true : 終端で止まり、時間とカメラの進行度は終端(進行度 1.0)のまま保つ。イベントは巻き戻す(出した敵は消える)
+    // ゲーム側は true にして、終端の先(ボス戦など)でレールが再走しないようにする
+    void SetHoldAtEnd(bool hold) { holdAtEnd_ = hold; }
+
+    // 終端に到達して、SetHoldAtEnd(true) の動きで止まったか。
+    // 「終点に到達した」という明示の合図として使う(進行度の値の比較に頼らない)。Stop / Seek / 読み込みで false に戻る
+    bool HasReachedEnd() const { return reachedEnd_; }
 
     // -----------------------------------------------------------
     // シーク（時間ジャンプ）
@@ -183,6 +197,10 @@ private:
     // 直前フレームの再生時間（スイープ判定に使用）
     float previousTime_ = 0.0f;
 
+    // 終端で止まったまま保つか(SetHoldAtEnd)。終端に到達して保った状態か(HasReachedEnd)
+    bool holdAtEnd_ = false;
+    bool reachedEnd_ = false;
+
     // 再生状態
     TimelinePlayState playState_ = TimelinePlayState::Stopped;
 
@@ -192,7 +210,7 @@ private:
     // カメラへの非所有ポインタ（実体の寿命はBaseSceneが管理）
     ITimelineCamera* timelineCamera_ = nullptr;
 
-    // ComputeSpawnAnchorTransform()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
+    // ComputeSpawnAnchorRail()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
     float spawnAheadDistance_ = 80.0f;
 
     // 現在選択中のイベントへの非所有ポインタ（タスク14）

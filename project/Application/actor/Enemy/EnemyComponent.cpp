@@ -2,6 +2,7 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "../Bullet/HomingBulletComponent.h"
 #include <algorithm>
 
 namespace {
@@ -29,7 +30,7 @@ void EnemyComponent::Update(float deltaTime) {
         // -----------------------------------------------------------------------
         if (!effectFired_ && onDestroyed) {
             effectFired_ = true;
-            onDestroyed(owner_->GetTransform().translate);
+            onDestroyed(owner_->GetTransform().translate, destroyReason_);
         }
 
         // ディゾルブアニメーションを進める
@@ -54,11 +55,12 @@ void EnemyComponent::Update(float deltaTime) {
     }
 }
 
-void EnemyComponent::OnHit(int damage) {
+void EnemyComponent::OnHit(int damage, EnemyDestroyReason reason) {
     if (isDead_) return;
 
     hp_ -= damage;
     if (hp_ <= 0) {
+        destroyReason_ = reason;
         isDead_    = true;
         isActive_  = false;
         dissolveTimer_ = 0.0f;
@@ -88,7 +90,8 @@ void EnemyComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (!isActive_ || isDead_) return;
 
     // タグ判定：自機弾が当たったらダメージを受ける
-    if (other->GetTag() == "PlayerBullet") {
+    // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない。ほかの敵は通り抜けさせる
+    if (other->GetTag() == "PlayerBullet" && HomingBulletComponent::CanHit(*other, owner_)) {
         OnHit();
     }
 }

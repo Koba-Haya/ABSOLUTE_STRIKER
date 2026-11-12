@@ -26,25 +26,19 @@ float TimelineManager::GetDuration() const {
 // スポーン位置の自動算出
 // -----------------------------------------------------------
 
-Transform TimelineManager::ComputeSpawnAnchorTransform(float triggerTime) const {
-    Transform t{};
-    if (!timelineCamera_) return t;
-
-    const float duration = GetDuration();
-    const float progress = (duration > 0.0f) ? std::clamp(triggerTime / duration, 0.0f, 1.0f) : 0.0f;
-
-    Vector3 pos{};
-    Vector3 forward{};
-    timelineCamera_->GetPointAndForward(progress, pos, forward);
-
-    // カメラ位置から前方向へ spawnAheadDistance_ だけ進めた位置に出現させる
+RailSpawnPoint TimelineManager::ComputeSpawnAnchorRail() const {
+    // カメラ前方 spawnAheadDistance_ だけ奥の、道の真ん中(横・縦は 0)に出現させる
     // （距離の妥当な値はゲームのプレイヤー/照準距離次第なので SetSpawnAheadDistance() で調整する）
-    t.translate = {
-        pos.x + forward.x * spawnAheadDistance_,
-        pos.y + forward.y * spawnAheadDistance_,
-        pos.z + forward.z * spawnAheadDistance_
-    };
-    return t;
+    RailSpawnPoint rail;
+    rail.ahead = spawnAheadDistance_;
+    return rail;
+}
+
+TimelineFireContext TimelineManager::MakeFireContext(float triggerTime) const {
+    TimelineFireContext context;
+    context.triggerTime = triggerTime;
+    context.camera = timelineCamera_;
+    return context;
 }
 
 // -----------------------------------------------------------
@@ -70,6 +64,7 @@ void TimelineManager::Pause() {
 
 void TimelineManager::Stop() {
     playState_ = TimelinePlayState::Stopped;
+    reachedEnd_ = false;
 
     // 全イベントをRewindして状態をクリーンにする
     RewindAllEvents();
@@ -90,13 +85,16 @@ void TimelineManager::Seek(float targetTime) {
     // 有効範囲にクランプ
     targetTime = std::clamp(targetTime, 0.0f, GetDuration());
 
+    // 終端から動かしたので、「終端に到達した」状態は解除する
+    reachedEnd_ = false;
+
     // スイープ判定のために以前の時間を保存する
     previousTime_ = currentTime_;
     currentTime_ = targetTime;
 
     // 各トラックにスイープ判定を実行させる（Forward/Rewindを自動判断）
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_);
+        track->Update(currentTime_, previousTime_, timelineCamera_);
     }
 
     // カメラの進行度を即時同期する（Lerpによる遅延ワープを防ぐため直接設定）
@@ -121,7 +119,19 @@ void TimelineManager::Update(float deltaTime) {
 
         // 末尾のイベントを発火させてから停止する
         for (auto& track : tracks_) {
-            track->Update(currentTime_, previousTime_);
+            track->Update(currentTime_, previousTime_, timelineCamera_);
+        }
+
+        if (holdAtEnd_) {
+            // 終端で止まる。Stop() と違い、時間を先頭へ戻さないので、カメラの進行度は 1.0 のまま保たれる。
+            // イベントは巻き戻す(Stop と同じく、出した敵などを片づける)。
+            // 巻き戻したあとも時間は終端のままで、状態が Stopped なので、イベントが再び発火することはない
+            playState_ = TimelinePlayState::Stopped;
+            RewindAllEvents();
+            previousTime_ = currentTime_;
+            reachedEnd_ = true;
+            SyncCameraProgress();
+            return;
         }
 
         // 末端到達で自動停止
@@ -131,7 +141,7 @@ void TimelineManager::Update(float deltaTime) {
 
     // 各トラックを更新してスイープ判定を実行する
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_);
+        track->Update(currentTime_, previousTime_, timelineCamera_);
     }
 
     // カメラの進行度を同期する
@@ -245,6 +255,7 @@ bool TimelineManager::LoadFromFile(const std::string& filePath) {
     // 読み込み後は先頭にリセットする
     currentTime_ = 0.0f;
     previousTime_ = 0.0f;
+    reachedEnd_ = false;
     playState_ = TimelinePlayState::Stopped;
 
     std::cout << "[TimelineManager] タイムラインデータを読み込みました: " << filePath

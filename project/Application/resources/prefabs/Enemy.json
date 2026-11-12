@@ -3,14 +3,14 @@
     "components": [
         {
             "color": {
-                "x": 0.4,
-                "y": 0.75,
-                "z": 1.0,
+                "x": 0.8,
+                "y": 0.8,
+                "z": 0.8,
                 "w": 1.0
             },
             "environmentCoefficient": 0.0,
-            "modelPath": "resources/app/cube/cube.obj",
-            "texturePath": "resources/app/cube/white100x100.png",
+            "modelPath": "resources/app/enemy/enemy_bee.gltf",
+            "texturePath": "resources/app/enemy/enemy_palette.png",
             "type": "ModelComponent"
         },
         {
@@ -33,6 +33,27 @@
         },
         {
             "type": "EnemyShootComponent"
+        },
+        {
+            "type": "EnemyModelAnimatorComponent"
+        },
+        {
+            "type": "TelegraphComponent",
+            "glowMode": "muzzle",
+            "duration": 0.4,
+            "muzzleOffset": {
+                "x": 0.0,
+                "y": 0.08,
+                "z": -0.62
+            },
+            "glowColor": {
+                "x": 1.0,
+                "y": 0.55,
+                "z": 0.15,
+                "w": 1.0
+            },
+            "orbScaleStart": 0.08,
+            "orbScaleEnd": 0.45
         }
     ],
     "name": "Enemy",

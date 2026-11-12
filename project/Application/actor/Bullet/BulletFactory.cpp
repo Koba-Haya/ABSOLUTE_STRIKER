@@ -53,6 +53,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateStraight(
                                     tag, spec.radius, spec.position, spec.color);
   auto bulletComp = std::make_unique<BulletComponent>();
   bulletComp->Initialize(spec.velocity);
+  bulletComp->SetCanBeShotDown(spec.canBeShotDown);
   bulletObj->AddComponent(std::move(bulletComp));
   return bulletObj;
 }

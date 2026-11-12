@@ -335,9 +335,6 @@ void Renderer::Initialize(DirectXCommon *dx) {
   spotLightCB_ = CreateUploadBuffer(align256(sizeof(SpotLightGroupCB)));
   spotLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&spotLightMapped_));
 
-  skinningInformationCB_ = CreateUploadBuffer(align256(sizeof(SkinningInformation)));
-  skinningInformationCB_->Map(0, nullptr, reinterpret_cast<void **>(&skinningInformationMapped_));
-
   GPUParticleManager::GetInstance()->Initialize(dx_);
 
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
@@ -531,8 +528,8 @@ void Renderer::DispatchSkinning(ModelInstance* instance) {
   // u0: OutputVertices
   cmdList->SetComputeRootDescriptorTable(3, srvAlloc.Gpu(skinCluster->uavIndex));
   // b0: SkinningInformation
-  skinningInformationMapped_->numVertices = resource->GetVertexCount();
-  cmdList->SetComputeRootConstantBufferView(4, skinningInformationCB_->GetGPUVirtualAddress());
+  // インスタンスごとの定数バッファ(頂点数)を使う。共有の 1 個だと、複数のスキンモデルで最後の値に上書きされる
+  cmdList->SetComputeRootConstantBufferView(4, skinCluster->infoResource->GetGPUVirtualAddress());
 
   // 4. Dispatch
   uint32_t numVertices = resource->GetVertexCount();

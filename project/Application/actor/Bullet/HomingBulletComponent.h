@@ -32,6 +32,25 @@ public:
     std::string GetTypeName() const override { return "HomingBulletComponent"; }
 
     bool IsActive() const { return isActive_; }
+
+    /// ロック対象(追尾先)を返す。破棄済みなら空の weak_ptr が返る(lock() で生存確認すること)
+    const std::weak_ptr<AbsoluteEngine::GameObject>& GetTarget() const { return target_; }
+
+    /// <summary>
+    /// このホーミング弾が、指定したオブジェクトを狙っているか(ロック対象か)を返す。
+    /// </summary>
+    /// <param name="victim">調べるオブジェクト(敵やボス)</param>
+    /// <returns>ロック対象なら true。対象が破棄済みなら false</returns>
+    bool IsAimingAt(const AbsoluteEngine::GameObject* victim) const;
+
+    /// <summary>
+    /// 弾のオブジェクトが、victim に当たってよいかを返す(敵・ボスの被弾判定用)。
+    /// ホーミング弾は、ロック対象にしか当たらない。ホーミング弾でない弾は、常に当たってよい。
+    /// </summary>
+    /// <param name="bulletObj">当たってきた弾のオブジェクト</param>
+    /// <param name="victim">当たられる側(敵やボス)</param>
+    /// <returns>当たってよいなら true</returns>
+    static bool CanHit(const AbsoluteEngine::GameObject& bulletObj, const AbsoluteEngine::GameObject* victim);
     void Deactivate() { isActive_ = false; }
     float GetCollisionRadius() const { return radius_; }
 

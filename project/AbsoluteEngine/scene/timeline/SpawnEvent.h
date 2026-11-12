@@ -5,6 +5,7 @@
 // ============================================================
 #pragma once
 #include "ITimelineEvent.h"
+#include "RailSpawnPoint.h"
 #include "../../Type/Transform.h"
 #include <memory>
 #include <string>
@@ -28,7 +29,14 @@ public:
     std::string prefabId_ = "";
 
     // スポーン位置・回転・スケール
+    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
     Transform spawnTransform_{};
+
+    // レール座標で位置を指定するか(false なら、spawnTransform_.translate の世界座標。従来の JSON はこちら)
+    bool useRail_ = false;
+
+    // レール座標での出現位置(useRail_ が true のときだけ使う)
+    RailSpawnPoint rail_{};
 
     // -----------------------------------------------------------
     // ITimelineEvent 実装
@@ -38,7 +46,12 @@ public:
 
     // PrefabRegistryからパスを解決し、プレハブをスポーンして rootObjects に追加する
     // スポーンしたオブジェクトは weak_ptr で保持する
-    void Fire() override;
+    void Fire(const TimelineFireContext& context) override;
+
+    // 出現時の Transform(世界座標)を求める。useRail_ ならレール座標から変換し、そうでなければ spawnTransform_ のまま。
+    // outFrame は、レールで置いたときの、出現位置のレールの座標系(置かなかったときは変更しない)。
+    // 戻り値: レール座標で置いたか。Fire() とエディタのプレビューが、同じ手順で位置を求めるための関数
+    bool ResolveSpawnTransform(const TimelineFireContext& context, Transform& outTransform, RailFrame& outFrame) const;
 
     // weak_ptr 経由でオブジェクトの生存を確認してから安全に破棄する
     // （ダングリングポインタによるクラッシュを100%防ぐ）
@@ -54,7 +67,11 @@ public:
     // （DrawInspectorUI()では配置後の誤操作防止のため表示のみ・変更不可にしている）
     void DrawCreationUI(bool& activated, bool& deactivatedAfterEdit) override;
 
-    void SetSpawnAnchorTransform(const Transform& t) override { spawnTransform_ = t; }
+    // 追加時の既定位置。レール座標の指定にして、その値を入れる
+    void SetSpawnAnchorRail(const RailSpawnPoint& rail) override {
+        useRail_ = true;
+        rail_ = rail;
+    }
 
 private:
     // Fire()でスポーンしたオブジェクトへの弱参照

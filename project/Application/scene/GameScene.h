@@ -15,6 +15,7 @@
 #include "TextureResource.h"
 #include "Animation.h"
 #include "HitEffectSpawner.h"
+#include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
 #include "CloudImpact.h"
@@ -188,6 +189,7 @@ private:
   VolumeCloudSettings volumeCloudSea_ = MakeSeaLayerSettings();
   bool volumeCloudEditSea_ = true; // 調整 UI で、雲海の層(true)と箱(false)のどちらを調整するか
   StageIslands stageIslands_;      // 雲海の上へ頭を出す浮島の群れ(レールに沿って置く。距離感と速度感を出す)
+  IslandOccluders islandOccluders_; // 浮島の遮蔽物(円柱)。OcclusionWorld へ登録して、ロックオンと弾が問い合わせる
   IslandTurretSpawner islandTurrets_; // タレットの島の上へ、自機が近づいたらタレットを出す
 
   // アクター関連
@@ -199,6 +201,7 @@ private:
   HitEffectSpawner hitEffects_;    // 敵撃破時のヒットエフェクト
   PostEffectDirector postEffects_; // ポストエフェクト・カメラシェイクの発火とタイマー
   ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
+  ItemSystem itemSystem_;          // ドロップアイテム(敵を倒したときの出現、取得、強化)
 
   float time_ = 0.0f;
 

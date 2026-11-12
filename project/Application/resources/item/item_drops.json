@@ -1,0 +1,8 @@
+{
+    "drops": [
+        { "enemy": "Enemy", "item": "lockOnPlus", "chance": 0.2 },
+        { "enemy": "EnemyHoming", "item": "lockOnPlus", "chance": 0.25 },
+        { "enemy": "EnemyTurret", "item": "lockOnPlus", "chance": 1.0 },
+        { "enemy": "EnemyCrosser", "item": "lockOnPlus", "chance": 0.2 }
+    ]
+}

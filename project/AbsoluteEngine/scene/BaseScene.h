@@ -18,6 +18,7 @@ namespace AbsoluteEngine {
     class EditorCamera;
     class CommandManager;
     class ITimelineCamera;
+    class SpawnEvent;
 }
 
 class SceneManager;
@@ -104,6 +105,14 @@ protected:
   // 既定値はエンジン側の暫定値なので、ゲームのプレイヤー/照準距離に合わせて派生クラスから呼ぶ
   void SetTimelineSpawnAheadDistance(float distance);
 
+  // タイムラインが終端に着いたとき、先頭へ戻らず、終端で止めて保つかを設定する(既定は戻る)。
+  // 保つと、カメラの進行度が 1.0 のまま残る。ゲームのボス戦など、終端の先でレールを再走させたくないときに使う
+  void SetTimelineHoldAtEnd(bool hold);
+
+  // タイムラインが終端に到達して止まったか(SetTimelineHoldAtEnd(true) のとき)。
+  // 「終点に到達した」という明示の合図。タイムラインが無いシーンでは常に false
+  bool HasTimelineReachedEnd() const;
+
   // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
   void UpdateTimeline(float deltaTime);
 
@@ -189,6 +198,10 @@ protected:
   // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: timelineEditorWindow_ は timelineManager_ を参照する）を
   // 崩さないよう、順序を変えないこと
 private:
+  // エディタのタイムライン・プレビュー用: SpawnEvent の出現位置を世界座標で返す。
+  // レール座標の指定のときは、実際の出現(Fire)と同じ手順で、発火時刻のレール位置から変換する
+  Transform ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent &spawnEvent) const;
+
   SceneManager *sceneManager_ = nullptr;
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 

@@ -3,7 +3,17 @@
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"
+#include "TelegraphComponent.h"
+#include "externals/nlohmann/json.hpp"
+#include <algorithm>
 #include <cmath>
+
+namespace {
+// JSON のキー名
+constexpr const char* kKeyTriggerRange = "triggerRange";
+constexpr const char* kKeyChargeSpeed = "chargeSpeed";
+constexpr const char* kKeyWindupPullSpeed = "windupPullSpeed";
+}
 
 void ChargeOnApproachComponent::Update(float deltaTime) {
     if (!owner_) return;
@@ -38,6 +48,24 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     prevEye_ = eye;
     hasPrevEye_ = true;
 
+    // --- 予備動作の最中: 自機と反対へ引く(だんだん遅くなる)。済んだら、次のフレームで突進を始める ---
+    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    if (windingUp_) {
+        windupTimer_ += deltaTime;
+        const float duration = telegraph ? telegraph->GetDuration() : 0.0f;
+        const float progress = (duration > 0.0f) ? std::min(windupTimer_ / duration, 1.0f) : 1.0f;
+        const float pull = windupPullSpeed_ * (1.0f - progress) * deltaTime;
+        t.translate.x += windupAwayDir_.x * pull;
+        t.translate.y += windupAwayDir_.y * pull;
+        t.translate.z += windupAwayDir_.z * pull;
+        if (progress >= 1.0f) {
+            windingUp_ = false;
+            windupDone_ = true;
+            if (telegraph) telegraph->End();
+        }
+        return;
+    }
+
     // --- プレイヤーを探し、距離判定 ---
     std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
     for (const auto& obj : scene->GetRootObjects()) {
@@ -56,7 +84,18 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
         playerPos.z - currentPos.z
     };
     const float dist = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
-    if (dist > triggerRange_ || dist < 0.001f) return;
+    // 予備動作が済んでいれば、引いて距離が開いていても、そのまま突進を始める
+    if (!windupDone_ && (dist > triggerRange_ || dist < 0.001f)) return;
+    if (dist < 0.001f) return;
+
+    // --- 予備動作を始める(TelegraphComponent があるときだけ) ---
+    if (!windupDone_ && telegraph) {
+        windingUp_ = true;
+        windupTimer_ = 0.0f;
+        windupAwayDir_ = { -toPlayer.x / dist, -toPlayer.y / dist, -toPlayer.z / dist };
+        telegraph->Begin();
+        return;
+    }
 
     // --- トリガー発火 ---
     // 到達までのおおよその時間を見積もり、カメラの推定移動速度ぶんだけ
@@ -81,4 +120,16 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     } else {
         chargeDir_ = { toPlayer.x / dist, toPlayer.y / dist, toPlayer.z / dist };
     }
+}
+
+void ChargeOnApproachComponent::Serialize(nlohmann::json& j) const {
+    j[kKeyTriggerRange] = triggerRange_;
+    j[kKeyChargeSpeed] = chargeSpeed_;
+    j[kKeyWindupPullSpeed] = windupPullSpeed_;
+}
+
+void ChargeOnApproachComponent::Deserialize(const nlohmann::json& j) {
+    triggerRange_ = j.value(kKeyTriggerRange, triggerRange_);
+    chargeSpeed_ = j.value(kKeyChargeSpeed, chargeSpeed_);
+    windupPullSpeed_ = j.value(kKeyWindupPullSpeed, windupPullSpeed_);
 }

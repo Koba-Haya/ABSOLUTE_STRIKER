@@ -4,10 +4,17 @@
 #include "Method.h"
 #include "Renderer.h"
 #include "Spline.h"
+#include <cmath>
 #include "../../AbsoluteEngine/scene/BaseScene.h"
 #include "../actor/Player/PlayerComponent.h"
 #include <algorithm>
 #include <string>
+
+namespace {
+    // 注視点までの既定の距離(ユニット)。以前は「全長の 2%」で、今のステージ(全長 約 1250)ではちょうど 25 だった。
+    // 距離指定にしたので、全長が変わっても、曲がり角でのカメラの追従は同じになる
+    constexpr float kDefaultLookAheadDistance = 25.0f;
+}
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -26,7 +33,7 @@ RailCameraComponent::RailCameraComponent() {
         { 0.0f,  5.0f, 220.0f}  // P4: ゴールへと向かう直進路
     };
     speed_ = 15.0f; // 秒速15ユニットで走破する（ロックオンの余裕を持たせた速度）
-    lookAheadOffset_ = 0.02f;
+    lookAheadDistance_ = kDefaultLookAheadDistance;
     RebuildArcLengthTable_();
 }
 
@@ -96,18 +103,18 @@ void RailCameraComponent::ComputePositionAndTarget_(float progress, Vector3& out
     // 現在地点の計算
     outPos = Spline::GetPoint(waypoints_, t);
 
-    // 注視点の計算 (Look-ahead)：弧長ベースで一定割合先の地点を見るようにする
+    // 注視点の計算 (Look-ahead)：レールに沿って、一定の距離(lookAheadDistance_)先の地点を見るようにする
     if (progress >= 1.0f - 0.001f) {
         // 終点付近では、少し手前の点から終点への方向を向くようにする
-        const float sBeforeEnd = std::max(1.0f - lookAheadOffset_, 0.0f);
-        const float tBeforeEnd = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sBeforeEnd * totalLength) : sBeforeEnd;
+        const float distBeforeEnd = std::max(totalLength - lookAheadDistance_, 0.0f);
+        const float tBeforeEnd = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(distBeforeEnd) : 0.0f;
         Vector3 p1 = Spline::GetPoint(waypoints_, tBeforeEnd);
         Vector3 p2 = Spline::GetPoint(waypoints_, 1.0f);
         Vector3 diff = { p2.x - p1.x, p2.y - p1.y, p2.z - p1.z };
         outTarget = { outPos.x + diff.x, outPos.y + diff.y, outPos.z + diff.z };
     } else {
-        const float sTarget = std::min(progress + lookAheadOffset_, 1.0f);
-        const float tTarget = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(sTarget * totalLength) : sTarget;
+        const float distTarget = std::min(progress * totalLength + lookAheadDistance_, totalLength);
+        const float tTarget = (totalLength > 0.0f) ? arcLengthTable_.GetTAtDistance(distTarget) : progress;
         outTarget = Spline::GetPoint(waypoints_, tTarget);
     }
 }
@@ -125,6 +132,72 @@ void RailCameraComponent::GetPointAndForward(float progress, Vector3& outPos, Ve
 
     Vector3 diff = { targetPos.x - outPos.x, targetPos.y - outPos.y, targetPos.z - outPos.z };
     outForward = Normalize(diff);
+}
+
+namespace {
+    // JSONでの速さの項目名
+    constexpr const char* kSpeedKey = "speed";
+    // 接線を求めるとき、前後それぞれこの距離(ユニット)だけ離れた2点の差を使う
+    // (弧長テーブルは約6ユニット刻みなので、それより小さくしても精度は上がらない。1は十分に局所的な値)
+    constexpr float kTangentSampleDistance = 1.0f;
+    // 前方向がこの値以上に真上・真下(|forward.y|)を向いているとき、右ベクトルが定まらないとみなす
+    constexpr float kMaxForwardY = 0.9999f;
+    // ベクトルの長さの二乗がこれ未満なら、ゼロベクトルとみなす
+    constexpr float kMinLengthSq = 1.0e-12f;
+    constexpr Vector3 kWorldUp = { 0.0f, 1.0f, 0.0f };
+    constexpr Vector3 kFallbackForward = { 0.0f, 0.0f, 1.0f };
+    // 前方向が真上・真下のときの右ベクトルの代替(世界の +X)
+    constexpr Vector3 kFallbackRight = { 1.0f, 0.0f, 0.0f };
+}
+
+Vector3 RailCameraComponent::PointAtDistance_(float distance) const {
+    return Spline::GetPoint(waypoints_, arcLengthTable_.GetTAtDistance(distance));
+}
+
+Vector3 RailCameraComponent::TangentAtDistance_(float distance) const {
+    // 中心差分: d の前後の2点を結んだ方向を接線とする。
+    // 始点・終点では、範囲内に収めた片側だけの差分になる(端の接線として妥当な値)
+    const float total = GetTotalLength();
+    const float lo = std::max(distance - kTangentSampleDistance, 0.0f);
+    const float hi = std::min(distance + kTangentSampleDistance, total);
+    const Vector3 a = PointAtDistance_(lo);
+    const Vector3 b = PointAtDistance_(hi);
+    const Vector3 diff = { b.x - a.x, b.y - a.y, b.z - a.z };
+    if (Dot(diff, diff) < kMinLengthSq) return kFallbackForward;
+    return Normalize(diff);
+}
+
+AbsoluteEngine::RailFrame RailCameraComponent::GetRailFrame(float distance) const {
+    AbsoluteEngine::RailFrame frame;
+    frame.distance = distance; // 要求された距離をそのまま記録する(範囲外・フォールバックでも同じ)
+
+    // レールが成り立たない(通過点不足、全長0)ときの既定値。GetPointAndForwardと同じく原点、+Z向き
+    if (waypoints_.size() < 2 || GetTotalLength() <= 0.0f) {
+        frame.position = { 0.0f, 0.0f, 0.0f };
+        frame.forward = kFallbackForward;
+        frame.right = kFallbackRight;
+        frame.up = kWorldUp;
+        return frame;
+    }
+
+    // 範囲内の距離で、位置と接線を求める。範囲外は端の値を使い、はみ出した分を直線で外挿する
+    const float clamped = std::clamp(distance, 0.0f, GetTotalLength());
+    frame.forward = TangentAtDistance_(clamped);
+    const Vector3 onRail = PointAtDistance_(clamped);
+    const float overshoot = distance - clamped; // 範囲内なら0。始点より前は負、終点より先は正
+    frame.position = {
+        onRail.x + frame.forward.x * overshoot,
+        onRail.y + frame.forward.y * overshoot,
+        onRail.z + frame.forward.z * overshoot };
+
+    // 右 = 上 x 前、上 = 前 x 右(左手系。StageIslandsなど既存コードと同じ流儀)
+    if (std::fabs(frame.forward.y) >= kMaxForwardY) {
+        frame.right = kFallbackRight;
+    } else {
+        frame.right = Normalize(Cross(kWorldUp, frame.forward));
+    }
+    frame.up = Normalize(Cross(frame.forward, frame.right));
+    return frame;
 }
 
 void RailCameraComponent::ApplyCameraTransform_() {
@@ -166,9 +239,19 @@ void RailCameraComponent::Serialize(nlohmann::json& j) const {
         waypointsArray.push_back({ {"x", pt.x}, {"y", pt.y}, {"z", pt.z} });
     }
     j["waypoints"] = waypointsArray;
+    // 秒速ユニット。古いJSONには無い項目なので、読み込み側は無くても動くようにしてある
+    j[kSpeedKey] = speed_;
 }
 
 void RailCameraComponent::Deserialize(const nlohmann::json& j) {
+    // 速さ: 項目が無い(古いJSON)、または数値でない、または0以下のときは、今の値(コンストラクタの既定値)のまま使う
+    if (j.contains(kSpeedKey) && j[kSpeedKey].is_number()) {
+        const float loadedSpeed = j[kSpeedKey].get<float>();
+        if (loadedSpeed > 0.0f) {
+            speed_ = loadedSpeed;
+        }
+    }
+
     if (j.contains("waypoints") && j["waypoints"].is_array()) {
         waypoints_.clear();
         for (const auto& ptJson : j["waypoints"]) {

@@ -4,7 +4,13 @@
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
+#include "TelegraphComponent.h"
 #include <cmath>
+
+void EnemyShootComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame) {
+    // レールの進行方向の逆 = 自機側へ向かう向き(世界の -Z 固定だと、レールが +Z 以外を向くと撃たなくなる)
+    facingDir_ = { -frame.forward.x, -frame.forward.y, -frame.forward.z };
+}
 
 void EnemyShootComponent::Update(float deltaTime) {
     if (!owner_) return;
@@ -26,10 +32,17 @@ void EnemyShootComponent::Update(float deltaTime) {
     prevPos_    = currentPos;
     hasPrevPos_ = true;
 
+    // 島の陰に隠れているかを毎フレーム追う(隠れている間は撃たない。出てきてから少し待つ)
+    islandGate_.Update(currentPos, deltaTime);
+
     // タイマー更新
     shootTimer_ += deltaTime;
+    // 予備動作(針の光): 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
+    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    if (telegraph && telegraph->HoldFire(shootInterval_ - shootTimer_)) return;
     if (shootTimer_ < shootInterval_) return;
     shootTimer_ -= shootInterval_;
+    if (telegraph) telegraph->End();
         
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return;
@@ -55,6 +68,9 @@ void EnemyShootComponent::Update(float deltaTime) {
     // NDC ±1.2 の範囲外は発射しない（画面外ギリギリの敵も少し猶予を持たせる）
     constexpr float ndcMargin = 1.2f;
     if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return;
+
+    // 島に隠れている(または、出てきたばかりの)敵は撃たない。隠れている間に来た発射の時刻は、捨てる
+    if (!islandGate_.CanShoot()) return;
 
     // --- プレイヤーを探す ---
     std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;

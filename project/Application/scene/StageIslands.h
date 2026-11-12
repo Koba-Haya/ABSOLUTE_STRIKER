@@ -1,5 +1,6 @@
 #pragma once
 #include "StageIsland.h"
+#include "Application/occlusion/IslandOccluders.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -23,6 +24,19 @@ constexpr float kTopRadiusPerScale = 3.2f;  // 島の大きさ 1 倍あたりの
 // 雲の上面より大きく上に置くと、島の下側が雲の外に見えて、空に浮かぶ島になってしまう(画面で確認済み) ---
 constexpr float kHeightAboveCloudMin = -6.0f;
 constexpr float kHeightAboveCloudMax = 2.0f;
+// --- 空に浮く島 ---
+// レールが上下するので、島の一部は、雲海の面ではなく、その距離のレールの高さを基準にして浮かせる(下側が見える)。
+// 乱数は 1 つの値で「どちらにするか」と「高さ」を決める(引く数を変えないので、島の位置や大きさの配置は変わらない):
+//   値が kSunkFraction 未満なら、従来どおり、雲の上面基準(kHeightAboveCloudMin から Max。下側が雲に埋まる)
+//   それ以外は、レールの高さからの相対(kFloatHeightMin から Max)。レールより上なら、道が島の下をくぐる
+constexpr float kSunkFraction = 0.4f;
+constexpr float kFloatHeightMin = -8.0f;  // 浮く島の原点の、レールからの高さの下限(負はレールより下)
+constexpr float kFloatHeightMax = 40.0f;  // 同、上限
+// --- 島の上下の広がり(原点 = 上面の中心から。大きさの倍率 1 のとき)。道に食い込むかの判定に使う安全側の値 ---
+constexpr float kIslandDepthPerScale = 6.0f; // 原点から、下の先端までの深さ(モデルは 3.6 から 6)
+constexpr float kIslandTopPerScale = 0.6f;   // 原点から、上(頂点、木)までの高さ
+// 道の通り道の、縦の半分の高さ(レールの上下。自機は前方 22 で縦に約 +-5 動き、敵の出現の縦は +-2。余裕を見て決める)
+constexpr float kCorridorHalfHeight = 8.0f;
 // --- 大きさ。ステージのカメラは視野が狭い(縦 約 26 度)ので、GameOver より大きくする ---
 constexpr float kScaleMin = 3.0f;
 constexpr float kScaleMax = 6.0f;
@@ -43,9 +57,89 @@ constexpr TurretIslandSpec kTurretIslands[] = {
     {640.0f, 28.0f, 3.5f},
     {920.0f, -28.0f, 3.5f},
 };
-constexpr float kTurretIslandHeightAboveCloud = 2.0f; // 島の原点の、雲の上面からの高さ(丘の頂点は、これより 0.52 x 倍率 高い)
+// 島の原点の、レールの高さからの相対の高さ(負は下)。以前は「雲の上面 + 2」で、レールが y=0、雲の上面が y=-24 のとき、これは -22 だった。
+// レールが上下しても、自機との高さの差(タレットが下から撃つ形)が変わらないよう、レール基準にした(丘の頂点は、これより 0.52 x 倍率 高い)
+constexpr float kTurretIslandHeightFromRail = -22.0f;
+// ただし、雲の上面より、少なくともこれだけ高く置く(レールが雲海すれすれまで下がる区間で、タレットの島が雲に埋まって見えなくなるのを防ぐ)。
+// 以前の「雲の上面 + 2」と同じ値
+constexpr float kTurretIslandMinHeightAboveCloud = 2.0f;
 constexpr float kRockTopHeight = 0.52f;               // rock のモデルの、原点から頂点までの高さ(倍率 1 のとき。island_rock.gltf の最大の y)
 constexpr float kTurretClearDistance = 40.0f;         // タレットの島の前後で、飾りの島を置かない距離(レールに沿った距離)
+
+// --- 門(手で位置を指定する。道の両側に島を 1 つずつ置いて、間を抜けて進む見た目を作る) ---
+// 島には当たり判定が無いので、自機が島に当たることは無い。門は見た目だけの配置。
+// 自機は、カメラの前 22 ユニットの平面で、横に約 +-9 まで動く。島の縁と道の中心の間(clearance)は、これより広く取る。
+// 広すぎると「間を抜けている」感じが出ないので、通り道の幅(kCorridorHalfWidth)に少し足した程度を目安にする
+
+// 島の種類。ステージで使える飾りの島の種類。Rock は灰色の岩肌(タレットの島と同じモデル)
+enum class GateIslandKind {
+  Small,
+  Medium,
+  Forest,
+  Rock,
+};
+
+// 島の高さの基準。レールを上下させたとき、島とカメラの高さの差を保つかどうかを選ぶ
+enum class GateHeightMode {
+  CloudTop, // 雲の上面が基準(heightOffset は、雲の上面からの高さ。負は雲の中)。雲と島の位置関係が変わらない
+  Rail,     // その距離のレールの高さが基準(heightOffset は、レールからの高さ。負はレールより下)。カメラと島の高さの差が変わらない
+};
+
+// 門の片側の島 1 つ
+struct GateIslandSpec {
+  GateIslandKind kind;  // 島の種類
+  float scale;          // 島の大きさの倍率。0 以下なら、この側には島を置かない(片側だけの門にできる)
+  float clearance;      // 道の中心から、島の上面の縁までの、水平の距離(ユニット)。島の中心は、これに上面の半径を足した位置になる
+  float heightOffset;   // 島の原点(上面の中心)の高さ。基準は、門の heightMode が決める
+  float yaw;            // 島の向き(ラジアン。島の見た目に変化を付けるだけ)
+};
+
+// 門 1 つ。レール上の距離 distance に、左右の島を向かい合わせに置く
+struct GateSpec {
+  float distance;           // レール上の距離(始点から。ユニット)
+  GateHeightMode heightMode; // 高さの基準
+  GateIslandSpec left;      // 道の左側の島
+  GateIslandSpec right;     // 道の右側の島
+};
+
+constexpr float kGateClearDistance = 40.0f;   // 門の前後で、飾りの島を置かない距離(レールに沿った距離。大きい島が門の間を塞がないように)
+// 今のステージは、レールが y=0 の直線で、雲の上面は y=-24。レール基準の高さは「雲の上面基準の高さ - 24」で、同じ位置になる。
+// (レール基準の指定は、レールが上下しても、カメラと島の高さの差を保つためのもの。雲の上面の高さを変えたら、ここを直す)
+constexpr float kGateHeightBelowRail = -26.0f; // 島の原点を、レールの 26 下に置く(レールが y=0 の区間では、雲の上面より 2 低い位置)
+constexpr float kGateHeightAboveCloud = 0.0f;  // 島の原点を、雲の上面と同じ高さに置く、雲の上面からの高さ
+// レールの上に浮かせる島(道が下をくぐる)の、レールからの高さ。島の下の先端(深さ 6 x 倍率)が、通り道の上端(kCorridorHalfHeight)より上に来る高さ
+constexpr float kGateHeightOverhead = 32.0f;
+// 道が、島の間を降りる門の、左の島(上)の、レールからの高さ。右の島(下)は kGateHeightBelowRail を使う
+constexpr float kGateHeightHigh = 24.0f;
+// 道の真上に置く島の clearance(島の中心が道の真上になる値: 上面の縁までの距離 = -上面の半径)
+constexpr float OverheadClearance(float scale) { return -scale * kTopRadiusPerScale; }
+
+// 門の一覧(距離の昇順でなくてもよい)。見た目は、画面で確認して調整する
+// clearance 14 は、通り道の幅 12 に 2 足した値(自機の移動範囲 +-9 より、十分広い)
+constexpr GateSpec kGates[] = {
+    // 距離 150: 同じ大きさで向かい合う、基本の門(雲の上面基準)
+    {150.0f, GateHeightMode::CloudTop, {GateIslandKind::Forest, 4.0f, 14.0f, kGateHeightAboveCloud, 0.6f}, {GateIslandKind::Medium, 4.0f, 14.0f, kGateHeightAboveCloud, 2.1f}},
+    // 距離 270: 大きさの違う門(左を大きく、右を小さく。レール基準)
+    {270.0f, GateHeightMode::Rail, {GateIslandKind::Medium, 5.0f, 15.0f, kGateHeightBelowRail, 4.0f}, {GateIslandKind::Small, 3.5f, 14.0f, kGateHeightBelowRail, 1.2f}},
+    // 距離 500: 片側だけ(右の島だけ。左は空ける)。道が片側に開ける変化
+    {500.0f, GateHeightMode::CloudTop, {GateIslandKind::Small, 0.0f, 0.0f, 0.0f, 0.0f}, {GateIslandKind::Forest, 5.0f, 14.0f, kGateHeightAboveCloud, 3.3f}},
+    // 距離 740: 岩の門(レール基準)
+    {740.0f, GateHeightMode::Rail, {GateIslandKind::Rock, 4.0f, 14.0f, kGateHeightBelowRail, 5.0f}, {GateIslandKind::Rock, 4.0f, 14.0f, kGateHeightBelowRail, 0.3f}},
+    // 距離 870: 道が、浮いた島の下をくぐる(道は高い所を通る区間。島は道の真上、左は空ける)
+    {870.0f, GateHeightMode::Rail, {GateIslandKind::Rock, 3.5f, OverheadClearance(3.5f), kGateHeightOverhead, 2.4f}, {GateIslandKind::Small, 0.0f, 0.0f, 0.0f, 0.0f}},
+    // 距離 980: 道が、島の間を降りる(左の島は上、右の島は下)
+    {980.0f, GateHeightMode::Rail, {GateIslandKind::Forest, 4.0f, 14.0f, kGateHeightHigh, 3.7f}, {GateIslandKind::Medium, 4.0f, 14.0f, kGateHeightBelowRail, 0.9f}},
+    // 距離 1060: 終盤の、広い門
+    {1060.0f, GateHeightMode::CloudTop, {GateIslandKind::Forest, 5.0f, 16.0f, kGateHeightAboveCloud, 1.7f}, {GateIslandKind::Forest, 5.0f, 16.0f, kGateHeightAboveCloud, 4.4f}},
+};
+
+// --- カーブの内側の除外 ---
+// 島が、道の通り道に入る島は、置かない。道に食い込む島を防ぐ。通り道は、水平には片側 kCorridorHalfWidth、縦にはレールの上下 kCorridorHalfHeight。
+// 判定は、レール上の点(kRailSampleSpacing ごと)に対して、水平の距離が(島の上面の半径 + 通り道の幅)より近く、かつ、
+// 点の高さが島の上下の範囲(通り道の縦の幅を足した範囲)に入るとき、食い込むとする(3 次元)。
+// 水平に離れていれば、高さによらず食い込まない。レールの真上に浮く島は、高さが離れていれば置ける
+constexpr float kRailSampleSpacing = 8.0f;      // 判定に使う、レール上の点の間隔(ユニット)
+constexpr float kRailClearanceTolerance = 0.5f; // 浮動小数点の誤差を逃がす余裕(ユニット)。直線のレールで、縁がちょうど通り道の端に来る島を、誤って除外しないため
 } // namespace StageIslandDefaults
 
 // ステージの浮島の群れ。レールに沿って、通り道の両側に、雲の上へ頭を出す島を置く。
@@ -70,10 +164,15 @@ public:
   };
   const std::vector<TurretSlot> &GetTurretSlots() const { return turretSlots_; }
 
+  // 置いた島すべてを、遮蔽物(円柱)として out へ足す。描く範囲の外の島も含める(敵や弾は、画面外の島の陰にもいるため)。
+  // 島の位置と大きさは、置いた島そのものから取るので、配置と遮蔽がずれない。形の決め方は IslandOccluders の仕事
+  void BuildOccluders(IslandOccluders &out) const;
+
 private:
   struct Entry {
     std::unique_ptr<StageIsland> island; // ModelInstance は動かせないので、ポインタで持つ
     float distance = 0.0f;               // 島の、レール上の距離(昇順に並べる)
+    IslandModelKind kind = IslandModelKind::Small; // 島のモデルの種類(遮蔽の形を選ぶのに使う)
   };
   std::vector<Entry> entries_;
   std::vector<TurretSlot> turretSlots_;

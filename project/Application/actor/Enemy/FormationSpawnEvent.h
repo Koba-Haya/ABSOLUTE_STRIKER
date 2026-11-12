@@ -12,6 +12,7 @@
 // ============================================================
 #pragma once
 #include "AbsoluteEngine/scene/timeline/ITimelineEvent.h"
+#include "AbsoluteEngine/scene/timeline/RailSpawnPoint.h"
 #include "Type/Transform.h"
 #include <memory>
 #include <string>
@@ -32,7 +33,15 @@ public:
     std::string prefabId_ = "";
 
     // 編隊の中心位置・回転・スケール（各メンバーはこの位置を基準にXY平面でオフセットされる）
+    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
     Transform basePosition_{};
+
+    // レール座標で位置を指定するか(false なら、basePosition_.translate の世界座標。従来の JSON はこちら)
+    bool useRail_ = false;
+
+    // レール座標での編隊の中心位置(useRail_ が true のときだけ使う)。
+    // 各メンバーの散らしは、レール座標のときは道の右・上方向(世界座標のときは世界の X・Y 軸)
+    AbsoluteEngine::RailSpawnPoint rail_{};
 
     // 編隊のメンバー数（3〜5にクランプ）
     int memberCount_ = 4;
@@ -47,7 +56,7 @@ public:
     std::string GetLabel() const override;
 
     // memberCount_ 体をbasePosition_周辺にランダム配置し、rootObjects に追加する
-    void Fire() override;
+    void Fire(const AbsoluteEngine::TimelineFireContext& context) override;
 
     // Fire()でスポーンした全メンバーを安全に破棄する
     void Rewind() override;
@@ -57,7 +66,11 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
     void DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) override;
-    void SetSpawnAnchorTransform(const Transform& t) override { basePosition_ = t; }
+    // 追加時の既定位置。レール座標の指定にして、その値を入れる
+    void SetSpawnAnchorRail(const AbsoluteEngine::RailSpawnPoint& rail) override {
+        useRail_ = true;
+        rail_ = rail;
+    }
 
 private:
     // Fire()でスポーンした各メンバーへの弱参照
