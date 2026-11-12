@@ -1,4 +1,5 @@
 #include "Logger.h"
+#include "AssetPath.h"
 #include <Windows.h>
 #include <DbgHelp.h>
 #include <filesystem>
@@ -109,26 +110,26 @@ LONG WINAPI VectoredExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo) {
 }
 
 void Logger::Initialize() {
-    char path[MAX_PATH];
-    GetModuleFileNameA(NULL, path, MAX_PATH);
-    std::filesystem::path exePath(path);
-    // exePath = CG2/project/generated/outputs/Debug/Application.exe
-    // parent_path() 1回目: Debug
-    // parent_path() 2回目: outputs
-    // parent_path() 3回目: generated
-    // parent_path() 4回目: project
-    std::filesystem::path logDir = exePath.parent_path().parent_path().parent_path().parent_path() / "logs";
-    
-    std::filesystem::create_directories(logDir);
+    // ログは exe と同じ階層の logs フォルダに出す。
+    // exe からの相対位置だけで決めるので、配布先のフォルダ構成(深さ・日本語名)に依存しない。
+    // 以前は「exe の4つ上」を決め打ちしていたため、配布先では書き込み禁止の場所を指して落ちていた。
+    const std::filesystem::path logDir = AbsoluteEngine::AssetPath::GetExeDirectory() / "logs";
+
+    // 例外を投げない版を使う。作れない場合(書き込み禁止の場所など)はログ無しで続行する
+    std::error_code ec;
+    std::filesystem::create_directories(logDir, ec);
 
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
     std::tm tm_buf;
     localtime_s(&tm_buf, &in_time_t);
-    std::stringstream ss;
-    ss << logDir.string() << "/" << std::put_time(&tm_buf, "%Y%m%d_%H%M%S") << ".log";
-    
-    logFile_.open(ss.str(), std::ios::out | std::ios::trunc);
+    std::wstringstream ss;
+    ss << std::put_time(&tm_buf, L"%Y%m%d_%H%M%S") << L".log";
+
+    // path のまま開く(string 経由にすると日本語フォルダで開けなくなる)
+    if (!ec) {
+        logFile_.open(logDir / ss.str(), std::ios::out | std::ios::trunc);
+    }
     
     if (logFile_.is_open()) {
         Log("[INFO] Logger Initialized.");
