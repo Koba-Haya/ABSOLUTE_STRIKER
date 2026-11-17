@@ -392,6 +392,7 @@ void PlayerComponent::Revive() {
 
 void PlayerComponent::TakeDamage(int damage) {
   if (IsDead()) return; // すでに死んでいる。重ねてダメージを受けない
+  if (invulnerable_) return; // 演出中の無敵(ボス撃破の演出)
   hp_ -= damage;
   if (damage > 0) animator_.NotifyHit(); // 被弾のよろめきを再生させる(切り替えは次の Update)
   if (hp_ < 0) hp_ = 0;

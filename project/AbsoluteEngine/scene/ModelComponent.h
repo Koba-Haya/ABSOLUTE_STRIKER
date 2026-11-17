@@ -61,7 +61,8 @@ public:
     // モデルのファイル内のアニメーションを、名前で選んで再生する(アニメーションが 1 ファイルに複数入っているモデル用)。
     // 読み込みは初めて呼ばれたときに 1 回だけ行う。モデル未読み込み、または名前が無いときは、ログを出して何もしない。
     // blendSeconds > 0 なら、いまのポーズから、その秒数でクロスフェードする
-    void PlayAnimation(const std::string& animationName, bool loop = true, float blendSeconds = 0.0f);
+    // restart が true なら、同じアニメーションの再生中でも、頭から再生し直す(連続して起きるリアクション用。既定は false)
+    void PlayAnimation(const std::string& animationName, bool loop = true, float blendSeconds = 0.0f, bool restart = false);
     // ループしないアニメーションが最後まで再生されたか(ModelInstance::IsAnimationFinished と同じ)
     bool IsAnimationFinished() const;
 

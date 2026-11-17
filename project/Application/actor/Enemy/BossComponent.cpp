@@ -1,4 +1,5 @@
 #include "BossComponent.h"
+#include "BossModelSpec.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -22,8 +23,6 @@ constexpr int   kSpreadCountPhase2 = 5;
 constexpr int   kSpreadCountPhase3 = 8;
 constexpr float kSpreadAngleDeg = 12.0f;
 
-constexpr float kSpinSpeed = 0.6f; // rad/sec
-
 // カメラの前方に留まる距離・左右上下の揺れ幅と速さ
 // 基準はカメラ(=レール上の位置)であり、自機の動きには影響されない。
 // 従来(自機の前方14)と見た目の位置が変わらないよう、自機のカメラ前方距離(22)+14 = 36 にしている
@@ -33,30 +32,70 @@ constexpr float kWeaveAmplitudeY = 3.0f;  // 上下の振れ幅
 constexpr float kWeaveSpeedX = 0.5f;      // rad/sec
 constexpr float kWeaveSpeedY = 0.7f;      // rad/sec（Xと素数っぽい比率にして周期がズレるようにする）
 
-constexpr float kHitFlashDuration = 0.12f; // 被弾フラッシュの継続時間（秒）
+// ボスのモデルの正面を、カメラの方へ向けるための補正(ラジアン)。実機で、正面が奥を向いていたため、半回転(180 度)させる
+constexpr float kModelFrontYawOffset = 3.14159265f;
+
+// アニメーションの切り替えの混ぜ合わせ時間(秒)。急に切り替わって見えないようにする
+constexpr float kHoverBlendSeconds = 0.25f;  // 待機へ戻る
+constexpr float kAttackBlendSeconds = 0.15f; // 攻撃の予告へ入る
+constexpr float kHitBlendSeconds = 0.05f;    // 被弾のよろめきへ入る(すぐに反応して見えるよう短く)
+// 単発弾を撃つ、この時間(秒)前から、攻撃の予告(あごを開く、翼を開くなど)を始める
+constexpr float kAttackLeadSeconds = 0.6f;
 }
 
 void BossComponent::Update(float deltaTime) {
     if (!isActive_ || !owner_) return;
 
-    // 完全に静止した箱に見えないよう、常時ゆっくり自転させる（演出コスト最小のリアクション）
-    spinTimer_ += deltaTime * kSpinSpeed;
-    owner_->GetTransform().rotate.y = spinTimer_;
-
-    // 被弾フラッシュの経過処理
-    if (hitFlashTimer_ > 0.0f) {
-        hitFlashTimer_ -= deltaTime;
-        if (hitFlashTimer_ <= 0.0f) {
-            hitFlashTimer_ = 0.0f;
-            if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-                modelComp->SetColor(colorBeforeFlash_);
-            }
-        }
-    }
-
     UpdateMovement(deltaTime);
+    SyncCoreTransform();
     UpdatePhase();
     UpdateAttack(deltaTime);
+    UpdateAnimation();
+}
+
+void BossComponent::UpdateAnimation() {
+    auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>();
+    if (!model) return;
+
+    // 被弾: すぐによろめく(攻撃の予告の途中でも割り込む)。連射を受けたときも、毎回頭から再生し直す(restart)
+    if (hitRequested_) {
+        hitRequested_ = false;
+        attackRequested_ = false;
+        PlayAnimationOnAll(BossAnimation::kHit, false, kHitBlendSeconds, true);
+        animState_ = AnimState::Hit;
+        return;
+    }
+
+    // 攻撃の予告: よろめいている間は始めない(Hit が終わってから、次の発射の予告を出す)
+    if (attackRequested_ && animState_ != AnimState::Hit) {
+        attackRequested_ = false;
+        PlayAnimationOnAll(BossAnimation::kAttack, false, kAttackBlendSeconds, false);
+        animState_ = AnimState::Attack;
+        return;
+    }
+    attackRequested_ = false;
+
+    // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る
+    if (animState_ == AnimState::None || (animState_ != AnimState::Hover && model->IsAnimationFinished())) {
+        PlayAnimationOnAll(BossAnimation::kHover, true, kHoverBlendSeconds, false);
+        animState_ = AnimState::Hover;
+    }
+}
+
+void BossComponent::PlayAnimationOnAll(const char* name, bool loop, float blendSeconds, bool restart) {
+    if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+        model->PlayAnimation(name, loop, blendSeconds, restart);
+    }
+    if (coreObject_) {
+        if (auto* coreModel = coreObject_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+            coreModel->PlayAnimation(name, loop, blendSeconds, restart);
+        }
+    }
+}
+
+void BossComponent::SyncCoreTransform() {
+    if (!coreObject_) return;
+    coreObject_->GetTransform() = owner_->GetTransform();
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {
@@ -93,6 +132,11 @@ void BossComponent::UpdateMovement(float deltaTime) {
         basePos.y + forward.y * kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
         basePos.z + forward.z * kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
     };
+
+    // 正面(モデルの +Z)を、カメラの方へ向ける。自機は、モデルの +Z を進行方向へ向けて飛ぶ(PlayerComponent と同じ規約)。
+    // ボスは、その自機と向かい合うので、進行方向の逆(カメラの向きの逆)へ向く。左右(Y 軸)の向きだけを合わせる
+    // (ボスのモデルは、自機のモデルと、書き出しの前後の向きが逆なので、kModelFrontYawOffset だけ回して合わせる)
+    owner_->GetTransform().rotate = { 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f };
 }
 
 void BossComponent::UpdatePhase() {
@@ -117,8 +161,14 @@ void BossComponent::UpdateAttack(float deltaTime) {
         case BossPhase::Phase2: aimedInterval = kAimedIntervalPhase2; break;
         case BossPhase::Phase3: aimedInterval = kAimedIntervalPhase3; break;
     }
+    // 発射の少し前に、攻撃の予告のアニメーションを始める(1 回の発射につき 1 回)
+    if (!attackAnnounced_ && aimedShotTimer_ >= aimedInterval - kAttackLeadSeconds) {
+        attackAnnounced_ = true;
+        attackRequested_ = true;
+    }
     if (aimedShotTimer_ >= aimedInterval) {
         aimedShotTimer_ -= aimedInterval;
+        attackAnnounced_ = false;
         FireAimedShot(kAimedSpeed);
     }
 
@@ -204,19 +254,12 @@ void BossComponent::TakeDamage(int damage) {
     hp_ -= damage;
     if (hp_ <= 0) {
         hp_ = 0;
-        isActive_ = false; // 撃破
-        if (owner_) {
-            owner_->Destroy();
-        }
-    } else if (owner_) {
-        // 即死しなかった場合の被弾リアクション
-        if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-            if (hitFlashTimer_ <= 0.0f) {
-                colorBeforeFlash_ = modelComp->GetColor();
-            }
-            modelComp->SetColor({1.0f, 1.0f, 1.0f, 1.0f});
-            hitFlashTimer_ = kHitFlashDuration;
-        }
+        // 撃破。オブジェクトはここでは消さない(撃破演出がボスの姿を使うため。消えるのはシーンの終わり)。
+        // isActive_ が false になるので、以降は、移動・攻撃・被弾の処理が止まる。撃破の検知は IsActive() で行う
+        isActive_ = false;
+    } else {
+        // 即死しなかった場合の被弾リアクション(よろめきのアニメーション。次の UpdateAnimation で再生する)
+        hitRequested_ = true;
     }
 }
 

@@ -64,7 +64,7 @@ constexpr float kGatherSeconds = 4.5f;       // 集まりの長さ(降下が終�
 // --- 発生の範囲(カメラの前方。近景から遠景まで) ---
 constexpr float kSpawnAheadDistance = 26.0f; // カメラから前方へ、発生の球の中心までの距離
 constexpr float kSpawnRadius = 26.0f;        // 発生の球の半径(中心が前方なので、近景から遠景までを覆う)
-constexpr float kSpawnRate = 90.0f;          // 1 秒に出す個数(粒のプール 1024 を超えないよう、寿命と合わせて決める)
+constexpr float kSpawnRate = 90.0f;          // 1 秒に出す個数(粒のプール(kMaxGPUParticles)を超えないよう、寿命と合わせて決める)
 constexpr float kGlowSpawnRateScale = 0.35f; // 灯りの間の発生量の倍率(灰の山が膨らみすぎないよう、減らす)
 
 // --- 灰の見た目と漂い(控えめ。ScaleDustSettings の既定を、この画面用に上書きする) ---

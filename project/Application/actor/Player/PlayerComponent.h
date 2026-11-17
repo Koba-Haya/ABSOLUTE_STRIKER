@@ -47,6 +47,10 @@ public:
   // 回避行動（バレルロール）中は無敵
   bool IsInvincible() const { return dodgeTimer_ > 0.0f; }
 
+  // 演出のための無敵。true の間は、どんなダメージも受けない(ボス撃破の演出中に、残った敵や弾で死なないため)。
+  // 回避の無敵(IsInvincible)とは別: こちらは TakeDamage 自体を止め、被弾のよろめきも出さない
+  void SetInvulnerable(bool invulnerable) { invulnerable_ = invulnerable; }
+
   // 操作のロック。true の間は、キー・パッド・マウスのどれも受け付けない(何も操作していない状態にする)。
   // ステージ開始演出の間、自機が演出どおりに飛ぶよう、シーンが使う
   void SetInputLocked(bool locked) { inputLocked_ = locked; }
@@ -82,6 +86,7 @@ private:
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
+  bool invulnerable_ = false; // true の間はダメージを受けない(SetInvulnerable)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ
 

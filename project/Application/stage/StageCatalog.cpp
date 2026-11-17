@@ -22,6 +22,7 @@ constexpr const char *kKeyBackdrop = "backdrop";
 constexpr const char *kKeyDataName = "dataName";
 constexpr const char *kKeyStageNameTexture = "stageNameTexture";
 constexpr const char *kKeyUnlocked = "unlocked";
+constexpr const char *kKeyBoss = "boss";
 
 // 定義が正しくないときの終了。何が悪いかを、探したファイルの場所と一緒に表示する
 [[noreturn]] void FailInvalid(const std::string &resolvedPath, const std::string &reason) {
@@ -113,6 +114,11 @@ void StageCatalog::Load_() {
       FailInvalid(pathText, "stages[" + std::to_string(i) + "].backdrop is unknown: \"" + backdropName + "\"");
     }
     stage.dataName = ReadRequiredString(entry, kKeyDataName, i, pathText);
+    const std::string bossName = ReadRequiredString(entry, kKeyBoss, i, pathText);
+    if (!ParseBossKind(bossName, stage.boss)) {
+      Logger::GetInstance().Log("[Stage] unknown boss \"%s\" in stages[%zu] of %s", bossName.c_str(), i, pathText.c_str());
+      FailInvalid(pathText, "stages[" + std::to_string(i) + "].boss is unknown: \"" + bossName + "\"");
+    }
     // stageNameTexture は省略できる(省略、または空文字は「ステージ名の画像なし」)。書くときは文字列であること
     const auto textureIt = entry.find(kKeyStageNameTexture);
     if (textureIt != entry.end()) {

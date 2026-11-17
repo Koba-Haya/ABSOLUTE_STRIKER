@@ -169,7 +169,7 @@ void GPUParticleManager::Initialize(DirectXCommon* dx) {
     // gParticles(u0), gFreeListIndex(u1), gFreeList(u2) を含むテーブルをセット
     cmdList->SetComputeRootDescriptorTable(0, srvAlloc.Gpu(uavIndex_));
     
-    cmdList->Dispatch(1, 1, 1); 
+    cmdList->Dispatch(kGPUParticleGroupCount, 1, 1); 
 
     // Resource Barrier (UAV -> SRV/Vertex)
     // particleBuffer_ のみを SRV に戻す。freeListIndexBuffer_, freeListBuffer_ は UAV のままで運用。
@@ -277,6 +277,9 @@ void GPUParticleManager::Update() {
     cmdList->SetPipelineState(emitPipelineState_.Get());
     cmdList->Dispatch(kMaxGPUEmitters, 1, 1);
 
+    // --- 頂点から粒を出す依頼(あれば)。同じ UAV(粒と空きの一覧)を、アトミック演算で取り合うだけなので、Emit CS との間にバリアは不要 ---
+    DispatchSurfaceEmits_();
+
     // UAV Barrier (Emit CS で更新されたリソースが Update CS での読み書きに入るため同期をとる)
     D3D12_RESOURCE_BARRIER uavBarriers[3]{};
     uavBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
@@ -289,7 +292,7 @@ void GPUParticleManager::Update() {
 
     // --- Update CS 起動（RootSignatureはEmitと共有のため再セット不要、PSOのみ切り替える） ---
     cmdList->SetPipelineState(updatePipelineState_.Get());
-    cmdList->Dispatch(1, 1, 1);
+    cmdList->Dispatch(kGPUParticleGroupCount, 1, 1);
 
     // SRVへ戻す (particleBuffer_ のみ)
     D3D12_RESOURCE_BARRIER srvTransitionBarrier{};
@@ -335,7 +338,7 @@ void GPUParticleManager::Draw(BlendMode blendMode, GPUParticleDepth depth) {
     // 2: Texture(t1)
     cmdList->SetGraphicsRootDescriptorTable(2, texture_->GetSrvGpu());
 
-    cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
+    cmdList->DrawIndexedInstanced(6, kMaxGPUParticles, 0, 0, 0);
 }
 
 void GPUParticleManager::WriteEmitterDesc_(GPUEmitter& em, const EmitterDesc& desc) {
@@ -384,7 +387,7 @@ void GPUParticleManager::DrawGlow(const GlowParams& params, D3D12_GPU_DESCRIPTOR
     cmdList->SetGraphicsRootDescriptorTable(2, depthSrv);
     cmdList->SetGraphicsRootConstantBufferView(3, glowParamCB_->GetGPUVirtualAddress());
 
-    cmdList->DrawIndexedInstanced(6, kMaxParticles, 0, 0, 0);
+    cmdList->DrawIndexedInstanced(6, kMaxGPUParticles, 0, 0, 0);
 }
 
 void GPUParticleManager::CreateGlowPipeline() {
@@ -566,6 +569,51 @@ void GPUParticleManager::EmitStyledBurst(const Vector3& position, uint32_t count
     em.emit = 1;
 }
 
+void GPUParticleManager::RequestSurfaceEmit(const SurfaceEmitDesc& desc) {
+    // 骨のないモデル(骨の影響とパレットが無い)や、頂点が無い依頼は無視する
+    if (desc.vertexCount == 0 || desc.crackCellSize <= 0.0f) return;
+    if (pendingSurfaceEmits_.size() >= kMaxGPUSurfaceEmitRequests) return;
+    pendingSurfaceEmits_.push_back(desc);
+}
+
+void GPUParticleManager::DispatchSurfaceEmits_() {
+    if (pendingSurfaceEmits_.empty()) return;
+
+    auto* cmdList = dx_->GetCommandList();
+    auto& srvAlloc = dx_->GetSrvAllocator();
+    cmdList->SetPipelineState(surfaceEmitPipelineState_.Get());
+
+    for (uint32_t i = 0; i < pendingSurfaceEmits_.size(); ++i) {
+        const SurfaceEmitDesc& desc = pendingSurfaceEmits_[i];
+
+        // このスロットの定数を書く(スロットごとに別の場所なので、同じフレームの複数の依頼が、互いを上書きしない)
+        GPUSurfaceEmitParams params{};
+        EmitterDesc emitter;
+        emitter.styled = true;
+        emitter.style = desc.style;
+        WriteEmitterDesc_(params.style, emitter);
+        params.world = desc.world;
+        params.crackOrigin = desc.crackOrigin;
+        params.crackCellScale = 1.0f / desc.crackCellSize;
+        params.crackSpreadRadius = desc.crackSpreadRadius;
+        params.prevBreak = desc.prevBreak;
+        params.curBreak = desc.curBreak;
+        params.emitChance = desc.emitChance;
+        params.outwardSpeed = desc.outwardSpeed;
+        params.vertexCount = desc.vertexCount;
+        std::memcpy(surfaceEmitMapped_ + sizeof(GPUSurfaceEmitParams) * i, &params, sizeof(params));
+
+        cmdList->SetComputeRootConstantBufferView(4, surfaceEmitCB_->GetGPUVirtualAddress() + sizeof(GPUSurfaceEmitParams) * i);
+        cmdList->SetComputeRootDescriptorTable(5, srvAlloc.Gpu(desc.vertexSrvIndex));
+        cmdList->SetComputeRootDescriptorTable(6, srvAlloc.Gpu(desc.influenceSrvIndex));
+        cmdList->SetComputeRootDescriptorTable(7, srvAlloc.Gpu(desc.paletteSrvIndex));
+
+        const uint32_t groups = (desc.vertexCount + kGPUSurfaceEmitThreadsPerGroup - 1) / kGPUSurfaceEmitThreadsPerGroup;
+        cmdList->Dispatch(groups, 1, 1);
+    }
+    pendingSurfaceEmits_.clear();
+}
+
 void GPUParticleManager::SetField(int slot, const FieldDesc& desc) {
     if (slot < 0 || slot >= static_cast<int>(kMaxGPUFields)) return;
 
@@ -591,7 +639,7 @@ void GPUParticleManager::CreateResources() {
     auto* device = dx_->GetDevice();
 
     // Particle Buffer
-    size_t bufferSize = sizeof(GPUParticle) * kMaxParticles;
+    size_t bufferSize = sizeof(GPUParticle) * kMaxGPUParticles;
     particleBuffer_ = renderer->CreateUAVBuffer(bufferSize);
     particleBuffer_->SetName(L"GPUParticleManager::ParticleBuffer");
 
@@ -602,7 +650,7 @@ void GPUParticleManager::CreateResources() {
     srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
     srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srvDesc.Buffer.FirstElement = 0;
-    srvDesc.Buffer.NumElements = kMaxParticles;
+    srvDesc.Buffer.NumElements = kMaxGPUParticles;
     srvDesc.Buffer.StructureByteStride = sizeof(GPUParticle);
     srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
     device->CreateShaderResourceView(particleBuffer_.Get(), &srvDesc, srvAlloc.Cpu(srvIndex_));
@@ -613,7 +661,7 @@ void GPUParticleManager::CreateResources() {
     uavDesc.Format = DXGI_FORMAT_UNKNOWN;
     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     uavDesc.Buffer.FirstElement = 0;
-    uavDesc.Buffer.NumElements = kMaxParticles;
+    uavDesc.Buffer.NumElements = kMaxGPUParticles;
     uavDesc.Buffer.StructureByteStride = sizeof(GPUParticle);
     uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     device->CreateUnorderedAccessView(particleBuffer_.Get(), nullptr, &uavDesc, srvAlloc.Cpu(uavIndex_));
@@ -632,14 +680,14 @@ void GPUParticleManager::CreateResources() {
     device->CreateUnorderedAccessView(freeListIndexBuffer_.Get(), nullptr, &freeListIndexUavDesc, srvAlloc.Cpu(freeListIndexUavIndex_));
 
     // FreeList Buffer
-    freeListBuffer_ = renderer->CreateUAVBuffer(sizeof(uint32_t) * kMaxParticles);
+    freeListBuffer_ = renderer->CreateUAVBuffer(sizeof(uint32_t) * kMaxGPUParticles);
     freeListBuffer_->SetName(L"GPUParticleManager::FreeListBuffer");
     freeListUavIndex_ = srvAlloc.Allocate();
     D3D12_UNORDERED_ACCESS_VIEW_DESC freeListUavDesc{};
     freeListUavDesc.Format = DXGI_FORMAT_UNKNOWN;
     freeListUavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
     freeListUavDesc.Buffer.FirstElement = 0;
-    freeListUavDesc.Buffer.NumElements = kMaxParticles;
+    freeListUavDesc.Buffer.NumElements = kMaxGPUParticles;
     freeListUavDesc.Buffer.StructureByteStride = sizeof(uint32_t);
     freeListUavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
     device->CreateUnorderedAccessView(freeListBuffer_.Get(), nullptr, &freeListUavDesc, srvAlloc.Cpu(freeListUavIndex_));
@@ -666,6 +714,13 @@ void GPUParticleManager::CreateResources() {
     fieldsCB_->SetName(L"GPUParticleManager::FieldsCB");
     fieldsCB_->Map(0, nullptr, reinterpret_cast<void**>(&fieldsMapped_));
     std::memset(fieldsMapped_, 0, sizeof(GPUFieldArray));
+
+    // 頂点から粒を出す依頼の定数バッファ(依頼 1 件につき 256 バイトのスロット)。ゼロ初期化しておく
+    static_assert(sizeof(GPUSurfaceEmitParams) == 256, "one slot per request must be 256 bytes (constant buffer alignment)");
+    surfaceEmitCB_ = renderer->CreateUploadBuffer(sizeof(GPUSurfaceEmitParams) * kMaxGPUSurfaceEmitRequests);
+    surfaceEmitCB_->SetName(L"GPUParticleManager::SurfaceEmitCB");
+    surfaceEmitCB_->Map(0, nullptr, reinterpret_cast<void**>(&surfaceEmitMapped_));
+    std::memset(surfaceEmitMapped_, 0, sizeof(GPUSurfaceEmitParams) * kMaxGPUSurfaceEmitRequests);
 
     // Load Texture
     texture_ = std::make_unique<TextureResource>();
@@ -710,7 +765,15 @@ void GPUParticleManager::CreateComputePipeline() {
         uavRange.NumDescriptors = 3; // u0, u1, u2
         uavRange.BaseShaderRegister = 0;
 
-        D3D12_ROOT_PARAMETER params[4]{};
+        // 頂点から粒を出す計算(SurfaceEmitParticle.CS)用の SRV。モデルごとにディスクリプタが離れているので、1 つずつ別のテーブルにする
+        D3D12_DESCRIPTOR_RANGE surfaceSrvRanges[3]{};
+        for (uint32_t i = 0; i < 3; ++i) {
+            surfaceSrvRanges[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+            surfaceSrvRanges[i].NumDescriptors = 1;
+            surfaceSrvRanges[i].BaseShaderRegister = i; // t0: 頂点、t1: 骨の影響、t2: パレット
+        }
+
+        D3D12_ROOT_PARAMETER params[8]{};
         // 0: Emitter[] (b0)
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor.ShaderRegister = 0;
@@ -724,9 +787,17 @@ void GPUParticleManager::CreateComputePipeline() {
         params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         params[3].DescriptorTable.NumDescriptorRanges = 1;
         params[3].DescriptorTable.pDescriptorRanges = &uavRange;
+        // 4: SurfaceEmitParams (b3)。5 〜 7: 頂点(t0)、骨の影響(t1)、パレット(t2)。SurfaceEmitParticle.CS だけが使う
+        params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+        params[4].Descriptor.ShaderRegister = 3;
+        for (uint32_t i = 0; i < 3; ++i) {
+            params[5 + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            params[5 + i].DescriptorTable.NumDescriptorRanges = 1;
+            params[5 + i].DescriptorTable.pDescriptorRanges = &surfaceSrvRanges[i];
+        }
 
         D3D12_ROOT_SIGNATURE_DESC rsDesc{};
-        rsDesc.NumParameters = 4;
+        rsDesc.NumParameters = 8;
         rsDesc.pParameters = params;
         rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
 
@@ -756,6 +827,14 @@ void GPUParticleManager::CreateComputePipeline() {
         psoDesc.pRootSignature = emitRootSignature_.Get(); // Emitと共有（Fieldもこのシグネチャに含まれる）
         psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
         device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&updatePipelineState_));
+    }
+    {
+        ComPtr<IDxcBlob> csBlob = CompileShader(L"resources/engine/shaders/SurfaceEmitParticle.CS.hlsl", L"cs_6_0", dx_->GetDXCUtils(), dx_->GetDXCCompiler(), dx_->GetDXCIncludeHandler());
+        D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc{};
+        psoDesc.pRootSignature = emitRootSignature_.Get(); // Emit/Update と共有
+        psoDesc.CS = { csBlob->GetBufferPointer(), csBlob->GetBufferSize() };
+        HRESULT hr = device->CreateComputePipelineState(&psoDesc, IID_PPV_ARGS(&surfaceEmitPipelineState_));
+        assert(SUCCEEDED(hr) && "GPUParticle 頂点から粒を出す計算の PSO 生成失敗");
     }
 }
 

@@ -23,6 +23,7 @@ public:
     bool isBossPhase = false;     // ボス戦中か(いまは、優先度チェーンでは使っていない。将来のボス戦の演出のために残す)
     float speedBlur = 0.0f;       // 加速中のブラーの強さ(0 〜 1。0 でブラーなし)。ステージ開始演出のブースト量を渡す
     Vector2 speedBlurCenterUv{ 0.5f, 0.5f }; // 加速のブラーの中心(スクリーン座標 UV 0〜1。自機のいる辺り)
+    bool suppressAll = false;     // true の間は、すべてのポストエフェクトを出さない(ボス撃破の演出中など、画面の見栄えを優先する場面)。タイマーは進める
   };
 
   // タイマーを進め、今フレームの PostProcessMode を確定する。
@@ -30,6 +31,11 @@ public:
 
   // --- イベント通知 ---
   void OnBossIntro();
+
+  // 全てのタイマーと状態を初期に戻し、PostProcessMode を Normal にする。
+  // Renderer は全シーンで共有されるため、シーンを離れるとき(Finalize)に呼ぶ。
+  // 呼ばないと、ゲーム中に有効だった効果(HP 1 の赤い枠など)が、次のシーンへ残ってしまう
+  void Reset();
 
 private:
   // 開始からの経過時間で有効/無効を判定する単純なタイマー

@@ -20,6 +20,10 @@ constexpr float kTitleSlabBottom = 45.0f;
 constexpr float kTitleSlabTop = 105.0f;
 constexpr float kGameSlabBottom = -95.0f;
 constexpr float kGameSlabTop = -25.0f;
+// 入れ替え後のシーンに、雲の層が無い(ステージ選択のように、カメラが動かない 2D のメニュー)ときの層。
+// 視線がどこを向いても届かない、はるか上空に置く(層の高さが入れ替え前のままだと、別の世界の高さの層が、背景の雲海に白い帯として映る)
+constexpr float kUnseenSlabBottom = 1000000.0f;
+constexpr float kUnseenSlabTop = 1000060.0f;
 constexpr float kDropletsOut = 2.0f;   // レンズの水滴: 水滴が増えてくもる時間(見る間もなく終わらないよう、長めにする)
 constexpr float kDropletsIn = 2.2f;    // レンズの水滴: くもりが晴れて水滴が流れ落ちる時間
 // ゲームオーバー: 蝶が雲海へ落ちて沈む。覆いは霧ではなく実際の雲で、落下カメラ(DeathCameraDirector)が雲の層へ沈んで画面が雲で満たされる間に、
@@ -107,15 +111,17 @@ TransitionSpec MakeDroplets(const Vector3 &color, float out, float hold, float i
   return MakeSpec(TransitionKind::Droplets, color, out, hold, in);
 }
 
-TransitionSpec MakeCloudDive(const Vector3 &color, float out, float hold, float in, float slabBottomBefore, float slabTopBefore) {
+// slabBottomBefore / slabTopBefore: 入れ替え前のシーンの雲の層。slabBottomAfter / slabTopAfter: 入れ替え後のシーンの雲の層(どちらも、そのシーンの世界の y)
+TransitionSpec MakeCloudDive(const Vector3 &color, float out, float hold, float in, float slabBottomBefore, float slabTopBefore,
+                             float slabBottomAfter, float slabTopAfter) {
   TransitionSpec spec = MakeSpec(TransitionKind::CloudDive, color, out, hold, in);
   // 入れ替え前の、雲の層(呼び出し側が、そのシーンの世界の高さで渡す。タイトルは水面が y = 0 で、スタート演出の上昇が層の中心(約 75)へ届く)
   spec.style.slabBottom = slabBottomBefore;
   spec.style.slabTop = slabTopBefore;
-  // 入れ替え後(ゲームの世界: 雲海の平均の高さが y = -35.5、カメラの開始位置が y = 0)の、雲の層。
-  // ゲームの助走は、層の中(下寄り)から始まり、雲海の上面を抜けてスタート位置へ昇る
-  spec.slabBottomAfter = kGameSlabBottom;
-  spec.slabTopAfter = kGameSlabTop;
+  // 入れ替え後のシーンの世界の、雲の層(呼び出し側が渡す)。
+  // 例: ゲームの世界は、雲海の平均の高さが y = -35.5、カメラの開始位置が y = 0 で、助走は層の中(下寄り)から始まり、雲海の上面を抜けてスタート位置へ昇る
+  spec.slabBottomAfter = slabBottomAfter;
+  spec.slabTopAfter = slabTopAfter;
   // 雲を抜けるときの水の膜は、霧の上にのる水滴(2 つ目のパス)で描く
   spec.style.mist.lensDrops = true;
   spec.style.mist.edge.innerEdge = kCloudDiveEdgeInner;
@@ -148,11 +154,12 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
   // タイトル -> ゲーム: スタート演出で加速している間に、外周から雲が流れ込んで覆う(雲突入)。
   // 覆い切ったところでゲームへ入れ替わり、雲の中を飛び続けながら晴れて、ゲームの空へ出る
   if (fromSceneId == SceneId::Title && toSceneId == SceneId::Game) {
-    return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop);
+    return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop, kGameSlabBottom, kGameSlabTop);
   }
   // タイトル -> ステージ選択: タイトルの発進演出のまま、外周から雲が流れ込んで覆う(雲突入。タイトルの演出を活かす)
+  // 入れ替え後のステージ選択は、雲の層を持たない(ゲームの層の高さを渡すと、背景の雲海に白い帯が残る)
   if (fromSceneId == SceneId::Title && toSceneId == SceneId::StageSelect) {
-    return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop);
+    return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kTitleSlabBottom, kTitleSlabTop, kUnseenSlabBottom, kUnseenSlabTop);
   }
   // ステージ選択 -> ゲーム: 雲の形のワイプ(白)で覆う。覆いの中でゲームが始まるので、スタート演出の助走も、覆いが晴れる間に動く
   if (fromSceneId == SceneId::StageSelect && toSceneId == SceneId::Game) {
@@ -177,7 +184,7 @@ std::optional<TransitionSpec> Resolve(const std::string &fromSceneId, const std:
   // ゲームオーバー -> ゲーム(復活): 飛び立つ蝶を追うカメラが雲の中へ入り、雲抜け(タイトルからゲームと同じ)で覆って、ゲームのスタート演出へ
   if (fromSceneId == SceneId::GameOver && toSceneId == SceneId::Game) {
     if (kRebirthUsesCloudDive) {
-      return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kRebirthSlabBottom, kRebirthSlabTop);
+      return MakeCloudDive(kWhite, kCloudDiveOut, kCloudDiveHold, kCloudDiveIn, kRebirthSlabBottom, kRebirthSlabTop, kGameSlabBottom, kGameSlabTop);
     }
     return MakeFade(kWhite, kRebirthFlashOut, kShortHold, kLongIn);
   }

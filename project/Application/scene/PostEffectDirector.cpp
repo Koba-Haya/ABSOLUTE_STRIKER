@@ -37,6 +37,16 @@ void PostEffectDirector::OnBossIntro() {
   Renderer::GetInstance()->SetGaussianFilterParam(kBossIntroBlurKernel, kBossIntroBlurSigma, { 1.0f, 0.0f });
 }
 
+void PostEffectDirector::Reset() {
+  // タイマーと前フレームのHPを初期値へ戻す(次にこのシーンが作られたときの、誤った被弾検知も防ぐ)
+  bossIntroBlur_ = Timed{};
+  playerHitVignette_ = Timed{};
+  criticalPulseTimer_ = 0.0f;
+  lastPlayerHp_ = -1;
+  // Renderer は共有なので、効果を確実に切る
+  Renderer::GetInstance()->SetPostProcessMode(Renderer::PostProcessMode::Normal);
+}
+
 void PostEffectDirector::Update(float deltaTime, const FrameState& state) {
   auto* renderer = Renderer::GetInstance();
 
@@ -54,6 +64,12 @@ void PostEffectDirector::Update(float deltaTime, const FrameState& state) {
       renderer->SetVignetteParam(kVignetteScale, kVignettePow);
     }
     lastPlayerHp_ = state.playerHp;
+  }
+
+  // --- 演出中は、すべての効果を止める(被弾検知とタイマーは上で済んでいるので、演出が終わったあとの状態は崩れない) ---
+  if (state.suppressAll) {
+    renderer->SetPostProcessMode(Renderer::PostProcessMode::Normal);
+    return;
   }
 
   // --- 優先度チェーン（ヘッダのコメント参照） ---

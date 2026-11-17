@@ -4,6 +4,7 @@
 #include <memory>
 #include "GPUParticle.h"
 #include "Matrix.h"
+#include "Method.h" // MakeIdentity4x4
 #include "BlendMode.h" // ブレンドモード列挙体
 #include <vector>
 
@@ -81,6 +82,31 @@ public:
     void EmitBurst(const Vector3& position, uint32_t count = 15, float radius = 0.3f);
     // スタイル付きのバースト。1 フレームに出せるバーストは kBurstPoolSize 個まで(超えると、古い方の指定が上書きされる)
     void EmitStyledBurst(const Vector3& position, uint32_t count, float radius, const ParticleStyle& style);
+    // 頂点から粒を出す依頼の内容。ボロノイのひび割れ(Object3d.PS と同じ CrackVoronoi.hlsli)で、前回から今回までの間に消えるセルの頂点から、
+    // スキニングした後のワールド位置へ、粒を出す。
+    // 分けた理由: エミッタ(形の中のランダムな位置)とは、「モデルの表面から出す」という別の出し方なので、別の依頼にしている。
+    // 注意: モデルは、骨(スキニング)付きであること(骨のないモデルは、依頼を無視する)
+    struct SurfaceEmitDesc {
+        // モデルの GPU 側の入力(ディスクリプタの番号。ModelResource の頂点・骨の SRV と、SkinCluster のパレットの SRV)
+        uint32_t vertexSrvIndex = 0;
+        uint32_t influenceSrvIndex = 0;
+        uint32_t paletteSrvIndex = 0;
+        uint32_t vertexCount = 0;
+        Matrix4x4 world = MakeIdentity4x4(); // モデル空間からワールドへ(ModelComponent::GetWorldMatrix)
+        // ひび割れの形(外殻の描画に設定したものと同じ値にすること)
+        Vector3 crackOrigin{ 0.0f, 0.0f, 0.0f };
+        float crackCellSize = 1.0f;
+        float crackSpreadRadius = 1.0f;
+        // セルが消えた割合の、前回と今回の値(0 〜 1)。この間に消えるセルの頂点から、粒が出る
+        float prevBreak = 0.0f;
+        float curBreak = 0.0f;
+        float emitChance = 0.2f;     // 消える頂点のうち、粒を出す割合(0 〜 1)。頂点が多いので、粒の数を、ここで抑える
+        float outwardSpeed = 0.0f;   // crackOrigin から、外向きに足す速さ(ワールド単位 / 秒)
+        ParticleStyle style;         // 粒の見た目。sizeMin 以外の範囲の使い方は、スタイル付きのエミッタと同じ
+    };
+    // 頂点から粒を出す依頼を出す。次の Update() で処理される。1 フレームに kMaxGPUSurfaceEmitRequests 件まで(超えた分は無視する)
+    void RequestSurfaceEmit(const SurfaceEmitDesc& desc);
+
     // 全ての粒を消して、空きの管理も最初の状態に戻す(次の Update で行う)。前の演出の残りの粒が、次の演出の開始時に出ないようにするために使う
     void ClearAllParticles() { clearAllPending_ = true; }
     // 1 フレームに出せるバーストの数
@@ -107,6 +133,8 @@ private:
     void CreateGraphicsPipeline();
     void CreateQuad();
     void CreateGlowPipeline();
+    // 保留している頂点から粒を出す依頼を、すべて Dispatch する(Update の中で、Emit CS の後に呼ぶ)
+    void DispatchSurfaceEmits_();
     // エミッタのスロットへ、desc の内容を書き込む(射出のタイマー frequencyTime と emit は触らない)
     static void WriteEmitterDesc_(GPUEmitter& em, const EmitterDesc& desc);
 
@@ -127,6 +155,13 @@ private:
     ComPtr<ID3D12RootSignature> emitRootSignature_;
     ComPtr<ID3D12PipelineState> emitPipelineState_;
     ComPtr<ID3D12PipelineState> updatePipelineState_;
+    // 頂点から粒を出す計算(SurfaceEmitParticle.CS)。Emit/Update と同じ RootSignature を共有する(上の理由)。
+    // ルート引数: 4 = SurfaceEmitParams(b3)、5 = 頂点(t0)、6 = 骨の影響(t1)、7 = スキニングのパレット(t2)
+    ComPtr<ID3D12PipelineState> surfaceEmitPipelineState_;
+    // 依頼 1 件につき 256 バイトのスロット(kMaxGPUSurfaceEmitRequests 個)。Update() で書いて、そのフレームの Dispatch が読む
+    ComPtr<ID3D12Resource> surfaceEmitCB_;
+    uint8_t* surfaceEmitMapped_ = nullptr;
+    std::vector<SurfaceEmitDesc> pendingSurfaceEmits_;
 
     ComPtr<ID3D12RootSignature> graphicsRootSignature_;
     // ブレンドモードごとのパイプライン（インデックスは BlendMode の enum 値と対応）
@@ -192,6 +227,4 @@ private:
     ComPtr<ID3D12Resource> ib_;
     D3D12_VERTEX_BUFFER_VIEW vbView_{};
     D3D12_INDEX_BUFFER_VIEW ibView_{};
-
-    static const uint32_t kMaxParticles = 1024;
 };

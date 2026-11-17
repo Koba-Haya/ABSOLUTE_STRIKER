@@ -90,7 +90,7 @@ constexpr float kFlashGain = 3.0f;
 constexpr float kFlashColorR = 0.55f;
 constexpr float kFlashColorG = 1.00f;
 constexpr float kFlashColorB = 0.95f;
-// 鱗粉の大バースト(金から青緑へ冷める。粒ごとの色で光る)。粒のプールは 1024 なので、灰と合わせて収まる数にする
+// 鱗粉の大バースト(金から青緑へ冷める。粒ごとの色で光る)。粒のプール(kMaxGPUParticles)に、灰と合わせて収まる数にする
 constexpr float kBurstCount = 400.0f;
 constexpr float kBurstRadius = 0.5f;
 constexpr float kBurstSpeedMin = 6.0f;

@@ -1,4 +1,5 @@
 #include "object3d.hlsli"
+#include "CrackVoronoi.hlsli"
 #define MAX_POINT_LIGHTS 16
 #define MAX_DIR_LIGHTS   4
 #define MAX_SPOT_LIGHTS  8
@@ -22,6 +23,18 @@ struct Material
     float pad3;
     float3 dissolveMaskColor;
     float pad4;
+
+    // --- Crack (ボロノイのひび割れ。撃破演出用。enableCrack が 0 なら何もしない) ---
+    int enableCrack;
+    float crackCellScale;    // 1 / セルの大きさ(モデル本来の単位)。大きいほど、細かく割れる
+    float crackLineWidth;    // ひびの線の太さの最大値(セルの大きさに対する割合)
+    float crackReveal;       // ひびが広がった割合(0 = なし、1 = 全体に広がり切った)
+    float3 crackColor;       // ひびの光る色
+    float crackIntensity;    // ひびの光の強さ(色に掛ける)
+    float3 crackOrigin;      // ひびが広がり始める位置(モデル本来の座標)
+    float crackSpreadRadius; // origin から、ひびが最後に届く所までの距離
+    float crackBreak;        // セルが消えた割合(0 = 消えない、1 = すべて消えた)。消える前のセルは、面全体が光る
+    float3 crackPad;
 };
 
 struct Camera
@@ -141,6 +154,13 @@ static float3 ComputeDiffuse(float3 N, float3 Ldir, int lightingMode)
         return pow(saturate(ndotl * 0.5f + 0.5f), 2.0f);
     }
 }
+
+// ===== ボロノイのひび割れ =====
+// ひびが先頭から広がる帯の幅(広がり具合に対する割合。大きいほど、先端がぼやけて、ゆっくり太くなる)
+static const float CRACK_SPREAD_SOFTNESS = 0.35f;
+// ひびの周りに、にじむ光の幅(線の太さに対する倍率)と、その強さ
+static const float CRACK_HALO_SCALE = 3.0f;
+static const float CRACK_HALO_STRENGTH = 0.35f;
 
 PixelShaderOutput main(VertexShaderOutput input)
 {
@@ -325,6 +345,41 @@ PixelShaderOutput main(VertexShaderOutput input)
             float3 emberEdge = ApplyEmber(finalRGB, gMaterial.dissolveEdgeColor, edgeWeight);
             finalRGB = lerp(plainEdge, emberEdge, saturate(gMaterial.dissolveEmber));
         }
+    }
+
+    // ===== ボロノイのひび割れ =====
+    // 照明の計算のあとに、色を直接のせる(ひびは、自分で光るので、影の側でも暗くならない)
+    if (gMaterial.enableCrack != 0)
+    {
+        // localPosition は、モデル本来の頂点位置(スキニング前)。表面の同じ点は、動いても同じ値なので、ひびは、ボスに付いてくる
+        float3 nearestFeature;
+        float3 nearestId;
+        float edge = CrackEdgeDistance(input.localPosition * gMaterial.crackCellScale, nearestFeature, nearestId);
+
+        // セルごとの光り始める時刻(計算は、粒を出す側と共有する CrackVoronoi.hlsli)。
+        // 代表点と番号は、セルの中で同じ値なので、1 つのセルは、まとめて光って、まとめて消える
+        float heatStart = CrackCellHeatStart(nearestFeature, nearestId, gMaterial.crackCellScale, gMaterial.crackOrigin, gMaterial.crackSpreadRadius);
+        // crackBreak が heatStart を越えると、セルの面が光りだし、HEAT_WINDOW のあとに消える(crackBreak = 1 で、必ず全部消える)
+        if (gMaterial.crackBreak >= heatStart + CRACK_BREAK_HEAT_WINDOW)
+        {
+            discard;
+        }
+        float cellHeat = saturate((gMaterial.crackBreak - heatStart) / CRACK_BREAK_HEAT_WINDOW);
+
+        // 広がり: origin に近い所から先に太くなる。dist01 は、origin(0)から、いちばん遠い所(1)までの割合
+        float dist01 = length(input.localPosition - gMaterial.crackOrigin) / max(gMaterial.crackSpreadRadius, CRACK_MIN_VALUE);
+        float front = gMaterial.crackReveal * (1.0f + CRACK_SPREAD_SOFTNESS);
+        float spread = saturate((front - dist01) / CRACK_SPREAD_SOFTNESS);
+
+        float width = gMaterial.crackLineWidth * spread;
+        float crackLine = (1.0f - smoothstep(0.0f, max(width, CRACK_MIN_VALUE), edge)) * step(CRACK_MIN_VALUE, width);
+        float crackHalo = (1.0f - smoothstep(0.0f, max(width * CRACK_HALO_SCALE, CRACK_MIN_VALUE), edge)) * step(CRACK_MIN_VALUE, width);
+
+        float3 crackRGB = gMaterial.crackColor * gMaterial.crackIntensity;
+        // 消える直前のセルは、面全体が、ひびと同じ光になる
+        finalRGB = lerp(finalRGB, crackRGB, cellHeat);
+        finalRGB = lerp(finalRGB, crackRGB, saturate(crackLine));
+        finalRGB += crackRGB * crackHalo * CRACK_HALO_STRENGTH;
     }
 
     output.color = float4(finalRGB, alpha);

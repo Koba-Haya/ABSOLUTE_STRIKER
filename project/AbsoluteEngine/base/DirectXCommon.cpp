@@ -3,6 +3,8 @@
 #include "graphics/texture/RenderTexture.h"
 #include "graphics/texture/DepthTexture.h"
 #include "Logger.h"
+#include <algorithm>
+#include <vector>
 #include <cassert>
 #include <dxcapi.h>
 
@@ -25,9 +27,39 @@ D3D12_GPU_DESCRIPTOR_HANDLE GetGPUDescriptorHandle(
 #include <dxgidebug.h>
 #endif
 
+namespace {
+// 遅延解放で預かっている資源と、フレーム番号。
+// 静的な破棄の順序の問題を避けるため、関数の中の静的変数(使われるときに作られ、プログラムの終わりまで残す)で持つ
+struct DeferredReleaseState {
+  std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> pending;
+  uint64_t frameCounter = 0;
+  bool accepting = false; // DirectXCommon が生きている間だけ true
+};
+
+DeferredReleaseState &GetDeferredState() {
+  static DeferredReleaseState *state = new DeferredReleaseState(); // 破棄しない(終了処理の順序によらず、安全に参照できる)
+  return *state;
+}
+} // namespace
+
+void DirectXCommon::DeferRelease(Microsoft::WRL::ComPtr<ID3D12Resource> resource) {
+  DeferredReleaseState &state = GetDeferredState();
+  if (!resource || !state.accepting) {
+    return; // 預かれない(DirectXCommon がない)ときは、ここで resource が解放される
+  }
+  state.pending.push_back(std::move(resource));
+}
+
+uint64_t DirectXCommon::GetFrameCounter() {
+  return GetDeferredState().frameCounter;
+}
+
 DirectXCommon::DirectXCommon() {}
 
 DirectXCommon::~DirectXCommon() {
+  // 預かっている資源をここで手放し、以降は預からない(デバイスより長く資源を持たないため)
+  GetDeferredState().pending.clear();
+  GetDeferredState().accepting = false;
   if (fenceEvent_) {
     CloseHandle(fenceEvent_);
     fenceEvent_ = nullptr;
@@ -48,6 +80,18 @@ void DirectXCommon::Initialize(const InitParams &params) {
   }
 #endif
 
+  // DRED(デバイスが外れたときに、直前の GPU の命令と、不正なメモリアクセスの記録を残す機能)を、デバイスを作る前に有効にする。
+  // デバッグレイヤーの無いビルド(Development / Release)でも、外れた原因を調べられるようにする。
+  // 取得に失敗しても(対応していない環境)、何もせず進める
+  {
+    Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dredSettings;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings)))) {
+      dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+      dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    }
+  }
+
+  GetDeferredState().accepting = true; // 以降、資源の遅延解放を受け付ける
   CreateDeviceAndFactory_();
   ChooseAdapter_();
   CreateCommandObjects_();
@@ -112,6 +156,10 @@ void DirectXCommon::EndFrame() {
     WaitForSingleObject(fenceEvent_, INFINITE);
   }
 
+  // GPU の完了を待ったあとなので、今フレームの命令が参照していた資源は、もう解放してよい。預かっていた資源を解放し、次のフレームへ進む
+  GetDeferredState().pending.clear();
+  ++GetDeferredState().frameCounter;
+
   // GPU の完了を待ったあとなので、この時点で今フレームの計測結果を読める
   gpuTimer_.Collect();
 
@@ -122,6 +170,69 @@ void DirectXCommon::EndFrame() {
 
   // 毎フレームの終わりにDirectXのエラーメッセージがあればログに吐き出す
   Logger::GetInstance().CheckDirectXErrors(device_.Get());
+
+  // GPU のデバイスが外れていたら、理由と、直前の GPU の命令をログへ出す
+  CheckDeviceRemoved_();
+}
+
+namespace {
+// 1 つのコマンドリストについて、ログへ出す直前の命令の数(外れた位置の前後の流れが分かるようにする)
+constexpr UINT kBreadcrumbContextOps = 6;
+// ログに出す、メモリの割り当ての最大数(多すぎて読めなくなるのを避ける)
+constexpr int kMaxLoggedAllocations = 8;
+} // namespace
+
+void DirectXCommon::CheckDeviceRemoved_() {
+  if (deviceRemovedLogged_ || !device_) return;
+  const HRESULT reason = device_->GetDeviceRemovedReason();
+  if (SUCCEEDED(reason)) return;
+  deviceRemovedLogged_ = true;
+
+  // 外れた理由(DXGI_ERROR_DEVICE_HUNG: GPU が止まった、DEVICE_RESET: 不正な操作、DRIVER_INTERNAL_ERROR: ドライバの不具合 など)
+  Logger::GetInstance().Log("[DeviceRemoved] reason=0x%08X", static_cast<unsigned int>(reason));
+
+  Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> dred;
+  if (FAILED(device_->QueryInterface(IID_PPV_ARGS(&dred)))) {
+    Logger::GetInstance().Log("[DeviceRemoved] DRED is not available");
+    return;
+  }
+
+  // 直前に GPU が実行していた命令(ブレッドクラム)。完了した最後の命令の次が、止まった所
+  D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs{};
+  if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs))) {
+    for (const D3D12_AUTO_BREADCRUMB_NODE *node = breadcrumbs.pHeadAutoBreadcrumbNode; node != nullptr; node = node->pNext) {
+      const UINT completed = node->pLastBreadcrumbValue ? *node->pLastBreadcrumbValue : 0;
+      if (completed >= node->BreadcrumbCount) continue; // 最後まで完了したコマンドリストは、原因ではない
+      Logger::GetInstance().Log("[DeviceRemoved] unfinished command list \"%s\": completed %u of %u ops",
+                                node->pCommandListDebugNameA ? node->pCommandListDebugNameA : "(unnamed)", completed,
+                                node->BreadcrumbCount);
+      const UINT from = completed > kBreadcrumbContextOps ? completed - kBreadcrumbContextOps : 0;
+      const UINT to = (std::min)(completed + 2, node->BreadcrumbCount);
+      for (UINT i = from; i < to; ++i) {
+        // 命令の種類は D3D12_AUTO_BREADCRUMB_OP の値(例: 2 = DrawInstanced、3 = DrawIndexedInstanced、4 = ExecuteIndirect、6 = Dispatch)
+        Logger::GetInstance().Log("[DeviceRemoved]   op[%u] = %d%s", i, static_cast<int>(node->pCommandHistory[i]),
+                                  i == completed ? "  <-- stopped here" : "");
+      }
+    }
+  }
+
+  // 不正なメモリアクセス(ページフォールト)の記録: アクセスしようとしたアドレスと、そこにあった(または、最近解放された)資源
+  D3D12_DRED_PAGE_FAULT_OUTPUT pageFault{};
+  if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault)) && pageFault.PageFaultVA != 0) {
+    Logger::GetInstance().Log("[DeviceRemoved] page fault at VA=0x%llX", static_cast<unsigned long long>(pageFault.PageFaultVA));
+    int logged = 0;
+    for (const D3D12_DRED_ALLOCATION_NODE *node = pageFault.pHeadExistingAllocationNode; node != nullptr && logged < kMaxLoggedAllocations;
+         node = node->pNext, ++logged) {
+      Logger::GetInstance().Log("[DeviceRemoved]   existing allocation: \"%s\" (type %d)", node->ObjectNameA ? node->ObjectNameA : "(unnamed)",
+                                static_cast<int>(node->AllocationType));
+    }
+    logged = 0;
+    for (const D3D12_DRED_ALLOCATION_NODE *node = pageFault.pHeadRecentFreedAllocationNode; node != nullptr && logged < kMaxLoggedAllocations;
+         node = node->pNext, ++logged) {
+      Logger::GetInstance().Log("[DeviceRemoved]   recently freed: \"%s\" (type %d)", node->ObjectNameA ? node->ObjectNameA : "(unnamed)",
+                                static_cast<int>(node->AllocationType));
+    }
+  }
 }
 
 void DirectXCommon::PreDraw() {

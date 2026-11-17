@@ -382,6 +382,10 @@ PipelineDesc UnifiedPipeline::MakeObject3DDesc() {
       D3D12_INPUT_ELEMENT_DESC{"NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
                                D3D12_APPEND_ALIGNED_ELEMENT,
                                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+      // VertexData の pad: モデル本来の頂点位置(スキニング前)。VS の localPosition になる
+      D3D12_INPUT_ELEMENT_DESC{"TEXCOORD", 1, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+                               D3D12_APPEND_ALIGNED_ELEMENT,
+                               D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
   };
   d.vsPath = L"resources/engine/shaders/Object3D.VS.hlsl";
   d.psPath = L"resources/engine/shaders/Object3D.PS.hlsl";

@@ -186,6 +186,7 @@
     <ClCompile Include="actor\Bullet\RibbonTrailFadeComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossModelSpec.cpp" />
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
     <ClCompile Include="actor\Enemy\EnemyShootComponent.cpp" />
     <ClCompile Include="actor\Enemy\StraightMoveComponent.cpp" />
@@ -217,6 +218,10 @@
     <ClCompile Include="scene\CloudImpact.cpp" />
     <ClCompile Include="scene\CloudImpactDebugUi.cpp" />
     <ClCompile Include="scene\PlayerDeathDirector.cpp" />
+    <ClCompile Include="scene\BossDefeatVisual.cpp" />
+    <ClCompile Include="scene\BossShardInfo.cpp" />
+    <ClCompile Include="scene\BossShatter.cpp" />
+    <ClCompile Include="scene\ClearDirector.cpp" />
     <ClCompile Include="scene\ScaleDust.cpp" />
     <ClCompile Include="scene\PlayerDeathDust.cpp" />
     <ClCompile Include="scene\ScaleDustDebugUi.cpp" />
@@ -282,6 +287,7 @@
     <ClInclude Include="actor\Bullet\RibbonTrailFadeComponent.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />
+    <ClInclude Include="actor\Enemy\BossModelSpec.h" />
     <ClInclude Include="actor\Enemy\EnemyComponent.h" />
     <ClInclude Include="actor\Enemy\EnemyShootComponent.h" />
     <ClInclude Include="actor\Enemy\StraightMoveComponent.h" />
@@ -317,6 +323,10 @@
     <ClInclude Include="scene\CloudImpact.h" />
     <ClInclude Include="scene\CloudImpactDebugUi.h" />
     <ClInclude Include="scene\PlayerDeathDirector.h" />
+    <ClInclude Include="scene\BossDefeatVisual.h" />
+    <ClInclude Include="scene\BossShardInfo.h" />
+    <ClInclude Include="scene\BossShatter.h" />
+    <ClInclude Include="scene\ClearDirector.h" />
     <ClInclude Include="scene\ScaleDust.h" />
     <ClInclude Include="scene\PlayerDeathDust.h" />
     <ClInclude Include="scene\ScaleDustDebugUi.h" />

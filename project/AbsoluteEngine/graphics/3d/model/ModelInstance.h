@@ -49,6 +49,31 @@ public:
     float pad3 = 0.0f;
     Vector3 dissolveMaskColor = {1.0f, 1.0f, 1.0f};
     float pad4 = 0.0f;
+
+    // --- Crack (ボロノイのひび割れ。HLSL の同名の項目と、同じ並び・同じ位置にする) ---
+    int32_t enableCrack = 0;
+    float crackCellScale = 0.5f;
+    float crackLineWidth = 0.1f;
+    float crackReveal = 0.0f;
+    Vector3 crackColor = {1.0f, 0.78f, 0.30f};
+    float crackIntensity = 1.0f;
+    Vector3 crackOrigin = {0.0f, 0.0f, 0.0f};
+    float crackSpreadRadius = 1.0f;
+    float crackBreak = 0.0f;
+    float crackPad[3] = {0.0f, 0.0f, 0.0f};
+  };
+
+  // ボロノイのひび割れの設定(SetCrackParam に渡す)
+  struct CrackParam {
+    bool enable = false;
+    float cellSize = 2.0f;      // セルの大きさ(モデル本来の単位)
+    float lineWidth = 0.1f;     // ひびの線の太さの最大値(セルの大きさに対する割合)
+    float reveal = 0.0f;        // ひびが広がった割合(0 〜 1)
+    Vector3 color = {1.0f, 0.78f, 0.30f};
+    float intensity = 1.0f;     // ひびの光の強さ
+    Vector3 origin = {0.0f, 0.0f, 0.0f}; // ひびが広がり始める位置(モデル本来の座標)
+    float spreadRadius = 1.0f;  // origin から、ひびが最後に届く所までの距離
+    float breakAmount = 0.0f;   // セルが消えた割合(0 〜 1)
   };
 
   struct TransformCB {
@@ -81,6 +106,8 @@ public:
   void SetDissolveParam(bool enable, float threshold = 0.0f, float edgeRange = 0.03f,
                         const Vector3& edgeColor = {1.0f, 0.4f, 0.3f}, const Vector3& maskColor = {1.0f, 1.0f, 1.0f},
                         float emberAmount = 0.0f);
+  // ボロノイのひび割れを設定する(enable が false なら、何も描かない)。cellSize が 0 以下のときは、無効として扱う
+  void SetCrackParam(const CrackParam &param);
 
   void SetWireframe(bool wireframe) { isWireframe_ = wireframe; }
   bool IsWireframe() const { return isWireframe_; }
@@ -99,7 +126,8 @@ public:
   void UpdateAnimation(float deltaTime);
   // blendDuration > 0 の場合、現在再生中のポーズから新しいアニメーションへ
   // blendDuration秒かけてクロスフェード（Lerp/Slerp補間）しながら遷移する。
-  void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true, float blendDuration = 0.0f);
+  // restart: true なら、すでに同じアニメーションを再生中でも、いまのポーズから頭へ戻して再生し直す(既定は false で、何もしない)
+  void PlayAnimation(std::shared_ptr<Animation> animation, bool loop = true, float blendDuration = 0.0f, bool restart = false);
   // 再生中のアニメーションが最後まで再生されたか。ループしないアニメーションが終わったときだけ true
   // (ループ再生中や、何も再生していないときは false)。次のアニメーションへ切り替える合図に使う
   bool IsAnimationFinished() const;

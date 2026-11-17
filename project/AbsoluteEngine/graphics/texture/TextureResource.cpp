@@ -5,6 +5,7 @@
 #include <string>
 
 #include "DirectXCommon.h"
+#include "Logger.h"
 #include "SrvAllocator.h"
 #include "TextureUtils.h"
 #include "externals/DirectXTex/DirectXTex.h"
@@ -13,12 +14,23 @@ static void TexResLog_(const std::string &msg) {
   OutputDebugStringA((msg + "\n").c_str());
 }
 
+TextureResource::~TextureResource() {
+  // 作られたのと同じフレームの中で破棄された(アップロードの命令がまだ実行されていない)。遅延解放で守られるが、原因の調査のため、ログに出す
+  if (texture_ && createdFrame_ == DirectXCommon::GetFrameCounter()) {
+    Logger::GetInstance().Log("[TextureResource] destroyed in the same frame it was created: %s",
+                              debugName_.empty() ? "(no path)" : debugName_.c_str());
+  }
+  DirectXCommon::DeferRelease(std::move(texture_));
+  DirectXCommon::DeferRelease(std::move(intermediateResource_));
+}
+
 bool TextureResource::CreateFromFile(DirectXCommon *dx,
                                      const std::string &filePath) {
   if (!dx) {
     TexResLog_("[TextureResource] dx is null");
     return false;
   }
+  debugName_ = filePath;
 
   DirectX::ScratchImage mipImages = LoadTexture(filePath);
   const DirectX::TexMetadata &meta = mipImages.GetMetadata();
@@ -76,6 +88,7 @@ bool TextureResource::CreateFromMetadata(DirectXCommon *dx,
     TexResLog_("[TextureResource] CreateTextureResource failed");
     return false;
   }
+  createdFrame_ = DirectXCommon::GetFrameCounter();
 
   intermediateResource_ =
       UploadTextureData(texture_, mipImages, device, commandList);

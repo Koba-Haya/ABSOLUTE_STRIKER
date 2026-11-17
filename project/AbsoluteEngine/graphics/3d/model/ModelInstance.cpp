@@ -134,6 +134,23 @@ void ModelInstance::SetDissolveParam(bool enable, float threshold, float edgeRan
   }
 }
 
+void ModelInstance::SetCrackParam(const CrackParam &param) {
+  if (!pImpl_->cbMatMapped) return;
+  MaterialCB &cb = *pImpl_->cbMatMapped;
+  // セルの大きさが 0 以下だと、割り算が壊れるので、無効にする
+  const bool valid = param.enable && param.cellSize > 0.0f;
+  cb.enableCrack = valid ? 1 : 0;
+  if (!valid) return;
+  cb.crackCellScale = 1.0f / param.cellSize;
+  cb.crackLineWidth = param.lineWidth;
+  cb.crackReveal = param.reveal;
+  cb.crackColor = param.color;
+  cb.crackIntensity = param.intensity;
+  cb.crackOrigin = param.origin;
+  cb.crackSpreadRadius = param.spreadRadius;
+  cb.crackBreak = param.breakAmount;
+}
+
 void ModelInstance::SetOverrideTexture(std::shared_ptr<TextureResource> tex) {
   pImpl_->overrideTexture = tex;
 }
@@ -250,9 +267,10 @@ T CalculateValue(const std::vector<Keyframe<T>>& keyframes, float time) {
   return (*keyframes.rbegin()).value;
 }
 
-void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loop, float blendDuration) {
-  // 既に同じアニメーションを再生中なら何もしない（ブレンドの再トリガーを防ぐ）
-  if (pImpl_->currentAnimation == animation) {
+void ModelInstance::PlayAnimation(std::shared_ptr<Animation> animation, bool loop, float blendDuration, bool restart) {
+  // 既に同じアニメーションを再生中なら何もしない（ブレンドの再トリガーを防ぐ）。
+  // restart が true のときは、同じアニメーションでも頭から再生し直す(連続した被弾で、毎回よろめきを出すため)
+  if (!restart && pImpl_->currentAnimation == animation) {
     pImpl_->animationLoop = loop;
     return;
   }

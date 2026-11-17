@@ -58,6 +58,7 @@
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AnimationManager.h"
+#include "ModelResource.h"
 #include "../actor/Player/PlayerModelDefs.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "Input.h"
@@ -148,10 +149,20 @@ constexpr float kSeaSkyFloorHeightMax = -30.0f;
 constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
 constexpr float kPlayerWingspan = 3.7f;
 
+// ボスのモデルへ掛ける環境光の反射の強さ。1.0 だと、空を映す鏡のようになり、テクスチャの色(外殻の赤、羽根の茶)が見えなくなるため、
+// 自機(蝶)と同じ 0 にする(テクスチャの色をそのまま出す)。光沢が欲しくなったら、小さい値(0.1 前後)から足す
+constexpr float kBossEnvironmentCoefficient = 0.0f;
+// ボスの内側(コア)に貼る、真っ白の画像(GameAssetPreloader が先読みしている、プレハブ用の立方体の画像と同じ)
+constexpr const char *kBossCoreTexturePath = "resources/app/cube/white100x100.png";
+
 // 死亡演出のスキップに使う入力(発射ボタン(Space・パッド A・マウス左)とは別のキーにして、連打による誤スキップを避ける)。
 // キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
 constexpr BYTE kDeathSkipKey = DIK_0;
 constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
+
+// ボス撃破演出のスキップに使う入力(死亡演出のスキップと同じキー。2 つの演出は同時に起きないので、衝突しない)
+constexpr BYTE kClearSkipKey = kDeathSkipKey;
+constexpr WORD kClearSkipPadButton = kDeathSkipPadButton;
 
 // 死亡演出の間、敵(全部)を画面から消すまでの時間(秒)。死亡の瞬間から、この時間をかけて縮んで見えなくなる。
 // 描かないだけで、敵は存在し続ける(撃破扱いにならず、スコア・編隊のカウント・撃破の演出に影響しない)
@@ -162,6 +173,11 @@ constexpr BYTE kDebugReviveKey = DIK_9;
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
 // SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
 constexpr bool kDebugFlowShortcutEnabled = false;
+
+// 開発用: ボス戦まで飛ばすショートカットを有効にするか(提出・展示のビルドでは false にする。展示モードでは、この値によらず無効)。
+// 撃破演出の確認や録画のため、道中を待たずにボス戦へ入る。キーは主列の 8(0 は演出のスキップ、9 は蘇生、B は骨の表示に使用済み)
+constexpr bool kDebugSkipToBossEnabled = true;
+constexpr BYTE kDebugSkipToBossKey = DIK_8;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
@@ -193,6 +209,26 @@ void GameScene::Initialize(const SceneServices &services) {
     }
     Logger::GetInstance().Log("[Stage] start: id=%s dataName=%s (payload=%s)", stage.id.c_str(), stage.dataName.c_str(),
                               params != nullptr ? "yes" : "none");
+    // このステージのボスのモデルを、先に読み込んで持っておく(ボス戦の出現の瞬間に、ディスクから読んで画面が止まるのを避ける。
+    // ModelManager のキャッシュは弱い参照なので、ここで強い参照を持ち続ける)
+    {
+      auto *assets = AbsoluteEngine::AssetManager::GetInstance();
+      const BossModelSpec &bossSpec = GetBossModelSpec(stage.boss);
+      bossModelHolds_.clear();
+      bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.modelPath));
+      if (bossSpec.coreModelPath) {
+        bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.coreModelPath));
+      }
+      if (bossSpec.dissolveMaskPath) {
+        bossMaskHold_ = assets->Load<TextureResource>(bossSpec.dissolveMaskPath);
+      }
+      // 撃破演出の欠片のモデルと、その付属データ(読めなければ、欠片なしとして、外殻のディゾルブで消える)
+      bossShardInfo_ = BossShardInfo();
+      if (bossSpec.shardsModelPath && bossSpec.shardsInfoPath) {
+        bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.shardsModelPath));
+        bossShardInfo_.Load(bossSpec.shardsInfoPath);
+      }
+    }
   }
 
   BaseScene::Initialize(services);
@@ -466,7 +502,10 @@ void GameScene::Finalize() {
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
+  bossModelHolds_.clear(); // 先読みしたボスの資産の参照を手放す
+  bossMaskHold_.reset();
   playerDeathDust_.Shutdown(); // 借りているエミッタと粒の力を返す
+  postEffects_.Reset(); // 共有の Renderer に残るポストエフェクト(HP 1 の赤い枠など)を、次のシーンへ持ち越さない
 }
 
 void GameScene::BeginIntro_() {
@@ -801,6 +840,8 @@ Camera* GameScene::GetGameplayCamera_() const {
 void GameScene::UpdatePostEffects_(float deltaTime) {
   PostEffectDirector::FrameState state;
   state.isBossPhase = phase_ == GamePhase::Boss;
+  // ボス撃破の演出中は、HP 1 の赤い枠などが演出の見栄えを損なうので、ポストエフェクトを止める
+  state.suppressAll = phase_ == GamePhase::Clearing;
   // ステージ開始演出の加速(ブースト)の間、画面にブラーを掛ける。ブラーの中心は、画面の中心(自機のいる辺り)
   state.speedBlur = stageStart_.GetBoost();
   if (playerObj_) {
@@ -872,18 +913,41 @@ void GameScene::SpawnBoss_() {
       cameraEye.y + forward.y * kBossInitialDistanceFromCamera,
       cameraEye.z + forward.z * kBossInitialDistanceFromCamera
   };
-  bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
+  // このステージのボスの種類(stages.json の "boss")から、モデル・大きさ・当たり判定の半径を決める
+  const BossModelSpec &bossSpec = GetBossModelSpec(ResolveStage_().boss);
+  bossObj->GetTransform().scale = {bossSpec.scale, bossSpec.scale, bossSpec.scale};
   auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-  bossModelComp->LoadModel("resources/app/cube/cube.obj");
-  bossModelComp->SetEnvironmentCoefficient(1.0f);
-  bossModelComp->SetColor({0.7f, 0.1f, 0.9f, 1.0f}); // ザコ敵と見分けられるようボスは紫に
+  bossModelComp->LoadModel(bossSpec.modelPath);
+  bossModelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
+  // 撃破演出の、外殻のひびと剥がれ(ディゾルブ)。専用のマスクがあれば使う(無ければ、共有のノイズのマスク)。普通は無効で、撃破演出が制御する
+  if (bossSpec.dissolveMaskPath) {
+    bossModelComp->LoadDissolveMask(bossSpec.dissolveMaskPath);
+  }
   bossObj->AddComponent(std::move(bossModelComp));
+  bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  bossObj->AddComponent(std::make_unique<BossComponent>());
+  auto bossComp = std::make_unique<BossComponent>();
+  bossComp->SetCollisionRadius(bossSpec.colliderRadius);
+
+  // 内側(コア)は、外殻とは別のオブジェクトにする(外殻だけをディゾルブで消し、コアを残して光らせるため)。
+  // 当たり判定は持たない。位置・向き・アニメーションは、BossComponent が外殻に合わせ続ける
+  if (bossSpec.coreModelPath) {
+    auto coreObj = std::make_shared<AbsoluteEngine::GameObject>("BossCore");
+    coreObj->GetTransform() = bossObj->GetTransform();
+    auto coreModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+    coreModelComp->LoadModel(bossSpec.coreModelPath);
+    // コアのモデルは、画像を持たない。エンジンは、画像のないモデルへ、確認用の格子模様を貼るので、真っ白の画像で置き換える
+    // (色は、撃破演出が、照明なしの金色として掛ける)
+    coreModelComp->LoadTexture(kBossCoreTexturePath);
+    coreObj->AddComponent(std::move(coreModelComp));
+    bossComp->SetCoreObject(coreObj);
+    AddRootObject(coreObj);
+  }
+  bossObj->AddComponent(std::move(bossComp));
 
   auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
   colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = 5.0f; // ボスなので大きめに
+  colliderComp->radius = bossSpec.colliderRadius; // ボスなので大きめに
   bossObj->AddComponent(std::move(colliderComp));
   bossObj->SetTag("Boss");
 
@@ -899,11 +963,36 @@ void GameScene::CheckDebugFlowShortcut_() {
     return;
   }
   if (GetInput()->TriggerKey(DIK_RETURN)) {
-    phase_ = GamePhase::Clear;
-    RequestResultScene_(SceneId::Clear);
+    // 本物の撃破の経路を通す。道中なら、ボスを出す(1 回目)。ボス戦なら、ボスを倒す(2 回目)。
+    // 倒すと、CheckGameEnd_ が撃破演出を始め、演出の終わりにクリアへの遷移を要求する
+    if (phase_ == GamePhase::InProgress) {
+      phase_ = GamePhase::Boss;
+      SpawnBoss_();
+    } else {
+      for (const auto& obj : GetRootObjects()) {
+        if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
+          boss->TakeDamage(boss->GetMaxHp());
+        }
+      }
+    }
   } else if (GetInput()->TriggerKey(DIK_BACK)) {
     // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
     KillPlayer_();
+  }
+}
+
+void GameScene::CheckSkipToBossShortcut_() {
+  if (!kDebugSkipToBossEnabled || ExhibitionMode::kEnabled || !GetInput()) {
+    return;
+  }
+  // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
+  if (phase_ != GamePhase::InProgress || stageStart_.IsActive()) {
+    return;
+  }
+  if (GetInput()->TriggerKey(kDebugSkipToBossKey)) {
+    // タイムラインを終端へ飛ばす。次の更新で「終点に到達した」合図(HasTimelineReachedEnd)が立ち、本物のボス戦への移行(SpawnBoss_)が走る。
+    // 出ていた敵は、終端での巻き戻しで片づく
+    SeekTimelineToEnd();
   }
 }
 
@@ -1022,7 +1111,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   }
 }
 
-void GameScene::RemoveBulletsDuringDeath_() {
+void GameScene::RemoveBulletsDuringCutscene_() {
   for (const auto& obj : GetRootObjects()) {
       if (!obj) continue;
       const std::string& tag = obj->GetTag();
@@ -1095,12 +1184,81 @@ void GameScene::CheckGameEnd_() {
   }
 
   if (phase_ == GamePhase::Boss) {
-      const bool bossAlive = std::any_of(GetRootObjects().begin(), GetRootObjects().end(),
-          [](const auto& obj) { return obj && obj->GetComponent<BossComponent>(); });
-      if (!bossAlive) {
-          phase_ = GamePhase::Clear;
-          RequestResultScene_(SceneId::Clear);
+      // ボスの撃破を見つける。撃破されたボスは、消さずに残る(BossComponent::IsActive が false)ので、
+      // 「ボスがいない」だけでなく「ボスが撃破済み」も撃破とみなす
+      bool bossDefeated = true;
+      for (const auto& obj : GetRootObjects()) {
+          const auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr;
+          if (boss && boss->IsActive()) {
+              bossDefeated = false;
+              break;
+          }
       }
+      if (bossDefeated) {
+          BeginClearing_();
+      }
+  }
+}
+
+void GameScene::BeginClearing_() {
+  phase_ = GamePhase::Clearing;
+  // 演出の間、操作を受け付けず、ダメージも受けない(残った敵や、消し損ねた弾で死なないため)
+  SetPlayerInputLocked_(true);
+  if (playerObj_) {
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          pComp->SetInvulnerable(true);
+      }
+  }
+  clearDirector_.Begin(clearSettings_);
+
+  // ボスの見た目の演出(外殻のひびと剥がれ、コアの光)を始める。撃破されたボスは、消さずに残っている
+  for (const auto& rootObj : GetRootObjects()) {
+      const auto* boss = rootObj ? rootObj->GetComponent<BossComponent>() : nullptr;
+      if (boss) {
+          // 欠片のオブジェクトを足すと、ルートの一覧が変わる(参照が無効になりうる)ので、ボスの参照を先に手元へ複製しておく
+          const std::shared_ptr<AbsoluteEngine::GameObject> bossObj = rootObj;
+          const BossModelSpec& bossSpec = GetBossModelSpec(ResolveStage_().boss);
+          const std::shared_ptr<AbsoluteEngine::GameObject> shards =
+              bossSpec.shardsModelPath ? CreateBossShards_(bossObj, bossSpec) : nullptr;
+          bossDefeatVisual_.Begin(bossObj, boss->GetCoreObject(), shards, bossShardInfo_, bossSpec.crackEndThreshold,
+                                  bossSpec.crackShape, BossDefeatSettings{});
+          break;
+      }
+  }
+}
+
+std::shared_ptr<AbsoluteEngine::GameObject> GameScene::CreateBossShards_(const std::shared_ptr<AbsoluteEngine::GameObject>& boss,
+                                                                          const BossModelSpec& bossSpec) {
+  // 欠片のモデルは、ボスの外殻と同じ位置・向き・大きさで置く(割る前と、組み立てた欠片が、同じ見た目になるように)。
+  // 動き(骨の書き換え)は BossShatter が行うので、ここでは、置くだけ。アニメーションは再生しない
+  auto shardsObj = std::make_shared<AbsoluteEngine::GameObject>("BossShards");
+  shardsObj->GetTransform() = boss->GetTransform();
+  auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+  modelComp->LoadModel(bossSpec.shardsModelPath);
+  modelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
+  shardsObj->AddComponent(std::move(modelComp));
+  AddRootObject(shardsObj);
+  return shardsObj;
+}
+
+void GameScene::UpdateClearing_(float deltaTime) {
+  // スキップ: 0 キーかパッドの Start。展示中は受け付けない
+  bool skipRequested = false;
+  if (GetInput()) {
+      skipRequested = GetInput()->TriggerKey(kClearSkipKey) || GetInput()->WasPadPressed(kClearSkipPadButton);
+  }
+  clearDirector_.Update(deltaTime, !ExhibitionMode::kEnabled, skipRequested);
+
+  // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション、最後に通常へ戻る)
+  SetWorldTimeScale(clearDirector_.GetWorldTimeScale());
+
+  // ボスの見た目(ひび、剥がれ、コアの光)を、いまのサブフェーズの進み具合に合わせる
+  bossDefeatVisual_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress(), deltaTime);
+
+  // Cover へ入ったら、クリアへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う
+  if (clearDirector_.ConsumeCoverStart()) {
+      phase_ = GamePhase::Clear;
+      RequestResultScene_(SceneId::Clear);
   }
 }
 
@@ -1193,6 +1351,10 @@ void GameScene::Update() {
   if (deathDirector_.IsActive()) {
       UpdateDying_(deltaTime);
   }
+  // ボス撃破演出(実時間)。死亡演出と同様に、世界の時間の速さをここで決める
+  if (clearDirector_.IsActive()) {
+      UpdateClearing_(deltaTime);
+  }
 
   // ポストエフェクトの調停（Editモードでもタイマーは進める）
   UpdatePostEffects_(deltaTime);
@@ -1260,6 +1422,7 @@ void GameScene::Update() {
           UpdateExhibitionFlow_(deltaTime);
       } else {
           CheckDebugFlowShortcut_();
+          CheckSkipToBossShortcut_();
       }
       CheckGameEnd_();
       ApplyDeathPose_();
@@ -1281,7 +1444,11 @@ void GameScene::Update() {
               }
               deathCamera_.Update(deltaTime, focus, spread);
           }
-          RemoveBulletsDuringDeath_();
+          RemoveBulletsDuringCutscene_();
+      }
+      // 撃破演出の間も、弾は残さない(ボスの弾、残った敵の弾が、演出の中で飛んでこないように)
+      if (clearDirector_.IsActive()) {
+          RemoveBulletsDuringCutscene_();
       }
       // 崩壊の鱗粉。死亡演出が始まっていないフレームも呼ぶ(出ている粒を動かし続け、シーンの開始時に前の粒を消すため)
       playerDeathDust_.Update(deathDirector_.IsActive(), deathDirector_.GetDissolve(), wingShatter_,

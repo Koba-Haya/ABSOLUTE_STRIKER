@@ -1,0 +1,500 @@
+{
+ "model": "boss_beetle_shards.gltf",
+ "coordinate_system": "glTF (Y up). The engine loads with aiProcess_MakeLeftHanded, which negates z.",
+ "root_bone": "ShardRoot",
+ "shard_count": 41,
+ "shards": [
+  {
+   "name": "Shard_00",
+   "part": "head",
+   "kind": "head",
+   "center": [
+    -1.296478,
+    0.130407,
+    3.266467
+   ],
+   "radius": 1.337247,
+   "volume": 2.897766
+  },
+  {
+   "name": "Shard_01",
+   "part": "head",
+   "kind": "head",
+   "center": [
+    1.200106,
+    0.090463,
+    3.116146
+   ],
+   "radius": 1.254229,
+   "volume": 3.329472
+  },
+  {
+   "name": "Shard_02",
+   "part": "head",
+   "kind": "head",
+   "center": [
+    -0.17286,
+    0.086731,
+    2.591695
+   ],
+   "radius": 1.274786,
+   "volume": 2.759426
+  },
+  {
+   "name": "Shard_03",
+   "part": "head",
+   "kind": "head",
+   "center": [
+    0.018818,
+    0.147895,
+    3.838277
+   ],
+   "radius": 1.313824,
+   "volume": 2.898492
+  },
+  {
+   "name": "Shard_04",
+   "part": "pronotum",
+   "kind": "body",
+   "center": [
+    -0.657665,
+    0.125479,
+    1.80891
+   ],
+   "radius": 1.360773,
+   "volume": 2.801749
+  },
+  {
+   "name": "Shard_05",
+   "part": "pronotum",
+   "kind": "body",
+   "center": [
+    1.566576,
+    0.141415,
+    0.948822
+   ],
+   "radius": 1.326555,
+   "volume": 2.858412
+  },
+  {
+   "name": "Shard_06",
+   "part": "pronotum",
+   "kind": "body",
+   "center": [
+    0.041682,
+    0.225713,
+    0.521204
+   ],
+   "radius": 1.368687,
+   "volume": 3.390165
+  },
+  {
+   "name": "Shard_07",
+   "part": "pronotum",
+   "kind": "body",
+   "center": [
+    -1.513073,
+    0.125307,
+    0.995901
+   ],
+   "radius": 1.338056,
+   "volume": 3.178341
+  },
+  {
+   "name": "Shard_08",
+   "part": "pronotum",
+   "kind": "body",
+   "center": [
+    0.725707,
+    0.141061,
+    1.804796
+   ],
+   "radius": 1.297678,
+   "volume": 2.948957
+  },
+  {
+   "name": "Shard_09",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    0.610042,
+    0.397464,
+    -1.589741
+   ],
+   "radius": 0.98227,
+   "volume": 1.255616
+  },
+  {
+   "name": "Shard_10",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    0.770387,
+    0.158688,
+    -3.735133
+   ],
+   "radius": 1.159714,
+   "volume": 1.22385
+  },
+  {
+   "name": "Shard_11",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    1.689134,
+    0.150974,
+    -0.813953
+   ],
+   "radius": 1.14853,
+   "volume": 1.721923
+  },
+  {
+   "name": "Shard_12",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    1.515042,
+    0.130519,
+    -2.355387
+   ],
+   "radius": 1.152232,
+   "volume": 1.6197
+  },
+  {
+   "name": "Shard_13",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    0.456893,
+    0.374472,
+    -2.735043
+   ],
+   "radius": 0.906458,
+   "volume": 0.972263
+  },
+  {
+   "name": "Shard_14",
+   "part": "elytra_R",
+   "kind": "wing",
+   "center": [
+    0.586033,
+    0.403936,
+    -0.511074
+   ],
+   "radius": 1.046014,
+   "volume": 1.013878
+  },
+  {
+   "name": "Shard_15",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -1.579899,
+    0.198796,
+    -1.739197
+   ],
+   "radius": 0.969422,
+   "volume": 1.250637
+  },
+  {
+   "name": "Shard_16",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -0.655066,
+    0.224343,
+    -3.692157
+   ],
+   "radius": 1.126389,
+   "volume": 1.247542
+  },
+  {
+   "name": "Shard_17",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -0.503296,
+    0.437958,
+    -2.184338
+   ],
+   "radius": 1.063687,
+   "volume": 1.235874
+  },
+  {
+   "name": "Shard_18",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -1.372923,
+    0.182015,
+    -2.902644
+   ],
+   "radius": 1.100317,
+   "volume": 1.172852
+  },
+  {
+   "name": "Shard_19",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -0.569589,
+    0.43094,
+    -0.770563
+   ],
+   "radius": 1.013766,
+   "volume": 1.430642
+  },
+  {
+   "name": "Shard_20",
+   "part": "elytra_L",
+   "kind": "wing",
+   "center": [
+    -1.677777,
+    0.164439,
+    -0.699032
+   ],
+   "radius": 1.066078,
+   "volume": 1.368355
+  },
+  {
+   "name": "Shard_21",
+   "part": "mandible_R",
+   "kind": "horn",
+   "center": [
+    1.647042,
+    0.065112,
+    4.322405
+   ],
+   "radius": 1.198598,
+   "volume": 2.722224
+  },
+  {
+   "name": "Shard_22",
+   "part": "mandible_R",
+   "kind": "horn",
+   "center": [
+    3.68538,
+    0.070157,
+    7.397111
+   ],
+   "radius": 2.720724,
+   "volume": 1.517625
+  },
+  {
+   "name": "Shard_23",
+   "part": "mandible_R",
+   "kind": "horn",
+   "center": [
+    2.987579,
+    0.096633,
+    5.476066
+   ],
+   "radius": 1.239898,
+   "volume": 1.930242
+  },
+  {
+   "name": "Shard_24",
+   "part": "mandible_L",
+   "kind": "horn",
+   "center": [
+    -2.894856,
+    0.093915,
+    5.471172
+   ],
+   "radius": 1.346056,
+   "volume": 2.372551
+  },
+  {
+   "name": "Shard_25",
+   "part": "mandible_L",
+   "kind": "horn",
+   "center": [
+    -1.537646,
+    0.061992,
+    4.249772
+   ],
+   "radius": 1.167733,
+   "volume": 2.333397
+  },
+  {
+   "name": "Shard_26",
+   "part": "mandible_L",
+   "kind": "horn",
+   "center": [
+    -3.677137,
+    0.095815,
+    7.436734
+   ],
+   "radius": 2.685806,
+   "volume": 1.490154
+  },
+  {
+   "name": "Shard_27",
+   "part": "leg_R1",
+   "kind": "leg",
+   "center": [
+    3.196594,
+    -1.016964,
+    2.267251
+   ],
+   "radius": 2.047141,
+   "volume": 0.800188
+  },
+  {
+   "name": "Shard_28",
+   "part": "leg_R1",
+   "kind": "leg",
+   "center": [
+    1.161077,
+    -0.243518,
+    1.651995
+   ],
+   "radius": 1.363815,
+   "volume": 0.969983
+  },
+  {
+   "name": "Shard_29",
+   "part": "leg_R2",
+   "kind": "leg",
+   "center": [
+    1.192927,
+    -0.214805,
+    0.028734
+   ],
+   "radius": 1.300034,
+   "volume": 0.991105
+  },
+  {
+   "name": "Shard_30",
+   "part": "leg_R2",
+   "kind": "leg",
+   "center": [
+    3.188769,
+    -0.956823,
+    0.228231
+   ],
+   "radius": 2.024359,
+   "volume": 0.795163
+  },
+  {
+   "name": "Shard_31",
+   "part": "leg_R3",
+   "kind": "leg",
+   "center": [
+    1.182663,
+    -0.20224,
+    -1.833184
+   ],
+   "radius": 1.384487,
+   "volume": 0.978909
+  },
+  {
+   "name": "Shard_32",
+   "part": "leg_R3",
+   "kind": "leg",
+   "center": [
+    3.169049,
+    -0.914196,
+    -2.184584
+   ],
+   "radius": 2.086011,
+   "volume": 0.829657
+  },
+  {
+   "name": "Shard_33",
+   "part": "leg_L1",
+   "kind": "leg",
+   "center": [
+    -1.124257,
+    -0.213117,
+    1.666821
+   ],
+   "radius": 1.362401,
+   "volume": 0.938768
+  },
+  {
+   "name": "Shard_34",
+   "part": "leg_L1",
+   "kind": "leg",
+   "center": [
+    -3.130061,
+    -0.901519,
+    2.276303
+   ],
+   "radius": 2.172557,
+   "volume": 0.873417
+  },
+  {
+   "name": "Shard_35",
+   "part": "leg_L2",
+   "kind": "leg",
+   "center": [
+    -1.142009,
+    -0.22936,
+    0.031272
+   ],
+   "radius": 1.346872,
+   "volume": 0.952896
+  },
+  {
+   "name": "Shard_36",
+   "part": "leg_L2",
+   "kind": "leg",
+   "center": [
+    -3.138593,
+    -0.939388,
+    0.229852
+   ],
+   "radius": 2.064581,
+   "volume": 0.821396
+  },
+  {
+   "name": "Shard_37",
+   "part": "leg_L3",
+   "kind": "leg",
+   "center": [
+    -3.180699,
+    -0.936572,
+    -2.185216
+   ],
+   "radius": 2.061005,
+   "volume": 0.798939
+  },
+  {
+   "name": "Shard_38",
+   "part": "leg_L3",
+   "kind": "leg",
+   "center": [
+    -1.154553,
+    -0.211104,
+    -1.856623
+   ],
+   "radius": 1.30947,
+   "volume": 0.958438
+  },
+  {
+   "name": "Shard_39",
+   "part": "antenna_R",
+   "kind": "antenna",
+   "center": [
+    1.452169,
+    0.905322,
+    5.079123
+   ],
+   "radius": 1.18887,
+   "volume": 0.079849
+  },
+  {
+   "name": "Shard_40",
+   "part": "antenna_L",
+   "kind": "antenna",
+   "center": [
+    -1.45217,
+    0.905323,
+    5.079124
+   ],
+   "radius": 1.188871,
+   "volume": 0.079849
+  }
+ ]
+}

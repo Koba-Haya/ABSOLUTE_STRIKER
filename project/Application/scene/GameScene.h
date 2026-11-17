@@ -18,6 +18,8 @@
 #include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
+#include "BossDefeatVisual.h"
+#include "ClearDirector.h"
 #include "CloudImpact.h"
 #include "DeathCameraDirector.h"
 #include "../actor/Player/WingShatter.h"
@@ -35,12 +37,16 @@
 
 class RailCameraComponent;
 struct StageDefinition;
+struct BossModelSpec;
+class ModelResource;
+class TextureResource;
 
 enum class GamePhase {
   InProgress,
   Boss,
   Dying,    // 自機の HP が 0 になって、死亡演出(PlayerDeathDirector)を進めている間
-  Clear,
+  Clearing, // ボスを撃破して、撃破演出(ClearDirector)を進めている間
+  Clear,    // 撃破演出が Cover へ入り、クリアへの遷移を要求した(またはデバッグで直接要求した)
   GameOver  // 死亡演出が Cover へ入り、ゲームオーバーへの遷移を要求した(または、クリア・ゲームオーバーの要求を出した)
 };
 
@@ -107,8 +113,16 @@ private:
   void UpdateDying_(float deltaTime);
   // 死亡演出が決めた位置・向きを、自機へ反映する
   void ApplyDeathPose_();
-  // 死亡演出の間、飛んでいる弾(自機のも敵のも)をすべて消す。新しく出た弾も、描かれる前に消す(当たり判定も描画も止まる)
-  void RemoveBulletsDuringDeath_();
+  // 演出(死亡演出、撃破演出)の間、飛んでいる弾(自機のも敵のも)をすべて消す。新しく出た弾も、描かれる前に消す(当たり判定も描画も止まる)
+  void RemoveBulletsDuringCutscene_();
+  // ボス撃破の演出を始める(ボスの HP が 0 になったとき)。操作をロックして自機を無敵にし、演出クラスを始める。
+  // ボスは消さない(撃破演出が、ボスの姿を使う)
+  void BeginClearing_();
+  // 撃破演出の、欠片のモデルのオブジェクトを作って、シーンへ足す(ボスと同じ位置・向き・大きさ)。戻り値は、作ったオブジェクト
+  std::shared_ptr<AbsoluteEngine::GameObject> CreateBossShards_(const std::shared_ptr<AbsoluteEngine::GameObject>& boss,
+                                                                 const BossModelSpec& bossSpec);
+  // 撃破演出を 1 フレーム進める(実時間)。スキップの入力、世界の時間の速さの反映、クリアへの遷移の要求を行う
+  void UpdateClearing_(float deltaTime);
   // 死亡演出の間、敵(Enemy / Boss。距離に関係なく全部)を描く大きさの倍率を返す(1 = 通常、0 = 描かない)。
   // 死亡の瞬間から短い時間で 1 -> 0 へ縮める。敵以外と、死亡演出でないときは 1。蝶の崩壊を見やすくするため
   float GetEnemyDrawScaleDuringDeath_(const AbsoluteEngine::GameObject& obj) const;
@@ -123,6 +137,8 @@ private:
   void UpdateStageStartDemoFlow_(float deltaTime);
   // 開発用: プレイせずに、タイトル -> ゲーム -> クリア / ゲームオーバー -> タイトルの流れを確認するためのショートカット
   void CheckDebugFlowShortcut_();
+  // 開発用: 道中を飛ばして、ボス戦へ入るショートカット(撃破演出の確認や録画のため)
+  void CheckSkipToBossShortcut_();
   void UpdateHud_();
   // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
   // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する
@@ -243,6 +259,13 @@ private:
   GamePhase phaseBeforeDeath_ = GamePhase::InProgress; // 死亡演出の前のフェーズ(蘇生で戻す先)
   bool debugHoldAtCover_ = false;           // デバッグ: Cover で遷移を要求せず、演出をその場で保つ(演出だけを、何度も見るため)
   PlayerDeathSettings deathSettings_;       // 死亡演出の設定(ステージごとの値へ差し替えられる)
+  ClearDirector clearDirector_;             // ボス撃破演出の進行(サブフェーズ、世界の時間の速さ)
+  ClearSettings clearSettings_;             // 撃破演出の設定(ステージ(ボス)ごとの値へ差し替えられる)
+  // このステージのボスの資産(外殻とコアのモデル、ディゾルブのマスク)の先読み。出現の瞬間の読み込みで止まらないよう、強い参照を持つ
+  std::vector<std::shared_ptr<ModelResource>> bossModelHolds_;
+  std::shared_ptr<TextureResource> bossMaskHold_;
+  BossShardInfo bossShardInfo_; // このステージのボスの、欠片の付属データ(撃破演出が使う。欠片のないボスは空)
+  BossDefeatVisual bossDefeatVisual_; // 撃破演出の、ボスの見た目(外殻のひびと剥がれ、コアの光)
 
   std::unique_ptr<GameHUD> gameHUD_;
   HudStatusView hudStatus_; // HUD の文字(目的、スコア、進行バー)

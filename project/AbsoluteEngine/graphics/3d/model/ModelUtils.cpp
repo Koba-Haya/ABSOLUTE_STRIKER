@@ -61,6 +61,15 @@ std::vector<VertexData> FlattenVertices(const ModelData &model) {
   for (const auto &m : model.meshes) {
     out.insert(out.end(), m.vertices.begin(), m.vertices.end());
   }
+
+  // pad に、モデル本来の頂点位置(スキニング前)を入れておく。
+  // スキニングの計算シェーダーは、pad をそのまま出力へ渡すので、描画側(Object3D.VS)は、動いても表面の同じ点は同じ値になる
+  // 「元の位置」を読める(撃破演出のひび割れの柄が、体の動きに付いてくるために使う)
+  for (VertexData &vertex : out) {
+    vertex.pad[0] = vertex.position.x;
+    vertex.pad[1] = vertex.position.y;
+    vertex.pad[2] = vertex.position.z;
+  }
   return out;
 }
 

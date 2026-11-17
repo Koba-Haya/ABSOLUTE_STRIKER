@@ -1,3 +1,7 @@
+// 粒の最大数と、更新・初期化の計算シェーダの 1 グループのスレッド数(GPUParticle.h の kMaxGPUParticles、kGPUParticleThreadsPerGroup と同じ値にすること)
+static const uint32_t kMaxParticles = 16384;
+static const uint32_t kParticleThreadsPerGroup = 1024;
+
 struct GPUParticle {
     float32_t3 translate;
     float32_t3 scale;
