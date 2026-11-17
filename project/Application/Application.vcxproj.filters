@@ -119,6 +119,9 @@
     <ClCompile Include="ui\ResultMenu.cpp" />
     <ClCompile Include="ui\ResultTally.cpp" />
     <ClCompile Include="ui\InheritancePicker.cpp" />
+    <ClCompile Include="exhibition\ExhibitionController.cpp" />
+    <ClCompile Include="exhibition\ExhibitionHint.cpp" />
+    <ClCompile Include="exhibition\ExhibitionResultMaker.cpp" />
     <ClCompile Include="ui\UiContinuePrompt.cpp" />
     <ClCompile Include="ui\UiPipBar.cpp" />
     <ClCompile Include="ui\UiPointer.cpp" />
@@ -252,6 +255,9 @@
     <ClInclude Include="ui\ResultMenu.h" />
     <ClInclude Include="ui\ResultTally.h" />
     <ClInclude Include="ui\InheritancePicker.h" />
+    <ClInclude Include="exhibition\ExhibitionController.h" />
+    <ClInclude Include="exhibition\ExhibitionHint.h" />
+    <ClInclude Include="exhibition\ExhibitionResultMaker.h" />
     <ClInclude Include="ui\UiContinuePrompt.h" />
     <ClInclude Include="ui\UiPipBar.h" />
     <ClInclude Include="ui\UiPointer.h" />

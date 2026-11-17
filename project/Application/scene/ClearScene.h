@@ -23,7 +23,8 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
-  float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れてからの経過(秒)
+  float exhibitionHoldTimer_ = 0.0f;  // 展示: 継承の確定(メニューが開いたあと)からの経過(秒)
+  float exhibitionTallyTimer_ = 0.0f; // 展示: 結果の集計が終わってからの経過(秒。継承の選択を始めるまでの待ち)
   ResultBanner banner_;     // 見出し(スプライト)
   ResultMenu menu_;         // 結果メニュー(もう一度、ステージ選択へ、タイトルへ)
   ResultTally tally_;       // 結果の集計(評価の内訳、合計、ランク)。結果が渡されたときだけ使う

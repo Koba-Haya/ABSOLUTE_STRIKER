@@ -90,7 +90,30 @@ void StageProgress::Load_() {
   }
 }
 
+void StageProgress::Reset() {
+  entries_.clear();
+  Save_(); // 仮の状態の間は、Save_ が何もしない
+  Logger::GetInstance().Log("[StageProgress] reset%s", volatile_ ? " (volatile)" : "");
+}
+
+void StageProgress::BeginVolatile() {
+  if (volatile_) return;
+  backup_ = entries_;
+  entries_.clear();
+  volatile_ = true;
+  Logger::GetInstance().Log("[StageProgress] volatile mode begin (the save file is not written)");
+}
+
+void StageProgress::EndVolatile() {
+  if (!volatile_) return;
+  entries_ = std::move(backup_);
+  backup_.clear();
+  volatile_ = false;
+  Logger::GetInstance().Log("[StageProgress] volatile mode end (restored)");
+}
+
 void StageProgress::Save_() const {
+  if (volatile_) return; // 仮の状態(展示)の間は、保存ファイルを書き込まない
   const std::filesystem::path path = GetSavePath();
   try {
     nlohmann::json stages = nlohmann::json::object();

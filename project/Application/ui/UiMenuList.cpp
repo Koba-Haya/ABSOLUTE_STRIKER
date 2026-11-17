@@ -60,6 +60,13 @@ void UiMenuList::Initialize(BitmapFont *font) {
 void UiMenuList::SetItems(std::vector<Item> items) {
   items_ = std::move(items);
   cursor_ = 0;
+  // 先頭がロック中なら、最初のロックでない項目から始める(ロック中の項目には、カーソルを乗せない)
+  for (int i = 0; i < GetItemCount(); ++i) {
+    if (!items_[i].locked) {
+      cursor_ = i;
+      break;
+    }
+  }
   lastMoveTime_ = std::chrono::steady_clock::now();
 }
 
@@ -108,7 +115,8 @@ UiMenuList::Event UiMenuList::UpdatePointer_(const UiPointer::State &pointer) {
       break;
     }
   }
-  if (hovered < 0) return Event::None;
+  // ロック中の項目は、選べない(マウスが乗っても、選択は移らず、クリックにも反応しない)
+  if (hovered < 0 || items_[hovered].locked) return Event::None;
 
   // マウスが動いた(または、クリックした)ときだけ、選択を移す。止まったままのマウスが、キーボードの選択を上書きしないため
   bool changed = false;
@@ -147,8 +155,16 @@ UiMenuList::Event UiMenuList::Apply(UiMenuInput::Command command) {
 
 void UiMenuList::MoveCursor_(int step) {
   const int count = GetItemCount();
-  // 負の移動でも 0 未満にならないよう、count を足してから余りを取る
-  cursor_ = (cursor_ + step % count + count) % count;
+  // ロック中の項目には、カーソルを乗せない。step の向きに 1 つずつ進めて、ロックでない項目を探す(端を越えたら反対側へ回り込む)。
+  // 負の移動でも 0 未満にならないよう、count を足してから余りを取る。1 周しても見つからなければ(全部ロック)、動かさない
+  int next = cursor_;
+  for (int i = 0; i < count; ++i) {
+    next = (next + step % count + count) % count;
+    if (!items_[next].locked) {
+      cursor_ = next;
+      break;
+    }
+  }
   lastMoveTime_ = std::chrono::steady_clock::now();
 }
 

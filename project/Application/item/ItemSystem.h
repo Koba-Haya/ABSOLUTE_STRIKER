@@ -10,6 +10,7 @@ namespace AbsoluteEngine {
 class GameObject;
 }
 struct ItemDefinition;
+enum class ItemEffectKind;
 
 // アイテムの仕組み全体の窓口。GameScene は、このクラスの関数だけを呼ぶ。
 //   BeginStage: ステージの開始(自機が決まった後)に 1 回
@@ -32,6 +33,10 @@ public:
 
   // 開発用: そのアイテムを、取ったことにする(落とさずに、効果と知らせだけを出す)。強化の効き目を、すぐ確かめるために使う
   void DebugGrant(const ItemDefinition &item) { OnCollected_(item); }
+
+  // 展示用: 強化 kind を count 個、取ったことにする(知らせの文字は出さず、効果を自機へ反映する)。上限を超える分は、取れない。
+  // BeginStage のあとに呼ぶ(ステージの開始で、今回取った分は 0 に戻るため)
+  void GrantEarned(ItemEffectKind kind, int count);
 
   // 敵 enemyName(オブジェクトの名前 = プレハブ名)が position で倒れた。抽選して、当たればアイテムを置く
   void OnEnemyDestroyed(BaseScene &scene, const std::string &enemyName, const Vector3 &position);

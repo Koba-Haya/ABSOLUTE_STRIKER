@@ -139,7 +139,7 @@ private:
   void CheckDebugReviveShortcut_();
   // 自機に致命傷を与える(デバッグのショートカットと、展示の自動死亡が使う。本物の死亡処理と同じ経路を通る)
   void KillPlayer_();
-  // 展示: 覆いが晴れたらすぐ、クリア / ゲームオーバーを交互に要求する(操作は受け付けない)
+  // 展示: スタート演出のあと、道中を飛ばしてボス戦へ入り、ボスをすぐ倒す(以降の撃破演出とクリア画面への遷移は、本番と同じ。操作は受け付けない)
   void UpdateExhibitionFlow_(float deltaTime);
   // スタート演出のデモ: 演出が終わってから一定時間後に、タイトルへ戻る遷移を要求する(操作は受け付けない)
   void UpdateStageStartDemoFlow_(float deltaTime);
@@ -147,9 +147,11 @@ private:
   void CheckDebugFlowShortcut_();
   // 開発用: 道中を飛ばして、ボス戦へ入るショートカット(撃破演出の確認や録画のため)
   void CheckSkipToBossShortcut_();
+  // 道中を飛ばして、ボス戦へ入る(開発用のキー 8 と、展示モードの自動進行が使う)
+  void SkipToBoss_();
   // 開発用: ボス戦の最中に、ボスを一撃で倒すショートカット(撃破演出の確認や録画のため)
   void CheckKillBossShortcut_();
-  // 開発用: 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckDebugFlowShortcut_ と CheckKillBossShortcut_ が使う)
+  // 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckDebugFlowShortcut_ と CheckKillBossShortcut_ と、展示の自動進行が使う)
   void KillBossForDebug_();
   void UpdateHud_();
   // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
@@ -192,7 +194,8 @@ private:
   bool isDebugCamera_ = false;
   bool showDebugRail_ = false;
   bool showDebugGrid_ = false; // 地面のグリッド線(デバッグ用)
-  float exhibitionHoldTimer_ = 0.0f; // 展示: 通常の更新に入ってからの経過(秒)
+  float exhibitionHoldTimer_ = 0.0f; // 展示: スタート演出が終わってからの経過(秒。ボス戦へ飛ぶと、0 から数え直す)
+  bool exhibitionBossKilled_ = false; // 展示: ボスを倒す指示を出したか(1 回だけ)
   float stageStartDemoTimer_ = 0.0f; // スタート演出のデモ: 演出が終わってからの経過(秒)
   bool stageStartDemoReturnRequested_ = false; // スタート演出のデモ: タイトルへの遷移を要求済みなら true
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示

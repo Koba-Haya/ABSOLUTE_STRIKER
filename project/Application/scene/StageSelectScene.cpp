@@ -2,6 +2,7 @@
 #include "ExhibitionMode.h"
 #include "SceneIds.h"
 #include "../ScreenSize.h"
+#include "../exhibition/ExhibitionHint.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageLaunchParams.h"
 #include "../stage/StageProgress.h"
@@ -150,7 +151,7 @@ void StageSelectScene::ApplyBackdrop_(const StageDefinition &stage) {
 
 void StageSelectScene::Update() {
   backdrop_.Update(kFrameDeltaSeconds);
-  if (ExhibitionMode::kEnabled) {
+  if (ExhibitionMode::IsEnabled()) {
     UpdateExhibition_();
   } else {
     UpdateInput_();
@@ -203,6 +204,7 @@ void StageSelectScene::Draw() {
     // 一覧(選択、点滅、ロック表示は UiMenuList が担当する)
     menu_.Draw(listPanel_.GetBodyOrigin(), listPanel_.GetBodySize().x, listAlpha);
   }
+  ExhibitionHint::GetInstance().Draw();
 
   // 操作の案内: 画面の下端の中央。一覧と一緒に現れる
   if (listAlpha > 0.0f) {
@@ -228,8 +230,17 @@ void StageSelectScene::UpdateUnlockAnimation_() {
 void StageSelectScene::UpdateExhibition_() {
   // 遷移の覆いが晴れてから数える(覆われている間に、決定してしまわないため)
   if (IsSceneTransitioning()) return;
+  // 鍵が外れる演出の最中は待つ(最後まで見せるため。演出が終わると、unlockStageId_ が空になる)
+  if (!unlockStageId_.empty()) return;
   exhibitionHoldTimer_ += kFrameDeltaSeconds;
-  if (exhibitionHoldTimer_ >= ExhibitionMode::kStageSelectHoldSec) {
+  if (exhibitionHoldTimer_ < ExhibitionMode::kStageSelectHoldSec) return;
+  exhibitionHoldTimer_ = 0.0f;
+
+  // 1 回目: カーソルを、先頭のステージ(展示で遊ぶステージ)へ戻す。2 回目: そのステージで決定する
+  if (!exhibitionCursorReturned_) {
+    menu_.SetCursor(0);
+    exhibitionCursorReturned_ = true;
+  } else {
     DecideCursorStage_();
   }
 }

@@ -315,6 +315,35 @@ void InheritancePicker::UpdatePointer_(const UiPointer::State &pointer) {
   }
 }
 
+void InheritancePicker::BeginAutoPlay(float stepSeconds, int maxPicksPerRow) {
+  autoPlay_ = true;
+  autoStepSeconds_ = stepSeconds;
+  autoMaxPicksPerRow_ = maxPicksPerRow;
+  autoTimer_ = 0.0f;
+}
+
+void InheritancePicker::UpdateAutoPlay(float deltaTime) {
+  // パネルが開いて、操作できる状態になってから数える
+  if (!autoPlay_ || !active_ || done_ || !listPanel_.IsOpened()) return;
+  autoTimer_ += deltaTime;
+  if (autoTimer_ < autoStepSeconds_) return;
+  autoTimer_ = 0.0f;
+
+  // 人が操作するのと同じ関数を通す(画面の動きが、本物の操作と同じになる)
+  if (cursor_ >= static_cast<int>(candidates_.size())) {
+    Decide_(); // 最後の行: 確定する
+    return;
+  }
+  Candidate &candidate = candidates_[static_cast<size_t>(cursor_)];
+  const int target = (std::min)(candidate.earned, autoMaxPicksPerRow_);
+  if (candidate.picked < target && UsedSlots_() < slots_) {
+    ChangePicked_(candidate, 1); // 個数を 1 つ増やす
+  } else {
+    cursor_ = cursor_ + 1; // 次の行へ(最後の候補の次は、確定の行)
+    moveTime_ = std::chrono::steady_clock::now();
+  }
+}
+
 void InheritancePicker::Draw() {
   if (!active_) return;
   listPanel_.Draw();

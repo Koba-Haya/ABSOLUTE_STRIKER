@@ -1,5 +1,6 @@
 #include "GameOverScene.h"
 #include "ExhibitionMode.h"
+#include "../exhibition/ExhibitionHint.h"
 #include "GameOverAshDebugUi.h"
 #include <algorithm>
 #include "Input.h"
@@ -63,18 +64,18 @@ void GameOverScene::Update() {
   // 見出しは、雲が薄くなって見通しが開くのに合わせて現れる
   banner_.SetRevealProgress(revealProgress);
   // 結果メニューは、見通しがほぼ開いたら、1 回だけ現れ始める(展示中は操作を受け付けないので出さない)
-  if (!ExhibitionMode::kEnabled && !menu_.IsOpen() && revealProgress >= kMenuOpenRevealProgress) {
+  if (!ExhibitionMode::IsEnabled() && !menu_.IsOpen() && revealProgress >= kMenuOpenRevealProgress) {
     menu_.Open();
   }
 
-  if (ExhibitionMode::kEnabled) {
+  if (ExhibitionMode::IsEnabled()) {
     UpdateExhibition_();
   } else {
     UpdateInput_();
   }
 
 #ifdef USE_IMGUI
-  if (!ExhibitionMode::kEnabled) {
+  if (!ExhibitionMode::IsEnabled()) {
     DrawDebugWindow_();
     backdrop_.DrawDebugUi();
     if (rebirth_.DrawDebugUi()) {
@@ -226,5 +227,6 @@ void GameOverScene::Draw() {
   banner_.Draw();
   // 結果メニュー(展示中は、現れ始めないので何も描かない)
   menu_.Draw();
+  ExhibitionHint::GetInstance().Draw();
   backdrop_.End();
 }

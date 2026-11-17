@@ -13,6 +13,7 @@
 
 #include "SceneIds.h"
 #include "ExhibitionMode.h"
+#include "../exhibition/ExhibitionHint.h"
 #include "ParticleManager.h"
 #include "ModelResource.h"
 #include "GameAssetPreloader.h"
@@ -357,7 +358,7 @@ void TitleScene::Update() {
 
   EmitContrails(state.playerWorld);
 
-  if (ExhibitionMode::kEnabled) {
+  if (ExhibitionMode::IsEnabled()) {
     // 展示: 操作を受け付けず、一定時間たったら自動でスタート演出を始める
     if (!startRequested_ && time_ >= ExhibitionMode::kTitleWaitSec) {
       RequestStart();
@@ -429,6 +430,9 @@ void TitleScene::Draw() {
   if (flashAlpha_ > 0.0f) {
     renderer->DrawEffectModel(&flashModel_);
   }
+
+  // 展示モードの切り替えの案内(2D。EndRenderScene の前に描く)
+  ExhibitionHint::GetInstance().Draw();
 
   renderer->EndRenderScene(Inverse(GetMainCamera()->GetProjectionMatrix()));
 }

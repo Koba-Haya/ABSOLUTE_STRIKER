@@ -45,6 +45,15 @@ public:
   // 戻り値: 更新する前のベスト記録と、何を更新したか(結果画面が「ベスト更新」を出すために使う)
   BestUpdate RecordRun(const std::string &stageId, const RunResult &result);
 
+  // 進行をすべて消す(ロック、演出の印、ベスト記録を、最初の状態へ戻す)。仮の状態の間は、保存しない
+  void Reset();
+
+  // 仮の状態に入る(展示モード用)。いまの進行を退避して、空の進行から始める。仮の状態の間は、保存ファイルを書き込まない。
+  // すでに仮の状態のときは、何もしない
+  void BeginVolatile();
+  // 仮の状態を終えて、退避した進行へ戻す(保存ファイルは、そのまま)。仮の状態でないときは、何もしない
+  void EndVolatile();
+
 private:
   StageProgress();
   void Load_();
@@ -57,4 +66,6 @@ private:
     BestRecord best; // ベスト記録(クリアしたあと)
   };
   std::map<std::string, Entry> entries_;
+  bool volatile_ = false;                   // 仮の状態か(true の間は、保存しない)
+  std::map<std::string, Entry> backup_;     // 仮の状態に入る前の進行(EndVolatile で戻す)
 };

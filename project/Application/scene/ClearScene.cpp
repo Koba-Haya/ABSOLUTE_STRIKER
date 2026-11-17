@@ -5,6 +5,7 @@
 #include "SceneManager.h"
 #include "ui/UiMenuInput.h"
 #include "ui/UiPointer.h"
+#include "../exhibition/ExhibitionHint.h"
 #include "../ScreenSize.h"
 #include "Logger.h"
 #include "../stage/StageLaunchParams.h"
@@ -88,8 +89,8 @@ void ClearScene::Initialize(const SceneServices &services) {
     tally_.Begin(*params->result, bestUpdate, kTallyDelaySec);
   }
   // メニューは、結果の集計があるときは、集計が終わってから開く(Update で)。無いときは、従来どおり、最初から待ちつきで開く。
-  // 展示中は操作を受け付けないので、メニューは出さない
-  if (!ExhibitionMode::kEnabled && !hasResult) {
+  // 展示中は、継承が決まってから(結果があるとき)開く。結果が無いときの、最初からの待ちつきの表示は、通常のときだけ
+  if (!ExhibitionMode::IsEnabled() && !hasResult) {
     menu_.Open(kMenuOpenDelaySec);
     menuOpened_ = true;
   }
@@ -107,8 +108,10 @@ void ClearScene::Update() {
   // 決定ボタンは、1 フレームに 1 回だけ読む(遷移の最中は受け付けない)。押した瞬間だけ反応するので、
   // 集計を飛ばした同じ押下で、継承へ進んでしまうことはない(下で、飛ばした押下は使い切ったものとして扱う)
   // マウスの左クリックも、決定と同じに扱う(メニューを、マウスでも操作できるようにするため)
+  // 展示中は、操作を受け付けない(来た人が押したキーやクリックで、自動の進行が乱れないように)
+  const bool exhibition = ExhibitionMode::IsEnabled();
   const UiPointer::State pointer = UiPointer::Poll(GetInput());
-  const bool decidePressed = !IsSceneTransitioning() &&
+  const bool decidePressed = !exhibition && !IsSceneTransitioning() &&
                              (UiMenuInput::Poll(GetInput()) == UiMenuInput::Command::Decide || (pointer.valid && pointer.leftClicked));
   bool decideConsumed = false;
   // 結果の集計の最中に決定ボタンが押されたら、集計を飛ばす
@@ -116,12 +119,20 @@ void ClearScene::Update() {
     tally_.Skip();
     decideConsumed = true;
   }
-  // 集計が終わったら、継承の段階へ進む(展示中は、継承を扱わない。保存を変えないため)。
+  // 集計が終わったら、継承の段階へ進む。
   // 今回取った強化が無ければ、選ぶものが無いので、すぐ確定へ進む。
-  // 強化があれば、案内を出して、決定ボタンを待つ(結果と評価を、ゆっくり見せるため)。押されたら、継承の選択を始め、集計を薄く消す
-  if (hasResult_ && tally_.IsFinished() && !inheritanceStarted_ && !ExhibitionMode::kEnabled) {
+  // 強化があれば、案内を出して、決定ボタンを待つ(結果と評価を、ゆっくり見せるため)。押されたら、継承の選択を始め、集計を薄く消す。
+  // 展示中は、一定時間待ってから、自動操作で継承の選択を始める(仮の状態なので、保存されない)
+  if (hasResult_ && tally_.IsFinished() && !inheritanceStarted_) {
     if (!InheritancePicker::HasCandidates()) {
       inheritanceStarted_ = true;
+    } else if (exhibition) {
+      exhibitionTallyTimer_ += kFrameDeltaSeconds;
+      if (exhibitionTallyTimer_ >= ExhibitionMode::kTallyHoldSec) {
+        inheritanceStarted_ = true;
+        picker_.Begin(resultRank_, kTallyFadeSeconds);
+        picker_.BeginAutoPlay(ExhibitionMode::kPickStepSec, ExhibitionMode::kPickMaxPerRow);
+      }
     } else {
       continuePrompt_.Show(kContinuePromptText);
       if (decidePressed && !decideConsumed) {
@@ -136,8 +147,9 @@ void ClearScene::Update() {
     tallyFadeSeconds_ += kFrameDeltaSeconds;
     tally_.SetOpacityScale((std::max)(0.0f, 1.0f - tallyFadeSeconds_ / kTallyFadeSeconds));
   }
-  // 継承の選択の入力
-  picker_.Update(GetInput(), !IsSceneTransitioning());
+  // 継承の選択の入力(展示中は、入力を読まず、自動操作を進める)
+  picker_.UpdateAutoPlay(kFrameDeltaSeconds);
+  picker_.Update(exhibition ? nullptr : GetInput(), !IsSceneTransitioning());
   // 継承を確定して(1 回だけ)、メニューを開く。選ぶものが無いとき(picker_ が動いていないとき)は、選ばずに確定する(世代だけ進む)
   if (inheritanceStarted_ && !inheritanceCommitted_ && (!picker_.IsActive() || picker_.IsDone())) {
     inheritanceCommitted_ = true;
@@ -148,14 +160,14 @@ void ClearScene::Update() {
     menuOpened_ = true;
   }
 
-  if (ExhibitionMode::kEnabled) {
-    // 展示: 操作を受け付けず、遷移の覆いが晴れてから(結果の集計があるときは、集計が終わってから)一定時間たったらタイトルへ戻る
-    const bool isTransitioning = IsSceneTransitioning();
-    const bool tallyDone = !tally_.IsActive() || tally_.IsFinished();
-    if (!isTransitioning && tallyDone) {
+  if (exhibition) {
+    // 展示: 操作を受け付けず、継承が決まって(結果が無いときは、集計が終わって)から一定時間たったら、ステージ選択へ進む
+    // (ステージ選択で、解放された次のステージの鍵が外れる演出を見せる)
+    const bool settled = hasResult_ ? inheritanceCommitted_ : (!tally_.IsActive() || tally_.IsFinished());
+    if (!IsSceneTransitioning() && settled) {
       exhibitionHoldTimer_ += kFrameDeltaSeconds;
       if (exhibitionHoldTimer_ >= ExhibitionMode::kResultHoldSec) {
-        RequestSceneChange(SceneId::Title);
+        RequestSceneChangeKeepingPayload(SceneId::StageSelect);
       }
     }
   } else {
@@ -212,5 +224,6 @@ void ClearScene::Draw() {
   continuePrompt_.Draw();
   picker_.Draw();
   menu_.Draw();
+  ExhibitionHint::GetInstance().Draw();
   backdrop_.End();
 }

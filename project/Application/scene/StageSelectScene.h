@@ -44,7 +44,8 @@ private:
   // カーソルのステージを決定する。解放済みなら、荷物をつけてゲームへ切り替える。ロック中なら何もしない
   void DecideCursorStage_();
 
-  float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れてからの経過(秒)
+  float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れて(鍵の演出が終わって)からの経過(秒)
+  bool exhibitionCursorReturned_ = false; // 展示: カーソルを先頭のステージへ戻したか
   ResultBackdrop backdrop_; // 背景の空(遷移の覆いが描画を通るようにもする)
   BitmapFont font_;         // UI の文字(日本語可)
   StageCard card_;          // 中央のカード(選んだステージの紹介)

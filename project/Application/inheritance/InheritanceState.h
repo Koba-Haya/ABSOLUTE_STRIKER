@@ -36,8 +36,14 @@ public:
   // 世代数を 1 進めて、保存する。picks が空でも、世代は進む
   void Commit(const std::vector<Pick> &picks, float rarity, const ItemUpgradeSettings &settings);
 
-  // 継承と世代数を、すべて消して(最初の状態へ戻して)保存する(「はじめから」)
+  // 継承と世代数を、すべて消して(最初の状態へ戻して)保存する(「はじめから」)。仮の状態の間は、保存しない
   void Reset();
+
+  // 仮の状態に入る(展示モード用)。いまの継承と世代数を退避して、最初の状態から始める。仮の状態の間は、保存ファイルを書き込まない。
+  // すでに仮の状態のときは、何もしない
+  void BeginVolatile();
+  // 仮の状態を終えて、退避した継承と世代数へ戻す(保存ファイルは、そのまま)。仮の状態でないときは、何もしない
+  void EndVolatile();
 
 private:
   InheritanceState();
@@ -47,4 +53,7 @@ private:
 
   int generation_ = 0;
   std::array<float, kItemEffectKindCount> inherited_{};
+  bool volatile_ = false;                                 // 仮の状態か(true の間は、保存しない)
+  int backupGeneration_ = 0;                              // 仮の状態に入る前の世代数
+  std::array<float, kItemEffectKindCount> backupInherited_{}; // 仮の状態に入る前の継承
 };

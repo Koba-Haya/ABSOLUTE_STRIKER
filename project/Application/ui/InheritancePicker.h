@@ -64,6 +64,16 @@ public:
   /// <summary>1 フレームの入力を読んで、選択を動かす / 決定する。acceptInput が false の間(遷移中など)は読まない</summary>
   void Update(const Input *input, bool acceptInput);
 
+  /// <summary>
+  /// 自動操作を始める(展示モード用。Begin のあとに呼ぶ)。パネルが開いてから、stepSeconds ごとに 1 回、人が操作するのと同じ動き
+  /// (個数を増やす、行を下へ動かす、確定する)を行う。上から順に、枠が尽きるまで、1 つの行で maxPicksPerRow 個まで選び、最後に確定する。
+  /// 入力を読む Update は、この間、input に nullptr を渡す(来た人の操作が、混ざらないように)
+  /// </summary>
+  void BeginAutoPlay(float stepSeconds, int maxPicksPerRow);
+
+  /// <summary>自動操作を進める(自動操作が有効なときだけ。deltaTime は 1 フレームの長さ(秒))</summary>
+  void UpdateAutoPlay(float deltaTime);
+
   /// <summary>選択を描く。シーンの 3D の描画の最中(雲の合成のあと)に呼ぶ</summary>
   void Draw();
 
@@ -119,6 +129,11 @@ private:
   bool done_ = false;
   float top_ = 0.0f;
   float bottom_ = 0.0f;
+  // 自動操作(展示モード用)
+  bool autoPlay_ = false;
+  float autoStepSeconds_ = 1.0f; // 1 回動かす間隔
+  int autoMaxPicksPerRow_ = 1;   // 1 つの行で選ぶ個数の上限
+  float autoTimer_ = 0.0f;       // 前に動かしてからの経過(秒)
   std::chrono::steady_clock::time_point moveTime_;    // 選択の行を最後に動かした時刻(点滅の基準)
   std::chrono::steady_clock::time_point messageTime_; // 「枠がいっぱいです」を出した時刻
   bool hasMessage_ = false;

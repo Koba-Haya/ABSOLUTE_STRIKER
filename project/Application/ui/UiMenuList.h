@@ -25,7 +25,7 @@ public:
   /// 1 つの項目
   struct Item {
     std::string label;   // 画面に出す文字(UTF-8)
-    bool locked = false; // true なら選べるが決定できない(ロック表示になる)
+    bool locked = false; // true なら、ロック表示になり、キーとマウスの操作ではカーソルが乗らない(SetCursor だけは、演出のために乗せられる)
   };
 
   /// Update / Apply が返す、このフレームの出来事

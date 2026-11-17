@@ -3,6 +3,8 @@
 
 #include "AbsoluteEngine/base/EnginePath.h"
 #include "Logger.h"
+#include "exhibition/ExhibitionController.h"
+#include "exhibition/ExhibitionHint.h"
 #include "scene/GameAssetPreloader.h"
 #include "Renderer.h"
 #include "SceneFactory.h"
@@ -48,6 +50,8 @@ void GameApp::Initialize() {
   sceneManager_->SetFactory(std::make_unique<SceneFactory>());
   // シーンの組み合わせごとの画面遷移の表(アプリ側が持つ)
   sceneManager_->SetTransitionResolver(&SceneTransitionTable::Resolve);
+  // 展示モードの切り替えの案内(全シーン共通)。文字の資源を、ここで 1 回だけ読む
+  ExhibitionHint::GetInstance().Initialize();
   sceneManager_->Start(SceneId::Title);
 }
 
@@ -257,6 +261,9 @@ void GameApp::Update() {
     sceneManager_->DrawEditorUI();
   }
 #endif
+
+  // 展示モードの切り替え(TAB)。シーンの更新より前に見る(切り替えの遷移の要求を、そのフレームから有効にするため)
+  ExhibitionController::Update(GetInput(), *sceneManager_);
 
   sceneManager_->Update();
   sceneManager_->ApplySceneChangeIfNeeded();

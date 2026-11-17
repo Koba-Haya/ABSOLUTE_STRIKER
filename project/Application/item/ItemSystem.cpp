@@ -31,6 +31,18 @@ void ItemSystem::BeginStage(const std::shared_ptr<AbsoluteEngine::GameObject> &p
   }
 }
 
+void ItemSystem::GrantEarned(ItemEffectKind kind, int count) {
+  const ItemUpgradeSettings &settings = ItemCatalog::GetInstance().GetUpgradeSettings();
+  PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
+  state.AddEarned(kind, count, settings.Get(kind).maxStacks);
+  // 自機へ反映する(最大 HP などの効果が、すぐ出る)
+  if (const auto player = player_.lock()) {
+    if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
+      ItemEffectApplier::SyncToPlayer(state, settings, *playerComp);
+    }
+  }
+}
+
 void ItemSystem::OnEnemyDestroyed(BaseScene &scene, const std::string &enemyName, const Vector3 &position) {
   const ItemCatalog &catalog = ItemCatalog::GetInstance();
   const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();

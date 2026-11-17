@@ -96,7 +96,7 @@
         del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
-        set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+        set SDK_BIN="$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64"
         set OUTDIR="$(OutDir)"
         copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
         copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
@@ -134,7 +134,7 @@
         del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
-        set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+        set SDK_BIN="$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64"
         set OUTDIR="$(OutDir)"
         copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
         copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
@@ -173,7 +173,7 @@
         del /Q "$(OutDir)resources\engine\AssetManager.cpp" "$(OutDir)resources\engine\AssetManager.h" 2>nul
         xcopy "resources" "$(OutDir)resources\app" /E /I /Y /D
 
-        set SDK_BIN="C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64"
+        set SDK_BIN="$(WindowsSdkDir)bin\$(TargetPlatformVersion)\x64"
         set OUTDIR="$(OutDir)"
         copy /Y %SDK_BIN%\dxcompiler.dll %OUTDIR%
         copy /Y %SDK_BIN%\dxil.dll %OUTDIR%
@@ -254,6 +254,9 @@
     <ClCompile Include="ui\ResultMenu.cpp" />
     <ClCompile Include="ui\ResultTally.cpp" />
     <ClCompile Include="ui\InheritancePicker.cpp" />
+    <ClCompile Include="exhibition\ExhibitionController.cpp" />
+    <ClCompile Include="exhibition\ExhibitionHint.cpp" />
+    <ClCompile Include="exhibition\ExhibitionResultMaker.cpp" />
     <ClCompile Include="ui\UiContinuePrompt.cpp" />
     <ClCompile Include="ui\UiPipBar.cpp" />
     <ClCompile Include="ui\UiPointer.cpp" />
@@ -384,6 +387,9 @@
     <ClInclude Include="ui\ResultMenu.h" />
     <ClInclude Include="ui\ResultTally.h" />
     <ClInclude Include="ui\InheritancePicker.h" />
+    <ClInclude Include="exhibition\ExhibitionController.h" />
+    <ClInclude Include="exhibition\ExhibitionHint.h" />
+    <ClInclude Include="exhibition\ExhibitionResultMaker.h" />
     <ClInclude Include="ui\UiContinuePrompt.h" />
     <ClInclude Include="ui\UiPipBar.h" />
     <ClInclude Include="ui\UiPointer.h" />

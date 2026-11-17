@@ -69,6 +69,7 @@ void InheritanceState::Load_() {
 }
 
 void InheritanceState::Save_() const {
+  if (volatile_) return; // 仮の状態(展示)の間は、保存ファイルを書き込まない
   const std::filesystem::path path = GetSavePath();
   try {
     nlohmann::json stacks = nlohmann::json::object();
@@ -109,6 +110,24 @@ void InheritanceState::Commit(const std::vector<Pick> &picks, float rarity, cons
 void InheritanceState::Reset() {
   generation_ = 0;
   inherited_.fill(0.0f);
-  Save_();
-  Logger::GetInstance().Log("[Inheritance] reset");
+  Save_(); // 仮の状態の間は、Save_ が何もしない
+  Logger::GetInstance().Log("[Inheritance] reset%s", volatile_ ? " (volatile)" : "");
+}
+
+void InheritanceState::BeginVolatile() {
+  if (volatile_) return;
+  backupGeneration_ = generation_;
+  backupInherited_ = inherited_;
+  generation_ = 0;
+  inherited_.fill(0.0f);
+  volatile_ = true;
+  Logger::GetInstance().Log("[Inheritance] volatile mode begin (the save file is not written)");
+}
+
+void InheritanceState::EndVolatile() {
+  if (!volatile_) return;
+  generation_ = backupGeneration_;
+  inherited_ = backupInherited_;
+  volatile_ = false;
+  Logger::GetInstance().Log("[Inheritance] volatile mode end (restored)");
 }
