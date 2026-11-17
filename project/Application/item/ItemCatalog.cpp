@@ -22,10 +22,20 @@ constexpr const char *kKeyAmount = "amount";
 constexpr const char *kKeyModel = "model";
 constexpr const char *kKeyTexture = "texture";
 constexpr const char *kKeyScale = "scale";
+constexpr const char *kKeyName = "name";
+constexpr const char *kKeyColor = "color";
+constexpr const char *kKeyEffects = "effects";
+constexpr const char *kKeyPerStack = "perStack";
+constexpr const char *kKeyMaxStacks = "maxStacks";
 
 // 効果の名前(items.json の "effect")と、コード側の ItemEffectKind の対応表。効果を増やすときは、ここに足す
 constexpr std::pair<const char *, ItemEffectKind> kEffectNames[] = {
     {"lockOnMax", ItemEffectKind::LockOnMax},
+    {"maxHp", ItemEffectKind::MaxHp},
+    {"lockRadius", ItemEffectKind::LockRadius},
+    {"dodgeCooldown", ItemEffectKind::DodgeCooldown},
+    {"fireRate", ItemEffectKind::FireRate},
+    {"pullRadius", ItemEffectKind::PullRadius},
 };
 
 [[noreturn]] void FailInvalid(const std::string &resolvedPath, const std::string &reason) {
@@ -116,8 +126,20 @@ void ItemCatalog::Load_() {
 
   // 強化の設定
   if (const auto it = root.find(kKeyUpgrade); it != root.end() && it->is_object()) {
-    ReadNumber(*it, "lockOnMaxCap", upgrade_.lockOnMaxCap, pathText);
     upgrade_.carryOverBetweenStages = it->value("carryOverBetweenStages", upgrade_.carryOverBetweenStages);
+    // 種類ごとの効き方(省略した種類は、ItemUpgradeSettings の既定値のまま)
+    if (const auto effectsIt = it->find(kKeyEffects); effectsIt != it->end() && effectsIt->is_object()) {
+      for (const auto &entry : kEffectNames) {
+        const auto specIt = effectsIt->find(entry.first);
+        if (specIt == effectsIt->end() || !specIt->is_object()) continue;
+        ItemEffectSpec &spec = upgrade_.effects[static_cast<size_t>(entry.second)];
+        ReadNumber(*specIt, kKeyPerStack, spec.perStack, pathText);
+        ReadNumber(*specIt, kKeyMaxStacks, spec.maxStacks, pathText);
+        if (spec.perStack <= 0.0f || spec.maxStacks < 0) {
+          FailInvalid(pathText, std::string("upgrade.effects.") + entry.first + " needs perStack > 0 and maxStacks >= 0");
+        }
+      }
+    }
   }
 
   // アイテムの定義
@@ -141,6 +163,15 @@ void ItemCatalog::Load_() {
     def.texturePath = ReadRequiredString(entry, kKeyTexture, i, pathText);
     def.amount = entry.value(kKeyAmount, def.amount);
     def.scale = entry.value(kKeyScale, def.scale);
+    def.name = entry.value(kKeyName, def.id); // 省略したら id を、画面の文字にする
+    // 色は、[r, g, b](省略したら白)
+    if (const auto colorIt = entry.find(kKeyColor); colorIt != entry.end()) {
+      if (!colorIt->is_array() || colorIt->size() != 3 || !(*colorIt)[0].is_number() || !(*colorIt)[1].is_number() ||
+          !(*colorIt)[2].is_number()) {
+        FailInvalid(pathText, "items[" + std::to_string(i) + "].color must be [r, g, b]");
+      }
+      def.color = {(*colorIt)[0].get<float>(), (*colorIt)[1].get<float>(), (*colorIt)[2].get<float>()};
+    }
     if (!usedIds.insert(def.id).second) {
       FailInvalid(pathText, "duplicate item id: " + def.id);
     }

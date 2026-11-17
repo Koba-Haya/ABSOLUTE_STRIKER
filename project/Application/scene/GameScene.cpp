@@ -41,6 +41,8 @@
 #include "../stage/StageCatalog.h"
 #include "../stage/StageProgress.h"
 #include "../result/RatingCatalog.h"
+#include "../item/ItemCatalog.h"
+#include "../item/PlayerUpgradeState.h"
 #include "../result/RunEvaluator.h"
 #include "../stage/StageLaunchParams.h"
 #include "../ScreenSize.h"
@@ -1387,9 +1389,10 @@ void GameScene::UpdateHud_() {
     status.hpRatio = 0.0f;
   }
   // ロックオンの表示に出す値(輪の半径は、判定と同じ定数)。捕まえている敵の画面座標は、HUD の更新にも使うので 1 回だけ求める
-  status.lockRadius = LockOnSystem::kLockRadiusPixels;
+  status.lockRadius = LockOnSystem::kDefaultLockRadiusPixels;
   if (pComp) {
     const LockOnSystem &lockOn = pComp->GetLockOn();
+    status.lockRadius = lockOn.GetLockRadius(); // 強化で広がった値
     status.lockingMode = lockOn.IsLockingMode();
     status.cursorPos = pComp->GetCursorPos();
     status.lockedPositions = lockOn.GetLockedScreenPositions(GetMainCamera());
@@ -1497,6 +1500,9 @@ void GameScene::Update() {
       // 世界の時間の速さに合わせる(ヒットストップで止まり、スローモーションで遅くなる)
       const float worldDeltaTime = deltaTime * GetWorldTimeScale();
       ParticleManager::GetInstance()->Update(worldDeltaTime);
+
+      // 強化を取ったことを知らせる文字を動かす
+      itemSystem_.Update(deltaTime);
 
       // リザルトの評価のための計測(時間、被ダメージ、同時ロック数)。数えるのは、通常の進行とボス戦の間だけ
       if (playerObj_) {
@@ -1768,6 +1774,7 @@ void GameScene::Draw() {
       renderer->FlushVolumeClouds();
       gameHUD_->Draw();
       hudStatus_.Draw();
+      itemSystem_.Draw();
   }
 
   Matrix4x4 projInverse;
@@ -1903,6 +1910,16 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
 
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
+    // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
+    for (const ItemDefinition& def : ItemCatalog::GetInstance().GetItems()) {
+        const int stacks = PlayerUpgradeState::Persistent().GetStacks(def.effect);
+        const int maxStacks = ItemCatalog::GetInstance().GetUpgradeSettings().Get(def.effect).maxStacks;
+        ImGui::Text("Upgrade %s: %d / %d", def.id.c_str(), stacks, maxStacks);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(("Grant##" + def.id).c_str())) {
+            itemSystem_.DebugGrant(def);
+        }
+    }
     {
         const RunStats& stats = runStats_.GetStats();
         ImGui::Text("Run: spawned %d  killed %d  selfDestruct %d", stats.enemiesSpawned, stats.enemiesKilled, stats.enemiesSelfDestructed);

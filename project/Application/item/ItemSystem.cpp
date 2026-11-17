@@ -10,6 +10,10 @@
 
 void ItemSystem::BeginStage(const std::shared_ptr<AbsoluteEngine::GameObject> &player) {
   player_ = player;
+  if (!toastReady_) {
+    toast_.Initialize(); // 文字の資源の読み込みは、最初の 1 回だけ
+    toastReady_ = true;
+  }
   const ItemUpgradeSettings &settings = ItemCatalog::GetInstance().GetUpgradeSettings();
   PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
   // 持ち越さない設定なら 0 に戻る。持ち越す設定なら、前のステージの値を、ここで自機へ戻す
@@ -40,5 +44,16 @@ void ItemSystem::OnCollected_(const ItemDefinition &item) {
   auto *playerComp = player->GetComponent<PlayerComponent>();
   if (!playerComp) return;
 
-  ItemEffectApplier::Apply(item, PlayerUpgradeState::Persistent(), ItemCatalog::GetInstance().GetUpgradeSettings(), *playerComp);
+  // 効果が実際に出たときだけ、取ったことを知らせる(上限で何も起きなかったときは、出さない)
+  if (ItemEffectApplier::Apply(item, PlayerUpgradeState::Persistent(), ItemCatalog::GetInstance().GetUpgradeSettings(), *playerComp)) {
+    toast_.Show(item.name);
+  }
+}
+
+void ItemSystem::Update(float deltaTime) {
+  toast_.Update(deltaTime);
+}
+
+void ItemSystem::Draw() {
+  toast_.Draw();
 }

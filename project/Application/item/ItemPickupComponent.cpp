@@ -1,3 +1,6 @@
+#include "ItemCatalog.h"
+#include "ItemEffectApplier.h"
+#include "PlayerUpgradeState.h"
 #include "ItemPickupComponent.h"
 
 #include <algorithm>
@@ -104,6 +107,9 @@ void ItemPickupComponent::Update(float deltaTime) {
   if (playerObj && playerComp && !playerComp->IsDying() && playerComp->GetHp() > 0) {
     const Vector3 playerPos = playerObj->GetTransform().translate;
     const float distance = Distance(basePosition_, playerPos);
+    // 吸い寄せ範囲: 基本の値に、強化(吸い寄せ範囲)を足す
+    const float pullRadius = settings_.pullRadius + ItemEffectApplier::GetValue(ItemEffectKind::PullRadius, PlayerUpgradeState::Persistent(),
+                                                                                ItemCatalog::GetInstance().GetUpgradeSettings());
     if (distance <= settings_.pickupRadius) {
       // 取得: 効果は、この瞬間に 1 回だけ出す
       collected_ = true;
@@ -111,9 +117,9 @@ void ItemPickupComponent::Update(float deltaTime) {
       if (onCollected_) {
         onCollected_();
       }
-    } else if (distance <= settings_.pullRadius) {
+    } else if (distance <= pullRadius) {
       // 吸い寄せ: 近いほど速くする(離れ際に追いつけず、取り逃さないように)
-      const float closeness = 1.0f - distance / settings_.pullRadius;
+      const float closeness = 1.0f - distance / pullRadius;
       MoveToward_(playerPos, settings_.pullSpeed * (1.0f + kPullAccelerationBoost * closeness), deltaTime);
     }
   }

@@ -211,6 +211,7 @@
     <ClCompile Include="hud\HudLockOnSlots.cpp" />
     <ClCompile Include="hud\HudLockOnMarkers.cpp" />
     <ClCompile Include="hud\HudStatusView.cpp" />
+    <ClCompile Include="hud\UpgradeToast.cpp" />
     <ClCompile Include="actor\Player\LockOnSystem.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
@@ -326,6 +327,7 @@
     <ClInclude Include="hud\HudLockOnMarkers.h" />
     <ClInclude Include="hud\HudStyle.h" />
     <ClInclude Include="hud\HudStatusView.h" />
+    <ClInclude Include="hud\UpgradeToast.h" />
     <ClInclude Include="actor\Player\LockOnSystem.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />
     <ClInclude Include="ScreenSize.h" />

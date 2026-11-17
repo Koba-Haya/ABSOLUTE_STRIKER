@@ -15,6 +15,9 @@ public:
   // id に対応する定義を返す。無ければ nullptr
   const ItemDefinition *Find(const std::string &itemId) const;
 
+  // すべてのアイテムの定義(JSON に書かれた順。開発用の表示などが使う)
+  const std::vector<ItemDefinition> &GetItems() const { return items_; }
+
   const ItemPickupSettings &GetPickupSettings() const { return pickup_; }
   const ItemUpgradeSettings &GetUpgradeSettings() const { return upgrade_; }
 

@@ -33,6 +33,7 @@ static constexpr float kBankSpeed    = 8.0f;  // バンク補間速度：素早�
 // 回避行動（バレルロール）のパラメータ
 static constexpr float kDodgeDuration     = 0.35f;  // 無敵＋ロール演出の時間（秒）
 static constexpr float kDodgeCooldown     = 0.8f;   // 再発動までのクールダウン（秒）
+static constexpr float kMinDodgeCooldown  = 0.2f;   // 強化で短くしても、これより短くならない（秒）
 static constexpr float kDodgeCursorOffset = 220.0f; // 回避時にカーソルを瞬間移動させる距離（ピクセル）
 static constexpr float kTwoPi             = 6.28318530718f;
 
@@ -41,6 +42,7 @@ static constexpr float kNormalBulletSpeed    = 50.0f;  // 弾速（m/秒）
 static constexpr float kMinAimDistance       = 0.001f; // 照準方向を求められる最小距離
 static constexpr float kNormalBulletRadius   = 0.5f;   // コライダー半径
 static constexpr float kNormalShootInterval  = 0.15f;  // 連射間隔（秒）
+static constexpr float kMinFireIntervalScale = 0.5f;   // 強化で連射を速くしても、間隔の倍率は、これより小さくならない
 
 // ホーミング弾
 static constexpr float kHomingBulletRadius   = 1.0f;   // コライダー半径
@@ -176,7 +178,7 @@ float PlayerComponent::UpdateDodge_(const PlayerInputState& in, const Vector2& m
 
       dodgeRollSign_ = (dodgeDirX < 0.0f) ? -1.0f : 1.0f;
       dodgeTimer_ = kDodgeDuration;
-      dodgeCooldownTimer_ = kDodgeCooldown;
+      dodgeCooldownTimer_ = (std::max)(kMinDodgeCooldown, kDodgeCooldown - dodgeCooldownReduction_);
 
       // 回避エフェクト（発光パーティクル）
       static std::mt19937 dodgeRng(std::random_device{}());
@@ -352,7 +354,7 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
 // 近・中レティクルも必ずこの弾道上に載る。
 void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos) {
   if (shootCooldown_ > 0.0f) return;
-  shootCooldown_ = kNormalShootInterval;
+  shootCooldown_ = kNormalShootInterval * fireIntervalScale_;
 
   Vector3 aimDir = {
       farReticleWorldPos_.x - muzzlePos.x,
@@ -388,6 +390,20 @@ void PlayerComponent::Revive() {
           model->PlayAnimation(PlayerAnimation::kFlap, true);
       }
   }
+}
+
+void PlayerComponent::SetMaxHp(int maxHp) {
+  maxHp = (std::max)(maxHp, 1);
+  // 増えたときは、増えた分だけ HP も回復する(取った強化が、すぐ効いて見える)。減ったときは、最大 HP を超えないようにするだけ
+  if (maxHp > maxHp_) {
+    hp_ += maxHp - maxHp_;
+  }
+  maxHp_ = maxHp;
+  hp_ = (std::min)(hp_, maxHp_);
+}
+
+void PlayerComponent::SetFireIntervalScale(float scale) {
+  fireIntervalScale_ = (std::max)(scale, kMinFireIntervalScale);
 }
 
 void PlayerComponent::TakeDamage(int damage) {

@@ -11,16 +11,69 @@
         "collectScaleUp": 1.4
     },
     "upgrade": {
-        "lockOnMaxCap": 6,
-        "carryOverBetweenStages": false
+        "carryOverBetweenStages": false,
+        "effects": {
+            "lockOnMax":     { "perStack": 1.0,  "maxStacks": 3 },
+            "maxHp":         { "perStack": 1.0,  "maxStacks": 3 },
+            "lockRadius":    { "perStack": 10.0, "maxStacks": 6 },
+            "dodgeCooldown": { "perStack": 0.1,  "maxStacks": 5 },
+            "fireRate":      { "perStack": 0.05, "maxStacks": 5 },
+            "pullRadius":    { "perStack": 2.0,  "maxStacks": 5 }
+        }
     },
     "items": [
         {
             "id": "lockOnPlus",
+            "name": "ロックオン上限 +1",
             "effect": "lockOnMax",
             "amount": 1,
             "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette_black.png",
+            "scale": 1.2
+        },
+        {
+            "id": "maxHpPlus",
+            "name": "最大HP +1",
+            "effect": "maxHp",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette_red.png",
+            "scale": 1.2
+        },
+        {
+            "id": "lockRadiusPlus",
+            "name": "ロックオン範囲 +10",
+            "effect": "lockRadius",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette_green.png",
+            "scale": 1.2
+        },
+        {
+            "id": "dodgePlus",
+            "name": "回避クールダウン -0.1秒",
+            "effect": "dodgeCooldown",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
             "texture": "resources/app/item/item_palette.png",
+            "scale": 1.2
+        },
+        {
+            "id": "firePlus",
+            "name": "連射 +5%",
+            "effect": "fireRate",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette_yellow.png",
+            "scale": 1.2
+        },
+        {
+            "id": "pullPlus",
+            "name": "吸い寄せ範囲 +2",
+            "effect": "pullRadius",
+            "amount": 1,
+            "model": "resources/app/item/item_lockon.gltf",
+            "texture": "resources/app/item/item_palette_pink.png",
             "scale": 1.2
         }
     ]

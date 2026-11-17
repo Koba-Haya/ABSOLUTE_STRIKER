@@ -132,7 +132,7 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             float distSq = dx * dx + dy * dy;
             
             // 範囲の半径(kLockRadiusPixels)以内の場合ロックオン
-            if (distSq <= kLockRadiusPixels * kLockRadiusPixels) {
+            if (distSq <= lockRadius_ * lockRadius_) {
                 // カメラ(自機の視点)から敵までの線分が、島や雲に遮られているなら、対象にしない(見えない敵は狙えない)。
                 // 画面の判定を通ったものだけに行うので、遮蔽の問い合わせは、カーソルの近くの敵の数だけで済む
                 if (IsHiddenFromCamera(camera->GetEye(), worldPos)) continue;

@@ -26,6 +26,7 @@ void ItemSpawner::Spawn(BaseScene &scene, const ItemDefinition &item, const Item
   model->SetLightingMode(ModelLightingMode::kUnlit);
   model->LoadModel(item.modelPath);
   model->LoadTexture(item.texturePath);
+  model->SetColor({item.color.x, item.color.y, item.color.z, 1.0f}); // 強化の種類を、色で見分ける
   obj->AddComponent(std::move(model));
 
   // 動きと取得
