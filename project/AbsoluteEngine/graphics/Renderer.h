@@ -218,8 +218,9 @@ public:
   void DrawEffectModel(ModelInstance *model, bool writeDepth = false);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
-  // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ
-  void DrawRibbon(const RibbonTrail &trail);
+  // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ。
+  // blendMode: Add(既定。加算で光らせる。暗い背景向き)か Alpha(通常のアルファ合成。明るい背景でも、色が白く飛ばない)。それ以外は Add として描く
+  void DrawRibbon(const RibbonTrail &trail, BlendMode blendMode = BlendMode::Add);
 
   enum class PostProcessMode {
     Normal,
@@ -353,6 +354,7 @@ private:
   std::unique_ptr<UnifiedPipeline> effectDepthPipeline_; // エフェクト用(深度を書き込む版。DrawEffectModel の writeDepth)
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
+  std::unique_ptr<UnifiedPipeline> ribbonAlphaPipeline_; // リボン(通常のアルファ合成版。DrawRibbon の blendMode が Alpha のとき)
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;
   std::unique_ptr<SpriteBatchDrawer> spriteBatchDrawer_; // 文字などのクワッドをまとめて描く(共有バッファ)
   ComPtr<ID3D12Resource> ribbonTransformCB_;

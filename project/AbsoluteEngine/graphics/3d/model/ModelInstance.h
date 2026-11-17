@@ -17,6 +17,10 @@ constexpr int32_t kUnlit = 0;        // 照明なし(テクスチャの色をそ
 constexpr int32_t kLambert = 1;      // Lambert(光が当たらない側は真っ黒)
 constexpr int32_t kHalfLambert = 2;  // Half-Lambert
 constexpr int32_t kThinSurface = 3;  // 薄い面(Half-Lambert + 環境光。蝶の翅など、両面が見えるもの)
+// 光る球の殻(爆破の球など)。照明は使わず、視線に斜めの面(縁)ほど濃く、正対する面(中心)ほど透ける。裏面も同じ扱い(abs)。
+// 半透明なので、アルファ合成のエフェクト用パイプライン(Renderer::DrawEffectModel)で描くこと。
+// 色の指定: 縁の色 = SetColor(アルファは全体の濃さ)、中心の色 = SetSpecularColor、縁から中心へ変わる鋭さ = SetShininess(rim = (1 - 正対の度合い) ^ この値。大きいほど、縁の細い輪だけが濃くなり、中が透ける)
+constexpr int32_t kRimGlow = 4;
 } // namespace ModelLightingMode
 
 class ModelInstance {

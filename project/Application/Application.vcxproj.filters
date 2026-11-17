@@ -85,6 +85,8 @@
     <ClCompile Include="scene\PlayerDeathDirector.cpp" />
     <ClCompile Include="scene\BossDefeatVisual.cpp" />
     <ClCompile Include="scene\BossShardInfo.cpp" />
+    <ClCompile Include="scene\BossExplosion.cpp" />
+    <ClCompile Include="scene\BossLightBeams.cpp" />
     <ClCompile Include="scene\BossShatter.cpp" />
     <ClCompile Include="scene\ClearDirector.cpp" />
     <ClCompile Include="scene\ScaleDust.cpp" />
@@ -193,6 +195,8 @@
     <ClInclude Include="scene\PlayerDeathDirector.h" />
     <ClInclude Include="scene\BossDefeatVisual.h" />
     <ClInclude Include="scene\BossShardInfo.h" />
+    <ClInclude Include="scene\BossExplosion.h" />
+    <ClInclude Include="scene\BossLightBeams.h" />
     <ClInclude Include="scene\BossShatter.h" />
     <ClInclude Include="scene\ClearDirector.h" />
     <ClInclude Include="scene\ScaleDust.h" />

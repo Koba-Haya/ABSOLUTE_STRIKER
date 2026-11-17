@@ -122,6 +122,14 @@ struct PixelShaderOutput
 static const int LIGHTING_MODE_THIN_SURFACE = 3;
 // 薄い面の環境光の強さ(面の色に掛ける)。光が当たらない側(翅の裏、影の側)の最低限の明るさ
 static const float THIN_SURFACE_AMBIENT = 0.45f;
+// 光る球の殻(ModelLightingMode::kRimGlow)。照明は使わない。
+// 視線に斜めの度合い rim(0 = 正対する中心、1 = 縁)を、rim = (1 - 正対の度合い) ^ shininess で求める。
+// shininess が大きいほど、縁の細い輪だけが濃くなる(球の中は、ほぼ透ける)。中心の色(specularColor)から縁の色(color)へ変え、
+// 透明度も、中心は RIM_GLOW_CENTER_ALPHA 倍、縁は 1 倍にする(中心が透けるので、球の中の物が見える)
+static const int LIGHTING_MODE_RIM_GLOW = 4;
+static const float RIM_GLOW_CENTER_ALPHA = 0.04f;
+// shininess の下限(0 乗は、どこでも 1 になって、縁と中心の差が消えるため)
+static const float RIM_GLOW_MIN_SHARPNESS = 0.01f;
 
 // ディゾルブの縁を熾火のように光らせる配色(不死鳥が燃え尽きて灰になる見た目)。
 // 帯の中の位置 w(0 = いまにも消える外縁、1 = 帯の内側の端)で、次のように色が変わる:
@@ -179,6 +187,19 @@ PixelShaderOutput main(VertexShaderOutput input)
     if (gMaterial.enableLighting == 0)
     {
         output.color = float4(gMaterial.color.rgb * textureColor.rgb, alpha);
+        return output;
+    }
+
+    // 光る球の殻: 照明の計算はせず、視線との向きだけで、色と透明度を決める
+    if (gMaterial.enableLighting == LIGHTING_MODE_RIM_GLOW)
+    {
+        float3 glowNormal = normalize(input.normal);
+        float3 glowView = normalize(gCamera.worldPosition - input.worldPosition);
+        float facing = abs(dot(glowNormal, glowView)); // 裏面も、表面と同じ扱い
+        float rim = pow(1.0f - facing, max(gMaterial.shininess, RIM_GLOW_MIN_SHARPNESS));
+        float3 glowRGB = lerp(gMaterial.specularColor, gMaterial.color.rgb, rim);
+        float glowAlpha = gMaterial.color.a * lerp(RIM_GLOW_CENTER_ALPHA, 1.0f, rim);
+        output.color = float4(glowRGB, glowAlpha);
         return output;
     }
 

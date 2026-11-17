@@ -18,10 +18,13 @@
 // 演出の長さ・動きの設定。ステージ(ボス)ごとに変わりうる値なので、コードに埋め込まず、まとめて持つ
 namespace ClearDefaults {
 // 各サブフェーズの長さ(秒)。Cover は、遷移の覆いが担うので、ここでは長さを持たない。
-// 全体: 各サブフェーズの合計 + 遷移の覆いで、6 秒以内にする
+// 全体: 各サブフェーズの合計は、約 9.2 秒(ユーザーの了承済み。光線が出そろうまでと、崩れる様子を見せる時間を優先した。以前の目安は 6 秒以内)
 constexpr float kHitStopSeconds = 0.15f;
-constexpr float kCrackSeconds = 0.8f;
-constexpr float kPeelSeconds = 1.0f;
+// Crack と Peel は、長くしてある(以前は 0.8 秒と 1.0 秒)。理由は 2 つ:
+//   Crack: 光線(BossLightBeams)が、Crack の間に、約 0.25 秒おきに 1 本ずつ出て、出そろうまで。短いと、まとまって出て、「徐々に増えていく」見え方にならない
+//   Peel: ボスが崩れていく様子(セルが 1 つずつ消える)と、爆破の球(BossExplosion)が広がる様子を、ゆっくり見せるため。短いと、すぐに崩れ切ってしまう
+constexpr float kCrackSeconds = 4.0f;
+constexpr float kPeelSeconds = 3.0f;
 constexpr float kBurstSeconds = 0.5f;
 constexpr float kFlowSeconds = 1.5f;
 

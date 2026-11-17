@@ -47,7 +47,6 @@ void BossComponent::Update(float deltaTime) {
     if (!isActive_ || !owner_) return;
 
     UpdateMovement(deltaTime);
-    SyncCoreTransform();
     UpdatePhase();
     UpdateAttack(deltaTime);
     UpdateAnimation();
@@ -61,7 +60,7 @@ void BossComponent::UpdateAnimation() {
     if (hitRequested_) {
         hitRequested_ = false;
         attackRequested_ = false;
-        PlayAnimationOnAll(BossAnimation::kHit, false, kHitBlendSeconds, true);
+        model->PlayAnimation(BossAnimation::kHit, false, kHitBlendSeconds, true);
         animState_ = AnimState::Hit;
         return;
     }
@@ -69,7 +68,7 @@ void BossComponent::UpdateAnimation() {
     // 攻撃の予告: よろめいている間は始めない(Hit が終わってから、次の発射の予告を出す)
     if (attackRequested_ && animState_ != AnimState::Hit) {
         attackRequested_ = false;
-        PlayAnimationOnAll(BossAnimation::kAttack, false, kAttackBlendSeconds, false);
+        model->PlayAnimation(BossAnimation::kAttack, false, kAttackBlendSeconds, false);
         animState_ = AnimState::Attack;
         return;
     }
@@ -77,25 +76,9 @@ void BossComponent::UpdateAnimation() {
 
     // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る
     if (animState_ == AnimState::None || (animState_ != AnimState::Hover && model->IsAnimationFinished())) {
-        PlayAnimationOnAll(BossAnimation::kHover, true, kHoverBlendSeconds, false);
+        model->PlayAnimation(BossAnimation::kHover, true, kHoverBlendSeconds, false);
         animState_ = AnimState::Hover;
     }
-}
-
-void BossComponent::PlayAnimationOnAll(const char* name, bool loop, float blendSeconds, bool restart) {
-    if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-        model->PlayAnimation(name, loop, blendSeconds, restart);
-    }
-    if (coreObject_) {
-        if (auto* coreModel = coreObject_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-            coreModel->PlayAnimation(name, loop, blendSeconds, restart);
-        }
-    }
-}
-
-void BossComponent::SyncCoreTransform() {
-    if (!coreObject_) return;
-    coreObject_->GetTransform() = owner_->GetTransform();
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {

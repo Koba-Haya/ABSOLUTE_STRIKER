@@ -41,9 +41,6 @@ struct BossModelSpec {
   float colliderRadius;
 
   // --- 撃破演出(ひびと剥がれ)に使う資産 ---
-  // 内側(コア)のモデルのパス。外殻が剥がれたあとに、金色に光って見える体。
-  // 外殻のモデルと、ボーン・アニメーションが同一であること(同じ時刻に同じポーズで動かす)。nullptr のときは、コアなし
-  const char *coreModelPath;
   // ディゾルブのマスク画像のパス(外殻の UV の上のボロノイ。tools の gen_dissolve_mask.py が作る)。
   // nullptr のときは、エンジンが共有で持つノイズのマスクで、全体を一様に消す
   const char *dissolveMaskPath;

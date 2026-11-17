@@ -31,11 +31,6 @@ public:
     // 当たり判定の半径を、ボスの種類の定義(BossModelSpec)に合わせる(生成するシーンが呼ぶ)
     void SetCollisionRadius(float radius) { radius_ = radius; }
 
-    // 内側(コア)のモデルを持つオブジェクト(任意)。コアは外殻とは別のオブジェクトなので(外殻だけをディゾルブで消すため)、
-    // このコンポーネントが、位置・向き・大きさと、アニメーションを、外殻に合わせ続ける
-    void SetCoreObject(std::shared_ptr<AbsoluteEngine::GameObject> core) { coreObject_ = std::move(core); }
-    const std::shared_ptr<AbsoluteEngine::GameObject>& GetCoreObject() const { return coreObject_; }
-
     int GetHp() const { return hp_; }
     int GetMaxHp() const { return maxHp_; }
     BossPhase GetPhase() const { return phase_; }
@@ -48,11 +43,6 @@ private:
     void UpdateMovement(float deltaTime);
     // モデルのアニメーションを切り替える(待機 / 攻撃の予告 / 被弾)。優先度は、被弾 > 攻撃の予告 > 待機
     void UpdateAnimation();
-    // 外殻と、コア(あれば)の両方で、同じアニメーションを再生する(同じ時刻に同じポーズで動かすため)
-    void PlayAnimationOnAll(const char* name, bool loop, float blendSeconds, bool restart);
-    // コアのオブジェクトの Transform を、外殻(このボス)に合わせる
-    void SyncCoreTransform();
-
     // アクティブシーンから自機のGameObjectを探す（Fire*で使用）
     std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer() const;
 
@@ -73,9 +63,6 @@ private:
 
     // 左右上下の揺れ用タイマー
     float weaveTimer_ = 0.0f;
-
-    // 内側(コア)のモデルのオブジェクト(無いボスでは null)
-    std::shared_ptr<AbsoluteEngine::GameObject> coreObject_;
 
     // 今再生しているアニメーションの種類(None は、まだ何も再生していない状態)
     enum class AnimState { None, Hover, Attack, Hit };

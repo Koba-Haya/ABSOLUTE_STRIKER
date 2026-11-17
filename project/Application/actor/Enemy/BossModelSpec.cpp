@@ -9,11 +9,11 @@ constexpr BossModelSpec kSpecs[] = {
     // 欠片のモデル(boss_beetle_shards.*)は、ボロノイのひび割れ(crackShape)の確認が済むまで、使わずに残してある
     // (使うときは、shardsModelPath と shardsInfoPath に、"resources/app/boss_beetle/boss_beetle_shards.gltf" と ".json" を入れる)。
     // ひびの形: モデルの範囲は x -4.3 〜 4.3、y -2.7 〜 1.2、z -4.6 〜 9.5(あごの先)。中心は胴のあたり、端まで 約 9.5
-    {"resources/app/boss_beetle/boss_beetle.gltf", 1.0f, 5.0f, "resources/app/boss_beetle/boss_beetle_core.gltf",
-     "resources/app/boss_beetle/beetle_dissolve_mask.png", 0.30f, nullptr, nullptr, {0.0f, -0.7f, 1.0f, 9.5f, 1.8f}},
+    {"resources/app/boss_beetle/boss_beetle.gltf", 1.0f, 5.0f, "resources/app/boss_beetle/beetle_dissolve_mask.png", 0.30f,
+     nullptr, nullptr, {0.0f, -0.7f, 1.0f, 9.5f, 1.8f}},
     // Eagle: 翼幅 約 12。当たり判定は、翼の先まで含めず、胴と翼の付け根を覆う半径。
-    // コア、マスク、欠片、ひびの形は、まだ作っていない(撃破演出は、全体が一様に消える。甲虫の確認のあとに作る)
-    {"resources/app/boss_eagle/boss_eagle.gltf", 1.0f, 5.0f, nullptr, nullptr, 0.0f, nullptr, nullptr, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
+    // マスク、欠片、ひびの形は、まだ作っていない(撃破演出は、全体が一様に消える。甲虫の確認のあとに作る)
+    {"resources/app/boss_eagle/boss_eagle.gltf", 1.0f, 5.0f, nullptr, 0.0f, nullptr, nullptr, {0.0f, 0.0f, 0.0f, 0.0f, 0.0f}},
 };
 
 // stages.json の文字列と BossKind の対応表。ボスを増やすときは、ここにも足す

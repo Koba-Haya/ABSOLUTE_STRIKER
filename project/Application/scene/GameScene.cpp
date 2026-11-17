@@ -152,8 +152,6 @@ constexpr float kPlayerWingspan = 3.7f;
 // ボスのモデルへ掛ける環境光の反射の強さ。1.0 だと、空を映す鏡のようになり、テクスチャの色(外殻の赤、羽根の茶)が見えなくなるため、
 // 自機(蝶)と同じ 0 にする(テクスチャの色をそのまま出す)。光沢が欲しくなったら、小さい値(0.1 前後)から足す
 constexpr float kBossEnvironmentCoefficient = 0.0f;
-// ボスの内側(コア)に貼る、真っ白の画像(GameAssetPreloader が先読みしている、プレハブ用の立方体の画像と同じ)
-constexpr const char *kBossCoreTexturePath = "resources/app/cube/white100x100.png";
 
 // 死亡演出のスキップに使う入力(発射ボタン(Space・パッド A・マウス左)とは別のキーにして、連打による誤スキップを避ける)。
 // キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
@@ -178,6 +176,11 @@ constexpr bool kDebugFlowShortcutEnabled = false;
 // 撃破演出の確認や録画のため、道中を待たずにボス戦へ入る。キーは主列の 8(0 は演出のスキップ、9 は蘇生、B は骨の表示に使用済み)
 constexpr bool kDebugSkipToBossEnabled = true;
 constexpr BYTE kDebugSkipToBossKey = DIK_8;
+
+// 開発用: ボスを一撃で倒すショートカットを有効にするか(提出・展示のビルドでは false にする。展示モードでは、この値によらず無効)。
+// 撃破演出の確認や録画のため。キーは主列の 7(0 はスキップ、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+constexpr bool kDebugKillBossEnabled = true;
+constexpr BYTE kDebugKillBossKey = DIK_7;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
@@ -216,12 +219,11 @@ void GameScene::Initialize(const SceneServices &services) {
       const BossModelSpec &bossSpec = GetBossModelSpec(stage.boss);
       bossModelHolds_.clear();
       bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.modelPath));
-      if (bossSpec.coreModelPath) {
-        bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.coreModelPath));
-      }
       if (bossSpec.dissolveMaskPath) {
         bossMaskHold_ = assets->Load<TextureResource>(bossSpec.dissolveMaskPath);
       }
+      // 撃破演出の爆破の球のモデルも、先に読み込む(撃破の最中に、読み込みで画面が止まらないようにする)
+      bossDefeatVisual_.Initialize();
       // 撃破演出の欠片のモデルと、その付属データ(読めなければ、欠片なしとして、外殻のディゾルブで消える)
       bossShardInfo_ = BossShardInfo();
       if (bossSpec.shardsModelPath && bossSpec.shardsInfoPath) {
@@ -929,20 +931,6 @@ void GameScene::SpawnBoss_() {
   auto bossComp = std::make_unique<BossComponent>();
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
 
-  // 内側(コア)は、外殻とは別のオブジェクトにする(外殻だけをディゾルブで消し、コアを残して光らせるため)。
-  // 当たり判定は持たない。位置・向き・アニメーションは、BossComponent が外殻に合わせ続ける
-  if (bossSpec.coreModelPath) {
-    auto coreObj = std::make_shared<AbsoluteEngine::GameObject>("BossCore");
-    coreObj->GetTransform() = bossObj->GetTransform();
-    auto coreModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-    coreModelComp->LoadModel(bossSpec.coreModelPath);
-    // コアのモデルは、画像を持たない。エンジンは、画像のないモデルへ、確認用の格子模様を貼るので、真っ白の画像で置き換える
-    // (色は、撃破演出が、照明なしの金色として掛ける)
-    coreModelComp->LoadTexture(kBossCoreTexturePath);
-    coreObj->AddComponent(std::move(coreModelComp));
-    bossComp->SetCoreObject(coreObj);
-    AddRootObject(coreObj);
-  }
   bossObj->AddComponent(std::move(bossComp));
 
   auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
@@ -969,15 +957,33 @@ void GameScene::CheckDebugFlowShortcut_() {
       phase_ = GamePhase::Boss;
       SpawnBoss_();
     } else {
-      for (const auto& obj : GetRootObjects()) {
-        if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
-          boss->TakeDamage(boss->GetMaxHp());
-        }
-      }
+      KillBossForDebug_();
     }
   } else if (GetInput()->TriggerKey(DIK_BACK)) {
     // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
     KillPlayer_();
+  }
+}
+
+void GameScene::KillBossForDebug_() {
+  // HP を 0 にする本物の撃破の経路。倒れると、CheckGameEnd_ が撃破演出(BeginClearing_)を始める
+  for (const auto& obj : GetRootObjects()) {
+    if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
+      boss->TakeDamage(boss->GetMaxHp());
+    }
+  }
+}
+
+void GameScene::CheckKillBossShortcut_() {
+  if (!kDebugKillBossEnabled || ExhibitionMode::kEnabled || !GetInput()) {
+    return;
+  }
+  // ボス戦の最中だけ受け付ける(道中や、演出・終了の要求の最中は何もしない。二重に倒さない)
+  if (phase_ != GamePhase::Boss) {
+    return;
+  }
+  if (GetInput()->TriggerKey(kDebugKillBossKey)) {
+    KillBossForDebug_();
   }
 }
 
@@ -1211,7 +1217,7 @@ void GameScene::BeginClearing_() {
   }
   clearDirector_.Begin(clearSettings_);
 
-  // ボスの見た目の演出(外殻のひびと剥がれ、コアの光)を始める。撃破されたボスは、消さずに残っている
+  // ボスの見た目の演出(外殻のひびと剥がれ)を始める。撃破されたボスは、消さずに残っている
   for (const auto& rootObj : GetRootObjects()) {
       const auto* boss = rootObj ? rootObj->GetComponent<BossComponent>() : nullptr;
       if (boss) {
@@ -1220,7 +1226,7 @@ void GameScene::BeginClearing_() {
           const BossModelSpec& bossSpec = GetBossModelSpec(ResolveStage_().boss);
           const std::shared_ptr<AbsoluteEngine::GameObject> shards =
               bossSpec.shardsModelPath ? CreateBossShards_(bossObj, bossSpec) : nullptr;
-          bossDefeatVisual_.Begin(bossObj, boss->GetCoreObject(), shards, bossShardInfo_, bossSpec.crackEndThreshold,
+          bossDefeatVisual_.Begin(bossObj, shards, bossShardInfo_, bossSpec.crackEndThreshold,
                                   bossSpec.crackShape, BossDefeatSettings{});
           break;
       }
@@ -1423,6 +1429,7 @@ void GameScene::Update() {
       } else {
           CheckDebugFlowShortcut_();
           CheckSkipToBossShortcut_();
+          CheckKillBossShortcut_();
       }
       CheckGameEnd_();
       ApplyDeathPose_();
@@ -1564,6 +1571,9 @@ void GameScene::Draw() {
       obj->Draw();
       obj->GetTransform().scale = originalScale;
   }
+
+  // ボス撃破の光線(ひびの線から放射状に伸びる光の帯)。物体を描いたあとに描く
+  bossDefeatVisual_.Draw();
 
   // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
   wingShatter_.Draw(deathDirector_.GetDissolve());

@@ -139,6 +139,10 @@ private:
   void CheckDebugFlowShortcut_();
   // 開発用: 道中を飛ばして、ボス戦へ入るショートカット(撃破演出の確認や録画のため)
   void CheckSkipToBossShortcut_();
+  // 開発用: ボス戦の最中に、ボスを一撃で倒すショートカット(撃破演出の確認や録画のため)
+  void CheckKillBossShortcut_();
+  // 開発用: 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckDebugFlowShortcut_ と CheckKillBossShortcut_ が使う)
+  void KillBossForDebug_();
   void UpdateHud_();
   // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
   // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する

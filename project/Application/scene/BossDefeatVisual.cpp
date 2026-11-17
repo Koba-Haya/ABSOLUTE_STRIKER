@@ -7,6 +7,7 @@
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "AbsoluteEngine/graphics/3d/model/ModelResource.h"
 #include "AbsoluteEngine/graphics/3d/model/SkinCluster.h"
+#include "AbsoluteEngine/graphics/Renderer.h"
 #include "AbsoluteEngine/graphics/particle/GPUParticleManager.h"
 
 namespace {
@@ -19,19 +20,15 @@ float Smooth01(float t) {
   return t * t * (3.0f - 2.0f * t);
 }
 
-// コアの大きさの下限(割合)。0 にすると、行列が潰れて(逆行列が求まらず)、描画が壊れるため
-constexpr float kMinCoreScale = 0.001f;
-
 float Lerp(float a, float b, float t) {
   return a + (b - a) * t;
 }
 } // namespace
 
-void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, std::shared_ptr<AbsoluteEngine::GameObject> core,
-                             std::shared_ptr<AbsoluteEngine::GameObject> shards, const BossShardInfo &shardInfo,
-                             float crackEndThreshold, const BossCrackShape &crackShape, const BossDefeatSettings &settings) {
+void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, std::shared_ptr<AbsoluteEngine::GameObject> shards,
+                             const BossShardInfo &shardInfo, float crackEndThreshold, const BossCrackShape &crackShape,
+                             const BossDefeatSettings &settings) {
   shell_ = std::move(shell);
-  core_ = std::move(core);
   crackEnd_ = std::clamp(crackEndThreshold, 0.0f, kThresholdAllGone);
   crackShape_ = crackShape;
   lastCellBreak_ = 0.0f;
@@ -48,14 +45,16 @@ void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, 
     ApplyCrack_(0.0f);
   }
 
-  if (core_) {
-    coreBaseScale_ = core_->GetTransform().scale;
-    // コアは、照明なしで描く(色の値が、そのまま光る色になる)
-    if (auto *model = core_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-      model->SetLightingMode(ModelLightingMode::kUnlit);
-    }
-    ApplyCore_(settings_.coreIntensityIdle, 1.0f);
+  // 光線(ボロノイのひびを使うときだけ。ひびの線の上の頂点を GPU に選ばせるので、ひびと同じ形・太さを渡す)
+  beams_ = BossLightBeams();
+  if (UsesVoronoiCrack_()) {
+    beams_.Begin(shell_, crackShape_, settings_.crackLineWidth, settings_.beams);
+    explosion_.Begin(shell_, crackShape_, settings_.explosion);
   }
+}
+
+void BossDefeatVisual::Initialize() {
+  explosion_.Initialize(BossExplosionDefaults::kModelPath);
 }
 
 void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float deltaTime) {
@@ -73,22 +72,20 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
   case ClearPhase::HitStop:
     ApplyShell_(false, 0.0f);
     ApplyCrack_(0.0f);
-    ApplyCore_(settings_.coreIntensityIdle, 1.0f);
     break;
   case ClearPhase::Crack:
     if (UsesVoronoiCrack_()) {
-      // ひびの段階(ボロノイ): 外殻は消さずに、表面のひびが、コアの位置から外へ広がる
+      // ひびの段階(ボロノイ): 外殻は消さずに、表面のひびが、広がり始める位置から外へ広がる
       ApplyShell_(false, 0.0f);
       ApplyCrack_(Smooth01(p));
     } else {
       // ひびの段階(マスク画像): 溝が開く。ひびの段階のないボス(crackEnd_ == 0)は、ここでは変化しない
       ApplyShell_(true, crackEnd_ * Smooth01(p));
     }
-    ApplyCore_(Lerp(settings_.coreIntensityIdle, settings_.coreIntensityCrack, Smooth01(p)), 1.0f);
     break;
   case ClearPhase::Peel:
     if (UsesVoronoiCrack_()) {
-      // 剥離の段階(ボロノイ): セルが、コアに近いほうから、光って消えていく。外殻のディゾルブは使わない
+      // 剥離の段階(ボロノイ): セルが、広がり始める位置に近いほうから、光って消えていく。外殻のディゾルブは使わない
       ApplyShell_(false, 0.0f);
       cellBreak = p;
       ApplyCrack_(1.0f, cellBreak);
@@ -96,28 +93,27 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
       // 剥離の段階(マスク画像): ひびの段階の最後から、すべて消えるまで
       ApplyShell_(true, Lerp(crackEnd_, kThresholdAllGone, p));
     }
-    ApplyCore_(Lerp(settings_.coreIntensityCrack, settings_.coreIntensityPeak, Smooth01(p)), 1.0f);
     break;
   case ClearPhase::Burst:
     ApplyShell_(true, kThresholdAllGone);
     cellBreak = 1.0f; // セルも、すべて消えている
     ApplyCrack_(1.0f, cellBreak);
-    ApplyCore_(settings_.coreIntensityPeak, 1.0f);
     break;
   case ClearPhase::Flow:
-    // コアが縮んで、光に溶ける(始めはゆっくり、終わりへ向けて速く縮む)
     ApplyShell_(true, kThresholdAllGone);
     cellBreak = 1.0f;
     ApplyCrack_(1.0f, cellBreak);
-    ApplyCore_(settings_.coreIntensityPeak, 1.0f - p * p);
     break;
   case ClearPhase::Cover:
     ApplyShell_(true, kThresholdAllGone);
     cellBreak = 1.0f;
     ApplyCrack_(1.0f, cellBreak);
-    ApplyCore_(settings_.coreIntensityPeak, 0.0f);
     break;
   }
+
+  // 光線を伸ばす(ボロノイのひびを使わないときは、Begin していないので、何もしない)
+  beams_.Update(phase, p);
+  explosion_.Update(phase, p);
 
   // 前のフレームから今のフレームの間に消えたセルの頂点から、粒を出す。
   // 割合が進んだフレームだけ出し、進んだ分(previous から current)を、必ず 1 回ずつ通す(飛ばしても、取りこぼさない)
@@ -125,6 +121,11 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
     EmitCellDust_(lastCellBreak_, cellBreak);
     lastCellBreak_ = cellBreak;
   }
+}
+
+void BossDefeatVisual::Draw() {
+  beams_.Draw();
+  explosion_.Draw(Renderer::GetInstance());
 }
 
 void BossDefeatVisual::ApplyShell_(bool enable, float threshold) {
@@ -199,13 +200,4 @@ void BossDefeatVisual::EmitCellDust_(float previousBreak, float currentBreak) {
   style.speedMax = settings_.dustSpeedMax;
 
   GPUParticleManager::GetInstance()->RequestSurfaceEmit(desc);
-}
-
-void BossDefeatVisual::ApplyCore_(float intensity, float scale) {
-  if (!core_) return;
-  scale = (std::max)(scale, kMinCoreScale); // Windows.h の max マクロと衝突しないよう、括弧で囲む
-  if (auto *model = core_->GetComponent<AbsoluteEngine::ModelComponent>()) {
-    model->SetColor({settings_.coreColor.x * intensity, settings_.coreColor.y * intensity, settings_.coreColor.z * intensity, 1.0f});
-  }
-  core_->GetTransform().scale = {coreBaseScale_.x * scale, coreBaseScale_.y * scale, coreBaseScale_.z * scale};
 }
