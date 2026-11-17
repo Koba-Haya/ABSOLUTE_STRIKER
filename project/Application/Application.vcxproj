@@ -364,6 +364,7 @@
     <ClInclude Include="stage\StageProgress.h" />
     <ClInclude Include="result\RunStatsTracker.h" />
     <ClInclude Include="result\RunStats.h" />
+    <ClInclude Include="result\BestRecord.h" />
     <ClInclude Include="result\RunResult.h" />
     <ClInclude Include="result\RatingSettings.h" />
     <ClInclude Include="result\RatingCatalog.h" />

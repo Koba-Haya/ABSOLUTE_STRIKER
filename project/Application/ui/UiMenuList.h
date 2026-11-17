@@ -41,6 +41,12 @@ public:
   /// <summary>font は文字を描くために使う(所有しない。メニューより長く生きていること)。白い画像も読む</summary>
   void Initialize(BitmapFont *font);
 
+  /// <summary>
+  /// 行の高さ、間隔、文字の大きさ、余白の倍率(既定 1)。画面の縦の余裕が少ないときに、小さくする(結果画面の、集計の下のメニューなど)。
+  /// GetContentHeight と Draw に効く。UiPanel::SetScale と同じ値にすると、パネルと見た目の比率がそろう
+  /// </summary>
+  void SetScale(float scale) { scale_ = scale; }
+
   /// <summary>項目を入れ替える。選択は先頭に戻る</summary>
   void SetItems(std::vector<Item> items);
 
@@ -91,4 +97,5 @@ private:
   std::chrono::steady_clock::time_point lastMoveTime_;   // 選択を最後に動かした時刻(点滅の基準)
   std::chrono::steady_clock::time_point lastRejectTime_; // ロック項目を最後に拒んだ時刻
   bool hasRejected_ = false;
+  float scale_ = 1.0f; // 寸法の倍率(SetScale)
 };

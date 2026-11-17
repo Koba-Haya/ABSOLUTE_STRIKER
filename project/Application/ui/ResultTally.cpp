@@ -26,6 +26,8 @@ constexpr float kRowBottomGap = 2.0f;        // 割合の棒と、行の下端�
 constexpr float kTotalFontSize = 26.0f;      // 合計の点数の文字の大きさ
 constexpr float kRankFontSize = 110.0f;      // ランクの文字の大きさ(押し終わったあと。アトラスの文字を、大きく引き伸ばすと、かくかくになる)
 constexpr float kRankStampStartScale = 1.6f; // ランクが押される前の、文字の拡大の倍率
+constexpr float kRecordFontSize = 26.0f;     // 「NEW RECORD」の文字の大きさ
+constexpr float kBestFontSize = 18.0f;       // 「ベスト」「ランクアップ」の文字の大きさ
 constexpr float kHalf = 0.5f;
 
 // --- 時間(秒。Begin からの経過) ---
@@ -38,7 +40,9 @@ constexpr float kTotalCountSeconds = 0.90f;  // 合計が数え上がる時間
 constexpr float kStampGapSeconds = 0.30f;    // 合計が数え終わってから、ランクが押されるまでの間
 constexpr float kStampSeconds = 0.35f;       // ランクが押される(大きい -> 元の大きさ)時間
 constexpr float kFlashSeconds = 0.30f;       // ランクが押された瞬間の、光る時間
-constexpr float kFinishGapSeconds = 0.50f;   // ランクが押されてから、集計が終わるまでの間
+constexpr float kFinishGapSeconds = 1.00f;   // ランクが押されてから、集計が終わるまでの間(ベスト更新の表示が、現れ終わるまでを含む)
+constexpr float kRecordDelaySeconds = 0.20f; // ランクが押されてから、ベスト更新の表示が現れ始めるまでの間
+constexpr float kRecordFadeSeconds = 0.30f;  // ベスト更新の表示が現れる時間
 constexpr float kRankPanelDelaySeconds = 0.15f; // 右のパネルが、左より遅れて開く時間
 constexpr float kFlashAlpha = 0.5f;          // ランクが押された瞬間の、光の最大の濃さ
 
@@ -50,6 +54,8 @@ const Vector4 kBarBackColor{0.20f, 0.28f, 0.38f, 0.60f};      // 割合の棒の
 const Vector4 kBarFillColor{0.62f, 0.86f, 1.00f, 0.95f};      // 割合の棒(水色)
 const Vector4 kTotalColor{1.00f, 1.00f, 1.00f, 1.00f};        // 合計
 const Vector4 kFlashColor{1.00f, 0.95f, 0.75f, 1.00f};        // ランクが押された瞬間の光
+const Vector4 kRecordColor{1.00f, 0.84f, 0.30f, 1.00f};       // 「NEW RECORD」(金)
+const Vector4 kBestColor{0.78f, 0.86f, 0.94f, 1.00f};         // 「ベスト」
 // ランクごとの色
 const Vector4 kRankColorS{1.00f, 0.84f, 0.30f, 1.00f}; // 金
 const Vector4 kRankColorA{1.00f, 0.55f, 0.25f, 1.00f}; // 橙
@@ -66,6 +72,9 @@ constexpr const char *kLabelFormation = "編隊の全滅";
 constexpr const char *kLabelMultiLock = "マルチロック";
 constexpr const char *kLabelBossNoDamage = "ボス戦ノーダメージ";
 constexpr const char *kTotalLabel = "合計";
+constexpr const char *kNewRecordText = "NEW RECORD";
+constexpr const char *kRankUpFormat = "RANK UP  %s -> %s";
+constexpr const char *kBestFormat = "ベスト %.1f (%s)";
 constexpr size_t kTextBufferSize = 96;
 
 float Saturate(float v) { return std::clamp(v, 0.0f, 1.0f); }
@@ -164,8 +173,9 @@ float ResultTally::RowStartTime_(int index) const {
   return kPanelOpenSeconds + static_cast<float>(index) * kRowInterval;
 }
 
-void ResultTally::Begin(const RunResult &result, float delaySeconds) {
+void ResultTally::Begin(const RunResult &result, const BestUpdate &best, float delaySeconds) {
   result_ = result;
+  best_ = best;
   BuildRows_();
   active_ = true;
   time_ = 0.0f;
@@ -269,10 +279,32 @@ void ResultTally::DrawRank_(float alpha) {
     const float scale = kRankStampStartScale + (1.0f - kRankStampStartScale) * eased;
     const float fontSize = kRankFontSize * scale;
     const Vector4 color = WithAlphaScale(RankColor(result_.rank), alpha * Saturate(t * 3.0f));
-    // 行ボックスの中心を、本体領域の中央(合計の下)へ合わせる
-    const float centerY = origin.y + font_.GetLineHeight(kTotalFontSize) + (body.y - font_.GetLineHeight(kTotalFontSize)) * kHalf;
+    // 行ボックスの中心を、合計(上)と、ベスト更新の表示(下)の間の、中央へ合わせる
+    const float topBlock = font_.GetLineHeight(kTotalFontSize);
+    const float bottomBlock = font_.GetLineHeight(kRecordFontSize) + font_.GetLineHeight(kBestFontSize);
+    const float centerY = origin.y + topBlock + (body.y - topBlock - bottomBlock) * kHalf;
     const float lineHeight = font_.GetLineHeight(fontSize);
     font_.Draw(RankToString(result_.rank), {centerX, centerY - lineHeight * kHalf}, fontSize, color, BitmapFont::Align::Center);
+
+    // ベスト更新の表示(下): ランクが押されたあとに現れる。「NEW RECORD」(点数を更新したとき)、ランクアップ、前のベスト
+    const float recordT = Saturate((time_ - stampStart_ - kStampSeconds - kRecordDelaySeconds) / kRecordFadeSeconds);
+    if (recordT > 0.0f) {
+      const float recordAlpha = alpha * recordT;
+      float lineY = origin.y + body.y - bottomBlock;
+      if (best_.pointsImproved || best_.scoreImproved) {
+        font_.Draw(kNewRecordText, {centerX, lineY}, kRecordFontSize, WithAlphaScale(kRecordColor, recordAlpha), BitmapFont::Align::Center);
+      }
+      lineY += font_.GetLineHeight(kRecordFontSize);
+      char text[kTextBufferSize];
+      if (best_.rankImproved) {
+        std::snprintf(text, sizeof(text), kRankUpFormat, RankToString(best_.previous.rank), RankToString(result_.rank));
+        font_.Draw(text, {centerX, lineY}, kBestFontSize, WithAlphaScale(kRecordColor, recordAlpha), BitmapFont::Align::Center);
+      } else if (best_.previous.exists) {
+        // 前のベスト(今回が、それ以下のとき、ベストは、前のまま。更新したときは、前のベストを見せる)
+        std::snprintf(text, sizeof(text), kBestFormat, best_.previous.points, RankToString(best_.previous.rank));
+        font_.Draw(text, {centerX, lineY}, kBestFontSize, WithAlphaScale(kBestColor, recordAlpha), BitmapFont::Align::Center);
+      }
+    }
 
     // 押された瞬間の光(すぐ収まる)
     const float flashT = Saturate((time_ - stampStart_ - kStampSeconds * kHalf) / kFlashSeconds);

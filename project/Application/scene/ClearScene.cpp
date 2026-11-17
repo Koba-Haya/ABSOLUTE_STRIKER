@@ -7,6 +7,7 @@
 #include "../ScreenSize.h"
 #include "Logger.h"
 #include "../stage/StageLaunchParams.h"
+#include "../stage/StageProgress.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -30,6 +31,8 @@ constexpr float kTallyGapAboveMenu = 16.0f;
 constexpr float kTallyGapBelowBanner = 8.0f;
 // 結果の集計が始まる(パネルが開き始める)までの待ち。見出しが現れる(約 1.2 秒)のを待つ
 constexpr float kTallyDelaySec = 1.0f;
+// 結果の集計があるとき、メニューを小さくする倍率(集計に、縦の余裕を回すため。結果が無いときは、原寸)
+constexpr float kMenuScaleWithResult = 0.7f;
 } // namespace
 
 void ClearScene::Initialize(const SceneServices &services) {
@@ -54,13 +57,18 @@ void ClearScene::Initialize(const SceneServices &services) {
     bannerLayout.centerYRatio = kBannerCenterYRatio;
   }
   banner_.Initialize(kBannerTexturePath, bannerLayout);
-  menu_.Initialize();
+  menu_.Initialize(hasResult ? kMenuScaleWithResult : 1.0f);
   if (hasResult) {
     // 集計の縦の範囲: 見出しの下から、メニューの上まで
     const float bannerBottom = ScreenSize::kHeight * kBannerCenterYRatio + kBannerHeight * 0.5f;
     tally_.Initialize();
     tally_.SetVerticalRange(bannerBottom + kTallyGapBelowBanner, menu_.GetPanelTop() - kTallyGapAboveMenu);
-    tally_.Begin(*params->result, kTallyDelaySec);
+    // 今回の結果を、ベスト記録と比べて、更新して保存する(集計を飛ばしても、記録は残る)。更新の内容は、集計が「ベスト更新」として見せる
+    const BestUpdate bestUpdate = StageProgress::GetInstance().RecordRun(params->stageId, *params->result);
+    Logger::GetInstance().Log("[Best] stage=%s previous=%s%s scoreImproved=%d pointsImproved=%d rankImproved=%d", params->stageId.c_str(),
+                              bestUpdate.previous.exists ? "yes " : "none", bestUpdate.previous.exists ? RankToString(bestUpdate.previous.rank) : "",
+                              bestUpdate.scoreImproved, bestUpdate.pointsImproved, bestUpdate.rankImproved);
+    tally_.Begin(*params->result, bestUpdate, kTallyDelaySec);
   }
   // メニューは、結果の集計があるときは、集計が終わってから開く(Update で)。無いときは、従来どおり、最初から待ちつきで開く。
   // 展示中は操作を受け付けないので、メニューは出さない

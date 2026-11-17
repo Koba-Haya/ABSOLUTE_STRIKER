@@ -3,6 +3,7 @@
 #include <string>
 
 #include "StageDefinition.h"
+#include "../result/BestRecord.h"
 
 // ステージの進行(どのステージが解放されたか、解放の演出を見せたか)を保存して、問い合わせに答えるクラス。
 //
@@ -12,10 +13,13 @@
 //
 // 保存先: exe の横の savedata/progress.json(exe 基準。日本語を含むフォルダでも読み書きできる)。
 //   書き込めない場所などで保存に失敗しても、ゲームは続ける(ログに出す。その回のあいだは、メモリ上の進行で動く)。
-//   形式: {"stages": {"<ステージ ID>": {"unlocked": true, "unlockShown": false}, ...}}
+//   形式: {"stages": {"<ステージ ID>": {"unlocked": true, "unlockShown": false,
+//                     "bestScore": 5100, "bestPoints": 84.2, "bestRank": "A"}, ...}}
+//   (ベスト記録の 3 つの項目は、そのステージをクリアしたあとだけ入る。無いものは、記録なしとして読む)
 //
 // 解放の演出を見せたか(unlockShown): ステージ選択の「鍵が外れる」演出を、解放のたびに 1 回だけ出すための印。
 //   どのステージでも同じ扱い(特定のステージだけの処理にしない)。
+// ベスト記録: ステージごとに、ベストスコア、ベストの評価の点数、最高ランクを、それぞれ別に、最高の値で保存する(RecordRun)。
 // 使い方: ボス撃破で次のステージを解放するとき Unlock。ステージ選択は IsUnlocked でロックを判定し、FindPendingUnlock で演出する
 //   ステージを探して、演出を見せたら MarkUnlockShown を呼ぶ。
 
@@ -37,6 +41,10 @@ public:
   // 鍵が外れる演出を見せたことを記録して、保存する
   void MarkUnlockShown(const std::string &stageId);
 
+  // 今回の結果を、そのステージのベスト記録と比べて、最高の値で更新し、保存する。
+  // 戻り値: 更新する前のベスト記録と、何を更新したか(結果画面が「ベスト更新」を出すために使う)
+  BestUpdate RecordRun(const std::string &stageId, const RunResult &result);
+
 private:
   StageProgress();
   void Load_();
@@ -46,6 +54,7 @@ private:
   struct Entry {
     bool unlocked = false;
     bool unlockShown = false;
+    BestRecord best; // ベスト記録(クリアしたあと)
   };
   std::map<std::string, Entry> entries_;
 };

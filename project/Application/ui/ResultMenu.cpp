@@ -25,9 +25,10 @@ constexpr std::array<EntryDefinition, 3> kEntries = {{
 constexpr const char *kPanelTitle = "メニュー";
 } // namespace
 
-void ResultMenu::Initialize() {
+void ResultMenu::Initialize(float scale) {
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);
   menu_.Initialize(&font_);
+  menu_.SetScale(scale);
 
   std::vector<UiMenuList::Item> items;
   items.reserve(kEntries.size());
@@ -38,10 +39,12 @@ void ResultMenu::Initialize() {
 
   // パネルは、画面の下の中央に置く(高さは項目の数で決まる)
   panel_.Initialize(&font_);
+  panel_.SetScale(scale);
   panel_.SetTitle(kPanelTitle);
-  const float height = UiPanel::GetHeightForBody(menu_.GetContentHeight());
-  panelTop_ = ScreenSize::kHeight - kPanelBottomMargin - height;
-  panel_.SetBounds({(ScreenSize::kWidth - kPanelWidth) * kHalf, panelTop_}, {kPanelWidth, height});
+  const float height = UiPanel::GetHeightForBody(menu_.GetContentHeight(), scale);
+  const float width = kPanelWidth * scale;
+  panelTop_ = ScreenSize::kHeight - kPanelBottomMargin * scale - height;
+  panel_.SetBounds({(ScreenSize::kWidth - width) * kHalf, panelTop_}, {width, height});
 }
 
 void ResultMenu::Open(float delaySeconds) {

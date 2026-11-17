@@ -17,7 +17,23 @@ constexpr const char *kSaveTempSuffix = ".tmp"; // 書き込み途中で止ま�
 constexpr const char *kKeyStages = "stages";
 constexpr const char *kKeyUnlocked = "unlocked";
 constexpr const char *kKeyUnlockShown = "unlockShown";
+constexpr const char *kKeyBestScore = "bestScore";
+constexpr const char *kKeyBestPoints = "bestPoints";
+constexpr const char *kKeyBestRank = "bestRank";
+// 点数の更新とみなす最小の差(浮動小数点の誤差で、同じ点数が「更新」にならないようにする)
+constexpr float kPointsEpsilon = 0.01f;
 constexpr int kJsonIndent = 2;
+
+// 保存した文字("S" など)を、ランクにする。知らない文字のときは false
+bool ParseRank(const std::string &text, RunRank &out) {
+  for (RunRank rank : {RunRank::S, RunRank::A, RunRank::B, RunRank::C}) {
+    if (text == RankToString(rank)) {
+      out = rank;
+      return true;
+    }
+  }
+  return false;
+}
 
 std::filesystem::path GetSavePath() {
   return AbsoluteEngine::AssetPath::GetExeDirectory() / kSaveDirectory / kSaveFileName;
@@ -54,6 +70,18 @@ void StageProgress::Load_() {
       Entry entry;
       entry.unlocked = it.value().value(kKeyUnlocked, false);
       entry.unlockShown = it.value().value(kKeyUnlockShown, false);
+      // ベスト記録(3 つがそろっているときだけ、記録ありとして読む。壊れた値は、記録なしにする)
+      const auto &value = it.value();
+      if (value.contains(kKeyBestScore) && value.contains(kKeyBestPoints) && value.contains(kKeyBestRank) &&
+          value[kKeyBestScore].is_number() && value[kKeyBestPoints].is_number() && value[kKeyBestRank].is_string()) {
+        RunRank rank = RunRank::C;
+        if (ParseRank(value[kKeyBestRank].get<std::string>(), rank)) {
+          entry.best.exists = true;
+          entry.best.score = value[kKeyBestScore].get<int>();
+          entry.best.points = value[kKeyBestPoints].get<float>();
+          entry.best.rank = rank;
+        }
+      }
       entries_[it.key()] = entry;
     }
   } catch (const std::exception &e) {
@@ -67,7 +95,13 @@ void StageProgress::Save_() const {
   try {
     nlohmann::json stages = nlohmann::json::object();
     for (const auto &pair : entries_) {
-      stages[pair.first] = {{kKeyUnlocked, pair.second.unlocked}, {kKeyUnlockShown, pair.second.unlockShown}};
+      nlohmann::json stageJson = {{kKeyUnlocked, pair.second.unlocked}, {kKeyUnlockShown, pair.second.unlockShown}};
+      if (pair.second.best.exists) {
+        stageJson[kKeyBestScore] = pair.second.best.score;
+        stageJson[kKeyBestPoints] = pair.second.best.points;
+        stageJson[kKeyBestRank] = RankToString(pair.second.best.rank);
+      }
+      stages[pair.first] = stageJson;
     }
     const nlohmann::json root = {{kKeyStages, stages}};
 
@@ -107,6 +141,41 @@ std::string StageProgress::FindPendingUnlock() const {
     if (pair.second.unlocked && !pair.second.unlockShown) return pair.first;
   }
   return {};
+}
+
+BestUpdate StageProgress::RecordRun(const std::string &stageId, const RunResult &result) {
+  Entry &entry = entries_[stageId];
+  BestUpdate update;
+  update.previous = entry.best;
+
+  if (!entry.best.exists) {
+    // 初めてのクリア: 今回の値が、そのままベストになる(ランクの比較は、できないので、ランクアップとは言わない)
+    update.scoreImproved = true;
+    update.pointsImproved = true;
+    entry.best.exists = true;
+    entry.best.score = result.score;
+    entry.best.points = result.totalPoints;
+    entry.best.rank = result.rank;
+  } else {
+    // スコア、点数、ランクを、それぞれ別に、最高の値へ更新する
+    if (result.score > entry.best.score) {
+      update.scoreImproved = true;
+      entry.best.score = result.score;
+    }
+    if (result.totalPoints > entry.best.points + kPointsEpsilon) {
+      update.pointsImproved = true;
+      entry.best.points = result.totalPoints;
+    }
+    if (static_cast<int>(result.rank) > static_cast<int>(entry.best.rank)) {
+      update.rankImproved = true;
+      entry.best.rank = result.rank;
+    }
+  }
+
+  if (update.scoreImproved || update.pointsImproved || update.rankImproved) {
+    Save_();
+  }
+  return update;
 }
 
 void StageProgress::MarkUnlockShown(const std::string &stageId) {

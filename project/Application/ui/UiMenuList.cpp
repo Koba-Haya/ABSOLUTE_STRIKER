@@ -77,7 +77,7 @@ void UiMenuList::SetCursor(int index) {
 float UiMenuList::GetContentHeight() const {
   if (items_.empty()) return 0.0f;
   const float count = static_cast<float>(items_.size());
-  return kRowHeight * count + kRowGap * (count - 1.0f); // 最後の行の下には間隔を入れない
+  return (kRowHeight * count + kRowGap * (count - 1.0f)) * scale_; // 最後の行の下には間隔を入れない
 }
 
 const UiMenuList::Item *UiMenuList::GetSelectedItem() const {
@@ -134,38 +134,45 @@ float UiMenuList::GetRejectFlash_() const {
 void UiMenuList::Draw(const Vector2 &origin, float width, float alpha) {
   if (!font_ || alpha <= 0.0f || items_.empty()) return;
 
-  const float lineHeight = font_->GetLineHeight(kFontSize);
-  const float rowStep = kRowHeight + kRowGap;
+  // 寸法は、倍率(scale_)を掛けた値を使う
+  const float rowHeight = kRowHeight * scale_;
+  const float fontSize = kFontSize * scale_;
+  const float textPaddingX = kTextPaddingX * scale_;
+  const float markerWidth = kMarkerWidth * scale_;
+  const float rightPaddingX = kRightPaddingX * scale_;
+  const float lockIconGap = kLockIconGap * scale_;
+  const float lineHeight = font_->GetLineHeight(fontSize);
+  const float rowStep = rowHeight + kRowGap * scale_;
 
   for (int i = 0; i < GetItemCount(); ++i) {
     const Item &item = items_[i];
     const bool selected = (i == cursor_);
     const float rowTop = origin.y + rowStep * static_cast<float>(i);
-    const float textY = rowTop + (kRowHeight - lineHeight) * kHalf;
+    const float textY = rowTop + (rowHeight - lineHeight) * kHalf;
 
     // 選択中の帯: 点滅する。ロック中の項目は青くせず灰色にし、拒んだ直後は赤く光らせる
     if (selected) {
       Vector4 bar = WithAlphaScale(item.locked ? kBarLockedColor : kBarColor, GetBlinkRatio_());
       bar = Lerp(bar, kRejectColor, GetRejectFlash_());
-      rects_.Fill(UiRect{origin.x, rowTop, width, kRowHeight}, WithAlphaScale(bar, alpha));
+      rects_.Fill(UiRect{origin.x, rowTop, width, rowHeight}, WithAlphaScale(bar, alpha));
     }
 
     // 選択印と項目の文字
     const Vector4 &textColor = item.locked ? kLockedTextColor : (selected ? kSelectedTextColor : kNormalTextColor);
     if (selected) {
-      font_->Draw(kSelectMarker, {origin.x + kTextPaddingX, textY}, kFontSize, WithAlphaScale(kMarkerColor, alpha));
+      font_->Draw(kSelectMarker, {origin.x + textPaddingX, textY}, fontSize, WithAlphaScale(kMarkerColor, alpha));
     }
-    font_->Draw(item.label, {origin.x + kTextPaddingX + kMarkerWidth, textY}, kFontSize,
+    font_->Draw(item.label, {origin.x + textPaddingX + markerWidth, textY}, fontSize,
                 WithAlphaScale(textColor, alpha));
 
     // ロック表示: 右端に「鍵 ロック中」
     if (item.locked) {
-      const float rightEdge = origin.x + width - kRightPaddingX;
-      const float labelWidth = font_->Measure(kLockedLabel, kFontSize).x;
-      const float iconWidth = font_->Measure(kLockIcon, kFontSize).x;
-      font_->Draw(kLockedLabel, {rightEdge, textY}, kFontSize, WithAlphaScale(kLockedTextColor, alpha),
+      const float rightEdge = origin.x + width - rightPaddingX;
+      const float labelWidth = font_->Measure(kLockedLabel, fontSize).x;
+      const float iconWidth = font_->Measure(kLockIcon, fontSize).x;
+      font_->Draw(kLockedLabel, {rightEdge, textY}, fontSize, WithAlphaScale(kLockedTextColor, alpha),
                   BitmapFont::Align::Right);
-      font_->Draw(kLockIcon, {rightEdge - labelWidth - kLockIconGap - iconWidth, textY}, kFontSize,
+      font_->Draw(kLockIcon, {rightEdge - labelWidth - lockIconGap - iconWidth, textY}, fontSize,
                   WithAlphaScale(kLockedTextColor, alpha));
     }
   }

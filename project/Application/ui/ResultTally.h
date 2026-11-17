@@ -2,6 +2,7 @@
 #include "BitmapFont.h"
 #include "UiPanel.h"
 #include "UiRectRenderer.h"
+#include "../result/BestRecord.h"
 #include "../result/RunResult.h"
 
 /// <summary>
@@ -25,8 +26,11 @@ public:
   /// <summary>集計を置く縦の範囲(画面ピクセル。top は上端、bottom は下端)を決める。見出しとメニューの間を、渡す。Begin の前に呼ぶ</summary>
   void SetVerticalRange(float top, float bottom);
 
-  /// <summary>集計を始める。delaySeconds だけ待ってから、パネルが開く(見出しが現れるのを待つときなどに使う)</summary>
-  void Begin(const RunResult &result, float delaySeconds);
+  /// <summary>
+  /// 集計を始める。delaySeconds だけ待ってから、パネルが開く(見出しが現れるのを待つときなどに使う)。
+  /// best: 今回の結果を記録したときの、ベスト記録の更新の内容(「ベスト」と「NEW RECORD」、ランクアップの表示に使う)
+  /// </summary>
+  void Begin(const RunResult &result, const BestUpdate &best, float delaySeconds);
 
   /// <summary>結果が渡されて、集計が始まったか(Begin を呼んだか)</summary>
   bool IsActive() const { return active_; }
@@ -66,6 +70,7 @@ private:
   UiPanel rankPanel_; // 右: 合計とランク
   UiRectRenderer rects_;
   RunResult result_;
+  BestUpdate best_; // ベスト記録の更新の内容
   std::vector<Row> rows_;
   bool active_ = false;
   float top_ = 0.0f;
