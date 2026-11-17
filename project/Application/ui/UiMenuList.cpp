@@ -63,6 +63,11 @@ void UiMenuList::SetItems(std::vector<Item> items) {
   lastMoveTime_ = std::chrono::steady_clock::now();
 }
 
+void UiMenuList::SetItemLabel(int index, const std::string &label) {
+  if (index < 0 || index >= static_cast<int>(items_.size())) return;
+  items_[index].label = label;
+}
+
 void UiMenuList::SetItemLocked(int index, bool locked) {
   if (index < 0 || index >= static_cast<int>(items_.size())) return;
   items_[index].locked = locked;
@@ -85,7 +90,34 @@ const UiMenuList::Item *UiMenuList::GetSelectedItem() const {
 }
 
 UiMenuList::Event UiMenuList::Update(const Input *input) {
-  return Apply(UiMenuInput::Poll(input));
+  // キーボードとパッドを先に見る。何も押されていなければ、マウスを見る
+  const Event keyEvent = Apply(UiMenuInput::Poll(input));
+  if (keyEvent != Event::None) return keyEvent;
+  return UpdatePointer_(UiPointer::Poll(input));
+}
+
+UiMenuList::Event UiMenuList::UpdatePointer_(const UiPointer::State &pointer) {
+  if (!pointer.valid || !hasLayout_ || items_.empty()) return Event::None;
+
+  // マウスの下にある項目を探す
+  int hovered = -1;
+  for (int i = 0; i < GetItemCount(); ++i) {
+    const UiRect row{drawOrigin_.x, drawOrigin_.y + drawRowStep_ * static_cast<float>(i), drawWidth_, drawRowHeight_};
+    if (UiPointer::Contains(row, pointer.position)) {
+      hovered = i;
+      break;
+    }
+  }
+  if (hovered < 0) return Event::None;
+
+  // マウスが動いた(または、クリックした)ときだけ、選択を移す。止まったままのマウスが、キーボードの選択を上書きしないため
+  bool changed = false;
+  if ((pointer.moved || pointer.leftClicked) && hovered != cursor_) {
+    SetCursor(hovered);
+    changed = true;
+  }
+  if (pointer.leftClicked) return Apply(UiMenuInput::Command::Decide);
+  return changed ? Event::Moved : Event::None;
 }
 
 UiMenuList::Event UiMenuList::Apply(UiMenuInput::Command command) {
@@ -105,8 +137,10 @@ UiMenuList::Event UiMenuList::Apply(UiMenuInput::Command command) {
       return Event::DecidedLocked;
     }
     return Event::Decided;
+  case UiMenuInput::Command::Left:
+  case UiMenuInput::Command::Right:
   case UiMenuInput::Command::None:
-    break;
+    break; // 上下だけのメニューなので、左右は無視する
   }
   return Event::None;
 }
@@ -143,6 +177,13 @@ void UiMenuList::Draw(const Vector2 &origin, float width, float alpha) {
   const float lockIconGap = kLockIconGap * scale_;
   const float lineHeight = font_->GetLineHeight(fontSize);
   const float rowStep = rowHeight + kRowGap * scale_;
+
+  // マウスの当たり判定のために、描いた位置を覚える
+  hasLayout_ = true;
+  drawOrigin_ = origin;
+  drawWidth_ = width;
+  drawRowHeight_ = rowHeight;
+  drawRowStep_ = rowStep;
 
   for (int i = 0; i < GetItemCount(); ++i) {
     const Item &item = items_[i];

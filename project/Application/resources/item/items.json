@@ -24,6 +24,8 @@
     "items": [
         {
             "id": "lockOnPlus",
+            "shortName": "ロックオン上限",
+            "uiColor": [0.66, 0.70, 0.80],
             "name": "ロックオン上限 +1",
             "effect": "lockOnMax",
             "amount": 1,
@@ -33,6 +35,8 @@
         },
         {
             "id": "maxHpPlus",
+            "shortName": "最大HP",
+            "uiColor": [1.0, 0.36, 0.36],
             "name": "最大HP +1",
             "effect": "maxHp",
             "amount": 1,
@@ -42,6 +46,8 @@
         },
         {
             "id": "lockRadiusPlus",
+            "shortName": "ロックオン範囲",
+            "uiColor": [0.40, 0.90, 0.45],
             "name": "ロックオン範囲 +10",
             "effect": "lockRadius",
             "amount": 1,
@@ -51,6 +57,8 @@
         },
         {
             "id": "dodgePlus",
+            "shortName": "回避",
+            "uiColor": [0.40, 0.85, 1.0],
             "name": "回避クールダウン -0.1秒",
             "effect": "dodgeCooldown",
             "amount": 1,
@@ -60,6 +68,8 @@
         },
         {
             "id": "firePlus",
+            "shortName": "連射",
+            "uiColor": [1.0, 0.88, 0.30],
             "name": "連射 +5%",
             "effect": "fireRate",
             "amount": 1,
@@ -69,6 +79,8 @@
         },
         {
             "id": "pullPlus",
+            "shortName": "吸い寄せ範囲",
+            "uiColor": [0.92, 0.50, 0.90],
             "name": "吸い寄せ範囲 +2",
             "effect": "pullRadius",
             "amount": 1,

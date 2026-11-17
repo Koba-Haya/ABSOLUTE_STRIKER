@@ -16,5 +16,13 @@ UiMenuInput::Command UiMenuInput::Poll(const Input *input) {
       input->WasPadPressed(XINPUT_GAMEPAD_DPAD_DOWN)) {
     return Command::Down;
   }
+  if (input->TriggerKey(DIK_LEFT) || input->TriggerKey(DIK_A) ||
+      input->WasPadPressed(XINPUT_GAMEPAD_DPAD_LEFT)) {
+    return Command::Left;
+  }
+  if (input->TriggerKey(DIK_RIGHT) || input->TriggerKey(DIK_D) ||
+      input->WasPadPressed(XINPUT_GAMEPAD_DPAD_RIGHT)) {
+    return Command::Right;
+  }
   return Command::None;
 }

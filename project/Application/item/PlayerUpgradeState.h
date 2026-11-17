@@ -3,30 +3,44 @@
 
 #include "ItemDefinition.h"
 
-// 取得した強化の合計(強化の種類ごとの「積み数」)を持つクラス。
-// 分けた理由: 「強化がどれだけたまっているか」と「ステージをまたいで持ち越すか」の方針を、ここ 1 か所に閉じ込めるため。
-//             持ち越しの有無は、items.json の upgrade.carryOverBetweenStages の 1 つの値で切り替える。
-//             効果をどう自機へ反映するか(ItemEffectApplier)や、アイテムの出現とは関係を持たない。
-// 積み数: 強化 1 回につき 1 つ(アイテムの amount 個)ずつ増える。強化の値は、積み数 x 1 回あたりの量(ItemEffectSpec::perStack)。
-// 持ち越しの仕組み: 強化の値は、アプリが動いている間ずっと残る 1 個のインスタンス(Persistent)に持つ。
-//   ステージの開始(BeginStage)で、持ち越さない設定なら 0 に戻し、持ち越す設定なら、前のステージの値をそのまま使う。
+// 強化の合計(強化の種類ごとの「積み数」)を持つクラス。積み数は、2 つに分けて持つ。
+//   継承した分(小数): 前の世代から引き継いだ強化(InheritanceState)。ランクの倍率を掛けてあるので、小数になる
+//   今回取った分(整数): このステージで、アイテムを取って増えた強化。ステージが始まるたびに 0 へ戻る
+// 合計 = 継承した分 + 今回取った分。強化の値は、合計(上限で頭打ち) x 1 回あたりの量(ItemEffectSpec::perStack)。
+// 分けた理由: クリア後に、「今回取った分」から継承を選ぶので、継承した分と区別して持つ必要がある。
+//             「継承するか」「持ち越すか」の方針は、ここに閉じ込める(効果を自機へ反映する ItemEffectApplier や、
+//             アイテムの出現とは関係を持たない)。
+// 持ち越しの仕組み: アプリが動いている間ずっと残る 1 個のインスタンス(Persistent)に持つ。
+//   ステージの開始(BeginStage)で、今回取った分を 0 へ戻す(items.json の carryOverBetweenStages が true なら、残す)。
+//   継承した分は、ステージの開始のたびに、シーンが SetInherited で入れ直す。
 //   (ゲームオーバーからのやり直しも、ステージの開始として扱う)
 class PlayerUpgradeState {
 public:
   // アプリの間ずっと残る、強化の状態
   static PlayerUpgradeState &Persistent();
 
-  // ステージの開始で呼ぶ。carryOver が false なら、強化をすべて 0 に戻す
+  // ステージの開始で呼ぶ。carryOver が false なら、今回取った分を 0 に戻す(継承した分は、変えない)
   void BeginStage(bool carryOver);
 
-  // 強化 kind の積み数
-  int GetStacks(ItemEffectKind kind) const { return stacks_[static_cast<size_t>(kind)]; }
+  // 継承した分(小数)を決める。ステージの開始で、InheritanceState の値を入れる
+  void SetInherited(ItemEffectKind kind, float stacks) { inherited_[static_cast<size_t>(kind)] = stacks < 0.0f ? 0.0f : stacks; }
 
-  // 強化 kind の積み数を amount だけ増やす。合計が maxStacks を超えないようにする。実際に増えた量を返す
-  int AddStacks(ItemEffectKind kind, int amount, int maxStacks);
+  float GetInherited(ItemEffectKind kind) const { return inherited_[static_cast<size_t>(kind)]; }
+  // 今回取った分(整数)
+  int GetEarned(ItemEffectKind kind) const { return earned_[static_cast<size_t>(kind)]; }
+  // 合計(継承した分 + 今回取った分。上限での頭打ちは、しない。値を求める側が、頭打ちにする)
+  float GetTotal(ItemEffectKind kind) const { return GetInherited(kind) + static_cast<float>(GetEarned(kind)); }
+
+  // 今回取った分を amount だけ増やす。継承した分と合わせて、maxStacks を超えないようにする。実際に増えた量を返す。
+  // (継承した分が小数のとき、取れる整数の数は、上限から継承した分を引いて、切り捨てた数)
+  int AddEarned(ItemEffectKind kind, int amount, int maxStacks);
+
+  // あと何回、取れるか(0 なら、取っても何も起きない)
+  int GetRemainingEarnable(ItemEffectKind kind, int maxStacks) const;
 
 private:
   PlayerUpgradeState() = default;
 
-  std::array<int, kItemEffectKindCount> stacks_{};
+  std::array<float, kItemEffectKindCount> inherited_{};
+  std::array<int, kItemEffectKindCount> earned_{};
 };

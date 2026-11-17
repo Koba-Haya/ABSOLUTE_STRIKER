@@ -78,6 +78,7 @@
     <ClCompile Include="hud\HudLockOnMarkers.cpp" />
     <ClCompile Include="hud\HudStatusView.cpp" />
     <ClCompile Include="hud\UpgradeToast.cpp" />
+    <ClCompile Include="inheritance\InheritanceState.cpp" />
     <ClCompile Include="actor\Player\LockOnSystem.cpp" />
     <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
@@ -117,6 +118,10 @@
     <ClCompile Include="ui\UiPanel.cpp" />
     <ClCompile Include="ui\ResultMenu.cpp" />
     <ClCompile Include="ui\ResultTally.cpp" />
+    <ClCompile Include="ui\InheritancePicker.cpp" />
+    <ClCompile Include="ui\UiContinuePrompt.cpp" />
+    <ClCompile Include="ui\UiPipBar.cpp" />
+    <ClCompile Include="ui\UiPointer.cpp" />
     <ClCompile Include="ui\StageCard.cpp" />
     <ClCompile Include="ui\UiMenuInput.cpp" />
     <ClCompile Include="ui\UiMenuList.cpp" />
@@ -197,6 +202,7 @@
     <ClInclude Include="hud\HudStyle.h" />
     <ClInclude Include="hud\HudStatusView.h" />
     <ClInclude Include="hud\UpgradeToast.h" />
+    <ClInclude Include="inheritance\InheritanceState.h" />
     <ClInclude Include="actor\Player\LockOnSystem.h" />
     <ClInclude Include="ScreenSize.h" />
     <ClInclude Include="actor\Bullet\BulletFactory.h" />
@@ -245,6 +251,10 @@
     <ClInclude Include="ui\UiPanel.h" />
     <ClInclude Include="ui\ResultMenu.h" />
     <ClInclude Include="ui\ResultTally.h" />
+    <ClInclude Include="ui\InheritancePicker.h" />
+    <ClInclude Include="ui\UiContinuePrompt.h" />
+    <ClInclude Include="ui\UiPipBar.h" />
+    <ClInclude Include="ui\UiPointer.h" />
     <ClInclude Include="ui\StageCard.h" />
     <ClInclude Include="ui\UiMenuInput.h" />
     <ClInclude Include="ui\UiMenuList.h" />

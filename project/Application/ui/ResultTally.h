@@ -38,6 +38,9 @@ public:
   /// <summary>集計が、すべて終わったか(ランクが決まったあと。Begin を呼ぶ前は false)</summary>
   bool IsFinished() const { return active_ && time_ >= finishTime_; }
 
+  /// <summary>集計全体(2 つのパネルと中身)の透明度の倍率(1 で通常、0 で消える)。継承の選択へ切り替えるときに、集計を薄く消すのに使う</summary>
+  void SetOpacityScale(float scale);
+
   /// <summary>集計を飛ばして、最後の状態(すべて現れ、ランクが決まった状態)へ移る</summary>
   void Skip();
 

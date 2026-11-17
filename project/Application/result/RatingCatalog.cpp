@@ -25,6 +25,9 @@ constexpr const char *kKeyRanks = "ranks";
 constexpr const char *kKeyRankS = "S";
 constexpr const char *kKeyRankA = "A";
 constexpr const char *kKeyRankB = "B";
+constexpr const char *kKeyInheritance = "inheritance";
+constexpr const char *kKeySlots = "slots";
+constexpr const char *kKeyRarity = "rarity";
 
 // 定義が正しくないときの終了。何が悪いかを、探したファイルの場所と一緒に表示する
 [[noreturn]] void FailInvalid(const std::string &resolvedPath, const std::string &reason) {
@@ -95,5 +98,19 @@ void RatingCatalog::Load_() {
   // しきい値は、S > A > B の順(逆だと、ランクが決まらない)
   if (!(settings_.thresholdS > settings_.thresholdA && settings_.thresholdA > settings_.thresholdB)) {
     FailInvalid(path, "ranks must satisfy S > A > B");
+  }
+
+  // 継承のルール(ランクごとの、枠数と倍率)。書くときは、4 つのランクすべてを書く
+  const nlohmann::json &inheritance = RequireObject(root, kKeyInheritance, path);
+  const std::pair<const char *, RunRank> rankKeys[] = {
+      {kKeyRankS, RunRank::S}, {kKeyRankA, RunRank::A}, {kKeyRankB, RunRank::B}, {"C", RunRank::C}};
+  for (const auto &entry : rankKeys) {
+    const nlohmann::json &rule = RequireObject(inheritance, entry.first, path);
+    InheritanceRule &out = settings_.inheritance[static_cast<size_t>(entry.second)];
+    out.slots = static_cast<int>(RequireNumber(rule, kKeySlots, path));
+    out.rarity = RequireNumber(rule, kKeyRarity, path);
+    if (out.slots < 0 || out.rarity <= 0.0f) {
+      FailInvalid(path, std::string("inheritance.") + entry.first + " needs slots >= 0 and rarity > 0");
+    }
   }
 }

@@ -198,6 +198,11 @@ void ResultTally::Begin(const RunResult &result, const BestUpdate &best, float d
   waitSeconds_ = delaySeconds;
 }
 
+void ResultTally::SetOpacityScale(float scale) {
+  rowsPanel_.SetOpacityScale(scale);
+  rankPanel_.SetOpacityScale(scale);
+}
+
 void ResultTally::Skip() {
   if (!active_) return;
   time_ = (std::max)(time_, finishTime_);

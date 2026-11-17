@@ -1912,9 +1912,10 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
     // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
     for (const ItemDefinition& def : ItemCatalog::GetInstance().GetItems()) {
-        const int stacks = PlayerUpgradeState::Persistent().GetStacks(def.effect);
+        const PlayerUpgradeState& upgradeState = PlayerUpgradeState::Persistent();
         const int maxStacks = ItemCatalog::GetInstance().GetUpgradeSettings().Get(def.effect).maxStacks;
-        ImGui::Text("Upgrade %s: %d / %d", def.id.c_str(), stacks, maxStacks);
+        ImGui::Text("Upgrade %s: earned %d + inherited %.1f  (max %d)", def.id.c_str(), upgradeState.GetEarned(def.effect),
+                    upgradeState.GetInherited(def.effect), maxStacks);
         ImGui::SameLine();
         if (ImGui::SmallButton(("Grant##" + def.id).c_str())) {
             itemSystem_.DebugGrant(def);

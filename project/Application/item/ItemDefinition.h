@@ -27,8 +27,10 @@ constexpr size_t kItemEffectKindCount = static_cast<size_t>(ItemEffectKind::Coun
 struct ItemDefinition {
   std::string id;           // 識別子(item_drops.json から参照する)
   std::string name;         // 取ったときに画面に出す文字(UTF-8。「最大HP +1」など)。省略したら id
+  std::string shortName;    // 継承の選択などで、種類を示す短い名前(数字なし。「最大HP」など)。省略したら name
+  Vector3 uiColor{0.62f, 0.86f, 1.0f}; // 画面の印の色(アイテムのパレット画像の色に合わせる。省略したら水色)
   ItemEffectKind effect = ItemEffectKind::LockOnMax;
-  int amount = 1;           // 効果の量(LockOnMax なら、上限を増やす数)
+  int amount = 1;          // 効果の量(LockOnMax なら、上限を増やす数)
   std::string modelPath;    // モデル(glTF)。exe 基準のパス
   std::string texturePath;  // パレット画像。exe 基準のパス
   float scale = 1.0f;       // モデルの拡大率

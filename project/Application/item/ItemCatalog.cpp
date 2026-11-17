@@ -24,6 +24,8 @@ constexpr const char *kKeyTexture = "texture";
 constexpr const char *kKeyScale = "scale";
 constexpr const char *kKeyName = "name";
 constexpr const char *kKeyColor = "color";
+constexpr const char *kKeyShortName = "shortName";
+constexpr const char *kKeyUiColor = "uiColor";
 constexpr const char *kKeyEffects = "effects";
 constexpr const char *kKeyPerStack = "perStack";
 constexpr const char *kKeyMaxStacks = "maxStacks";
@@ -72,6 +74,13 @@ void ReadNumber(const nlohmann::json &section, const char *key, T &target, const
   target = it->get<T>();
 }
 } // namespace
+
+const char *ItemCatalog::GetEffectName(ItemEffectKind kind) {
+  for (const auto &entry : kEffectNames) {
+    if (entry.second == kind) return entry.first;
+  }
+  return "unknown"; // 到達しない(表に無い種類は、列挙の追加忘れ)
+}
 
 ItemCatalog::ItemCatalog() {
   Load_();
@@ -171,6 +180,15 @@ void ItemCatalog::Load_() {
         FailInvalid(pathText, "items[" + std::to_string(i) + "].color must be [r, g, b]");
       }
       def.color = {(*colorIt)[0].get<float>(), (*colorIt)[1].get<float>(), (*colorIt)[2].get<float>()};
+    }
+    def.shortName = entry.value(kKeyShortName, def.name);
+    // 画面の印の色は、[r, g, b](省略したら既定の水色)
+    if (const auto uiColorIt = entry.find(kKeyUiColor); uiColorIt != entry.end()) {
+      if (!uiColorIt->is_array() || uiColorIt->size() != 3 || !(*uiColorIt)[0].is_number() || !(*uiColorIt)[1].is_number() ||
+          !(*uiColorIt)[2].is_number()) {
+        FailInvalid(pathText, "items[" + std::to_string(i) + "].uiColor must be [r, g, b]");
+      }
+      def.uiColor = {(*uiColorIt)[0].get<float>(), (*uiColorIt)[1].get<float>(), (*uiColorIt)[2].get<float>()};
     }
     if (!usedIds.insert(def.id).second) {
       FailInvalid(pathText, "duplicate item id: " + def.id);

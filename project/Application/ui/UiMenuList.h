@@ -1,5 +1,6 @@
 #pragma once
 #include "UiMenuInput.h"
+#include "UiPointer.h"
 #include "UiRectRenderer.h"
 #include "Vector.h"
 #include <chrono>
@@ -50,6 +51,9 @@ public:
   /// <summary>項目を入れ替える。選択は先頭に戻る</summary>
   void SetItems(std::vector<Item> items);
 
+  /// <summary>index 番目の項目の文字を変える(範囲外なら何もしない。選択の印を付け替えるなど、選択を動かさずに表示だけ変えるのに使う)</summary>
+  void SetItemLabel(int index, const std::string &label);
+
   /// <summary>index 番目の項目の、ロックの有無を切り替える(範囲外なら何もしない。鍵が外れる演出のあとに、解放済みへ変えるのに使う)</summary>
   void SetItemLocked(int index, bool locked);
 
@@ -68,7 +72,12 @@ public:
   /// <summary>選択中の項目(項目が無いときは nullptr)</summary>
   const Item *GetSelectedItem() const;
 
-  /// <summary>1 フレームの入力を読んで、選択を動かす / 決定する。入力を受けたくない間(遷移中など)は呼ばない</summary>
+  /// <summary>
+  /// 1 フレームの入力を読んで、選択を動かす / 決定する。入力を受けたくない間(遷移中など)は呼ばない。
+  /// キーボードとパッドの命令がなければ、マウスを読む(UiPointer): マウスが動いて項目の上に来たら、選択がそこへ移り(Moved)、
+  /// 項目の上で左クリックすると、決定する(Decided。ロック中なら DecidedLocked)。
+  /// マウスの当たり判定は、直前の Draw で描いた位置を使う(まだ描いていない間は、反応しない)
+  /// </summary>
   Event Update(const Input *input);
 
   /// <summary>入力を介さずに命令を直接与える(展示モードの自動決定など)</summary>
@@ -83,6 +92,8 @@ public:
   void Draw(const Vector2 &origin, float width, float alpha);
 
 private:
+  /// マウスの状態を読んで、選択を動かす / 決定する(Update から呼ぶ)
+  Event UpdatePointer_(const UiPointer::State &pointer);
   /// 選択を step だけ動かす(端を越えたら反対側へ回り込む)
   void MoveCursor_(int step);
   /// 点滅の明るさの割合(0 から 1)。選択を動かした直後が 1
@@ -98,4 +109,10 @@ private:
   std::chrono::steady_clock::time_point lastRejectTime_; // ロック項目を最後に拒んだ時刻
   bool hasRejected_ = false;
   float scale_ = 1.0f; // 寸法の倍率(SetScale)
+  // 直前の Draw で描いた位置(マウスの当たり判定に使う)
+  bool hasLayout_ = false;
+  Vector2 drawOrigin_{0.0f, 0.0f};
+  float drawWidth_ = 0.0f;
+  float drawRowHeight_ = 0.0f;
+  float drawRowStep_ = 0.0f;
 };

@@ -3,6 +3,7 @@
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
+#include "../inheritance/InheritanceState.h"
 #include "ItemCatalog.h"
 #include "ItemEffectApplier.h"
 #include "ItemSpawner.h"
@@ -18,6 +19,11 @@ void ItemSystem::BeginStage(const std::shared_ptr<AbsoluteEngine::GameObject> &p
   PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
   // 持ち越さない設定なら 0 に戻る。持ち越す設定なら、前のステージの値を、ここで自機へ戻す
   state.BeginStage(settings.carryOverBetweenStages);
+  // 継承した分(前の世代から引き継いだ強化)を、ここで入れる。ゲームオーバーからのやり直しでも、同じ値が入る
+  for (size_t i = 0; i < kItemEffectKindCount; ++i) {
+    const ItemEffectKind kind = static_cast<ItemEffectKind>(i);
+    state.SetInherited(kind, InheritanceState::GetInstance().GetInheritedStacks(kind));
+  }
   if (player) {
     if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
       ItemEffectApplier::SyncToPlayer(state, settings, *playerComp);

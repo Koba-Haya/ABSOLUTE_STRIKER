@@ -15,5 +15,11 @@
         "S": 90,
         "A": 75,
         "B": 55
+    },
+    "inheritance": {
+        "S": { "slots": 3, "rarity": 2.0 },
+        "A": { "slots": 2, "rarity": 1.5 },
+        "B": { "slots": 2, "rarity": 1.0 },
+        "C": { "slots": 1, "rarity": 1.0 }
     }
 }

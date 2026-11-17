@@ -15,6 +15,9 @@ public:
   // id に対応する定義を返す。無ければ nullptr
   const ItemDefinition *Find(const std::string &itemId) const;
 
+  // 強化の種類 kind の名前(items.json の "effect" や、保存ファイルの項目名に使う文字。例: "maxHp")
+  static const char *GetEffectName(ItemEffectKind kind);
+
   // すべてのアイテムの定義(JSON に書かれた順。開発用の表示などが使う)
   const std::vector<ItemDefinition> &GetItems() const { return items_; }
 
