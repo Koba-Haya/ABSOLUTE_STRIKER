@@ -40,8 +40,8 @@ void ResultMenu::Initialize() {
   panel_.Initialize(&font_);
   panel_.SetTitle(kPanelTitle);
   const float height = UiPanel::GetHeightForBody(menu_.GetContentHeight());
-  panel_.SetBounds({(ScreenSize::kWidth - kPanelWidth) * kHalf, ScreenSize::kHeight - kPanelBottomMargin - height},
-                   {kPanelWidth, height});
+  panelTop_ = ScreenSize::kHeight - kPanelBottomMargin - height;
+  panel_.SetBounds({(ScreenSize::kWidth - kPanelWidth) * kHalf, panelTop_}, {kPanelWidth, height});
 }
 
 void ResultMenu::Open(float delaySeconds) {

@@ -31,4 +31,7 @@ struct StageDefinition {
   BossKind boss = BossKind::Beetle;
   // 最初から遊べるか(false のステージは、ステージ選択でロック表示にする)
   bool unlocked = false;
+  // 評価の基準になる、このステージの目標スコア(RunEvaluator。このスコアに届くと、評価のスコアの項目が満点)。
+  // プレイして決める値。0 以下なら、スコアの項目は満点として扱う(基準が無いので、減点しない)
+  int scoreTarget = 0;
 };

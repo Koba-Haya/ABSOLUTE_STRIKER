@@ -40,6 +40,8 @@
 #include "../actor/Player/PlayerInput.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageProgress.h"
+#include "../result/RatingCatalog.h"
+#include "../result/RunEvaluator.h"
 #include "../stage/StageLaunchParams.h"
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
@@ -804,6 +806,9 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
     }
 
+    // リザルトの評価のための計測: 敵の出現(編隊のメンバーなら、編隊の ID も)
+    runStats_.OnEnemySpawned(formationComp != nullptr, formationComp ? formationComp->GetFormationId() : 0);
+
     // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
     enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
         // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
@@ -811,17 +816,23 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
 
         // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
         // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
-        if (reason != EnemyDestroyReason::Player) return;
+        if (reason != EnemyDestroyReason::Player) {
+            runStats_.OnEnemySelfDestructed(); // 自滅した敵は、撃破率の母数から外す(評価のための計測)
+            return;
+        }
 
         // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
         itemSystem_.OnEnemyDestroyed(*this, enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();
+        runStats_.OnEnemyKilled();
 
-        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する(戻り値の初期メンバー数は、いまは使わない)
+        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する。戻り値(初期メンバー数)が 0 より大きいときが、全滅の合図
         if (formationComp) {
-            scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId());
+            if (scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId()) > 0) {
+                runStats_.OnFormationCleared();
+            }
         }
     };
 }
@@ -1040,7 +1051,12 @@ void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
 }
 
 void GameScene::RequestResultScene_(const std::string &sceneId) {
-  RequestSceneChange(sceneId, StageLaunchParams{ResolveStage_().id});
+  StageLaunchParams params{ResolveStage_().id};
+  // クリアのときは、今回のプレイの結果(評価)を、クリア画面へ渡す
+  if (sceneId == SceneId::Clear) {
+    params.result = clearResult_;
+  }
+  RequestSceneChange(sceneId, std::move(params));
 }
 
 void GameScene::KillPlayer_() {
@@ -1219,6 +1235,31 @@ void GameScene::BeginClearing_() {
       }
   }
   // 次の島を解放するときだけ、Flow を延ばして(粒が島へ飛び、カメラが追う)、Release を足す(島の解放)。しないときは、今までの長さ
+  // 計測した成績の数字を、ログに出す(リザルトの評価を作るまでの、確認用)
+  {
+      const RunStats &stats = runStats_.GetStats();
+      Logger::GetInstance().Log(
+          "[RunStats] score=%d kills=%d | spawned=%d killed=%d selfDestruct=%d | formations=%d/%d | damage=%d hits=%d bossHits=%d | "
+          "time=%.1fs | maxLock=%d maxKillsInWindow=%d",
+          scoreTracker_.GetScore(), scoreTracker_.GetKillCount(), stats.enemiesSpawned, stats.enemiesKilled, stats.enemiesSelfDestructed,
+          stats.formationsCleared, stats.formationsSpawned, stats.damageTaken, stats.hitCount, stats.bossHitCount, stats.playSeconds,
+          stats.maxLockCount, stats.maxKillsInWindow);
+  }
+  // 今回のプレイを評価して、結果を決める(クリア画面へ渡す。内訳をログに出す)
+  {
+      int playerMaxHp = 0;
+      if (playerObj_) {
+          if (const auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+              playerMaxHp = pComp->GetMaxHp();
+          }
+      }
+      clearResult_ = RunEvaluator::Evaluate(runStats_.GetStats(), scoreTracker_.GetScore(), scoreTracker_.GetKillCount(),
+                                            ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+      const RunResult& r = *clearResult_;
+      Logger::GetInstance().Log("[Rating] rank=%s total=%.1f | score=%.1f kill=%.1f damage=%.1f formation=%.1f multiLock=%.1f bossNoDamage=%.1f",
+                                RankToString(r.rank), r.totalPoints, r.scoreEntry.points, r.killEntry.points, r.damageEntry.points,
+                                r.formationEntry.points, r.multiLockEntry.points, r.bossNoDamageEntry.points);
+  }
   const StageDefinition *nextLockedStage = FindNextLockedStage_();
   const bool releaseNextIsland = nextLockedStage != nullptr;
   ClearSettings clearSettings = clearSettings_;
@@ -1456,6 +1497,15 @@ void GameScene::Update() {
       // 世界の時間の速さに合わせる(ヒットストップで止まり、スローモーションで遅くなる)
       const float worldDeltaTime = deltaTime * GetWorldTimeScale();
       ParticleManager::GetInstance()->Update(worldDeltaTime);
+
+      // リザルトの評価のための計測(時間、被ダメージ、同時ロック数)。数えるのは、通常の進行とボス戦の間だけ
+      if (playerObj_) {
+          if (const auto* playerComp = playerObj_->GetComponent<PlayerComponent>()) {
+              const bool countingStats = phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss;
+              runStats_.Update(worldDeltaTime, countingStats, phase_ == GamePhase::Boss, playerComp->GetHp(),
+                               playerComp->GetLockOn().GetLockedCount());
+          }
+      }
 
       // EffectManagerの更新（RingEffectなど）
       EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
@@ -1710,7 +1760,9 @@ void GameScene::Draw() {
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
   // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive()) {
+  // ボス撃破の演出の間(clearDirector_)も、出さない(演出の邪魔になるため。スコア、進行バー、レティクルのすべて)
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive() &&
+      !clearDirector_.IsActive()) {
       // 雲は通常 EndRenderScene で描かれるため、先に描いた HUD が雲に隠れてしまう。
       // HUD を描く前に雲を合成しておく(GameOverBackdrop::ResolveClouds と同じ方法)。以降の 2D は、深度なしのパイプラインで描かれる
       renderer->FlushVolumeClouds();
@@ -1851,6 +1903,12 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
 
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
+    {
+        const RunStats& stats = runStats_.GetStats();
+        ImGui::Text("Run: spawned %d  killed %d  selfDestruct %d", stats.enemiesSpawned, stats.enemiesKilled, stats.enemiesSelfDestructed);
+        ImGui::Text("Run: formations %d / %d  maxLock %d  multiKill %d", stats.formationsCleared, stats.formationsSpawned, stats.maxLockCount, stats.maxKillsInWindow);
+        ImGui::Text("Run: damage %d  hits %d  bossHits %d  time %.1fs", stats.damageTaken, stats.hitCount, stats.bossHitCount, stats.playSeconds);
+    }
 
     // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
     if (phase_ == GamePhase::Boss) {

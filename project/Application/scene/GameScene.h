@@ -27,6 +27,8 @@
 #include "../actor/Player/WingShatter.h"
 #include "PlayerDeathDust.h"
 #include "ScoreTracker.h"
+#include "../result/RunStatsTracker.h"
+#include "../result/RunResult.h"
 #include "StageStartDirector.h"
 #include "StageNameBoard.h"
 #include "StageImpactEffects.h"
@@ -226,6 +228,8 @@ private:
 
   HitEffectSpawner hitEffects_;    // 敵撃破時のヒットエフェクト
   PostEffectDirector postEffects_; // ポストエフェクト・カメラシェイクの発火とタイマー
+  std::optional<RunResult> clearResult_;   // ボスを倒したときに決めた、今回のプレイの結果(クリア画面へ渡す)
+  RunStatsTracker runStats_;       // リザルトの評価の元になる、成績の数字(出現・撃破、被ダメージ、時間など)
   ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
   ItemSystem itemSystem_;          // ドロップアイテム(敵を倒したときの出現、取得、強化)
 

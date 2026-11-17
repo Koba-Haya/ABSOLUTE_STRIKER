@@ -32,6 +32,9 @@ public:
   /// <summary>現れる動きを始める(待ち秒の意味は UiPanel::Open と同じ)。呼ぶまでは、何も描かない</summary>
   void Open(float delaySeconds = 0.0f);
 
+  /// <summary>メニューのパネルの上端(画面ピクセル。Initialize のあと有効)。その上に、別の表示(結果の集計)を置くときの境目に使う</summary>
+  float GetPanelTop() const { return panelTop_; }
+
   /// <summary>現れる動きを始めたか</summary>
   bool IsOpen() const { return opened_; }
 
@@ -57,4 +60,5 @@ private:
   UiPanel panel_;    // 枠(出現の動き、透明度)
   UiMenuList menu_;  // 項目
   bool opened_ = false;
+  float panelTop_ = 0.0f; // パネルの上端(画面ピクセル)
 };
