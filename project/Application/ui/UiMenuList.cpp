@@ -63,6 +63,11 @@ void UiMenuList::SetItems(std::vector<Item> items) {
   lastMoveTime_ = std::chrono::steady_clock::now();
 }
 
+void UiMenuList::SetItemLocked(int index, bool locked) {
+  if (index < 0 || index >= static_cast<int>(items_.size())) return;
+  items_[index].locked = locked;
+}
+
 void UiMenuList::SetCursor(int index) {
   if (index < 0 || index >= GetItemCount()) return;
   cursor_ = index;

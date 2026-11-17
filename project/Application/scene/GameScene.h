@@ -18,7 +18,9 @@
 #include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
+#include "BossDefeatCamera.h"
 #include "BossDefeatVisual.h"
+#include "NextIslandView.h"
 #include "ClearDirector.h"
 #include "CloudImpact.h"
 #include "DeathCameraDirector.h"
@@ -83,6 +85,10 @@ private:
   // このシーンで遊ぶステージの定義を返す。荷物(StageLaunchParams)があればその ID のステージ、
   // 荷物が無い、または ID が一覧に無いときは、先頭のステージ。BaseScene::Initialize より前から呼ばれるので、毎回荷物から求める
   const StageDefinition &ResolveStage_() const;
+  // ボスを倒したあと、次のステージの島を解放する演出(粒が次の島へ飛ぶ)で、解放するステージを返す。
+  // 次のステージが存在し、まだロックされていて(StageProgress)、ボスが、ひび割れの形(演出の中心)を持つときだけ、そのステージ。
+  // 解放済みのステージの再クリア、最終ステージ(次が無い)は nullptr(今までどおり、元の位置へ戻る)
+  const StageDefinition *FindNextLockedStage_() const;
 
   // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。
   // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
@@ -269,6 +275,8 @@ private:
   std::vector<std::shared_ptr<ModelResource>> bossModelHolds_;
   std::shared_ptr<TextureResource> bossMaskHold_;
   BossShardInfo bossShardInfo_; // このステージのボスの、欠片の付属データ(撃破演出が使う。欠片のないボスは空)
+  BossDefeatCameraSettings bossDefeatCameraSettings_; // 撃破演出のカメラワーク(周回)の設定
+  NextIslandView nextIsland_;         // 粒が飛んでいく先の、次のステージをイメージする仮の島
   BossDefeatVisual bossDefeatVisual_; // 撃破演出の、ボスの見た目(外殻のひびと剥がれ、コアの光)
 
   std::unique_ptr<GameHUD> gameHUD_;

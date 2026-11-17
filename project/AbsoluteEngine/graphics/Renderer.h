@@ -140,6 +140,9 @@ public:
 
   // 描画メソッド群
   void DrawModel(ModelInstance *model);
+  // 島が蘇る見た目(次の島の解放)で描く。DrawModel と同じ描き方で、ピクセルシェーダーだけが IslandRevive.PS.hlsl。
+  // 蘇りの値は、ModelInstance::SetCrackParam で渡す(読み替えの取り決めは、IslandRevive.PS.hlsl の冒頭)。反射パスでは、通常の描き方になる
+  void DrawIslandReviveModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   // たくさんの四角形(文字など)を、1 回の描画命令でまとめて描く(BitmapFont が使う)。
   // vertices は quadCount * 4 個で、1 クワッドの並びは Sprite の単位四角形と同じ(左下、左上、右下、右上)。
@@ -308,6 +311,9 @@ private:
   SpotLightGroupCB *spotLightMapped_ = nullptr;
 
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
+  std::unique_ptr<UnifiedPipeline> islandRevivePipeline_; // 島が蘇る見た目(DrawIslandReviveModel)
+  // DrawModel の本体。pipelineOverride が nullptr でなければ、通常のモデルのパイプラインの代わりに使う(反射パスを除く)
+  void DrawModelInternal_(ModelInstance *model, UnifiedPipeline *pipelineOverride);
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> objPipelineMirrored_; // 反射パス用(鏡映で巻き順が逆になるので、表裏の判定を反転)
   std::unique_ptr<UnifiedPipeline> skinnedPipelineOpaque_;

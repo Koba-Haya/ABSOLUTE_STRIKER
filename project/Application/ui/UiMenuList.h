@@ -44,6 +44,9 @@ public:
   /// <summary>項目を入れ替える。選択は先頭に戻る</summary>
   void SetItems(std::vector<Item> items);
 
+  /// <summary>index 番目の項目の、ロックの有無を切り替える(範囲外なら何もしない。鍵が外れる演出のあとに、解放済みへ変えるのに使う)</summary>
+  void SetItemLocked(int index, bool locked);
+
   /// <summary>選択を index にする(範囲外なら何もしない)。戻ってきたときに前の選択を復元するのに使う</summary>
   void SetCursor(int index);
 

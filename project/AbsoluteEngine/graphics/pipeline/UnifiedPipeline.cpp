@@ -736,6 +736,13 @@ PipelineDesc UnifiedPipeline::MakeCylinderDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeIslandReviveDesc() {
+  // 頂点の形、定数バッファ、テクスチャの並びは Object3D と同じ(同じルートシグネチャのまま、ピクセルシェーダーだけを差し替える)
+  PipelineDesc d = MakeObject3DDesc();
+  d.psPath = L"resources/engine/shaders/IslandRevive.PS.hlsl";
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeGrayscaleDesc() {
   PipelineDesc d = MakeCopyImageDesc();
   d.psPath = L"resources/engine/shaders/Grayscale.PS.hlsl";

@@ -63,7 +63,7 @@ struct Field {
     uint32_t type; // 0:None 1:Attractor 2:Wind 3:Vortex 4:Drag 5:Turbulence 6:Spring
 };
 
-static const uint32_t kMaxFields = 5;
+static const uint32_t kMaxFields = 10; // GPUParticle.h の kMaxGPUFields と同じ値にすること
 
 struct FieldArray {
     Field fields[kMaxFields];

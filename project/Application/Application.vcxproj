@@ -221,6 +221,10 @@
     <ClCompile Include="scene\BossDefeatVisual.cpp" />
     <ClCompile Include="scene\BossShardInfo.cpp" />
     <ClCompile Include="scene\BossExplosion.cpp" />
+    <ClCompile Include="scene\BossDustHold.cpp" />
+    <ClCompile Include="scene\BossDefeatCamera.cpp" />
+    <ClCompile Include="scene\NextIslandView.cpp" />
+    <ClCompile Include="scene\IslandReleasePillar.cpp" />
     <ClCompile Include="scene\BossLightBeams.cpp" />
     <ClCompile Include="scene\BossShatter.cpp" />
     <ClCompile Include="scene\ClearDirector.cpp" />
@@ -239,6 +243,7 @@
     <ClCompile Include="scene\GameIntroDirector.cpp" />
     <ClCompile Include="scene\StageStartDirector.cpp" />
     <ClCompile Include="stage\StageCatalog.cpp" />
+    <ClCompile Include="stage\StageProgress.cpp" />
     <ClCompile Include="scene\StageSelectScene.cpp" />
     <ClCompile Include="ui\UiPanel.cpp" />
     <ClCompile Include="ui\ResultMenu.cpp" />
@@ -328,6 +333,10 @@
     <ClInclude Include="scene\BossDefeatVisual.h" />
     <ClInclude Include="scene\BossShardInfo.h" />
     <ClInclude Include="scene\BossExplosion.h" />
+    <ClInclude Include="scene\BossDustHold.h" />
+    <ClInclude Include="scene\BossDefeatCamera.h" />
+    <ClInclude Include="scene\NextIslandView.h" />
+    <ClInclude Include="scene\IslandReleasePillar.h" />
     <ClInclude Include="scene\BossLightBeams.h" />
     <ClInclude Include="scene\BossShatter.h" />
     <ClInclude Include="scene\ClearDirector.h" />
@@ -348,6 +357,7 @@
     <ClInclude Include="scene\GameIntroDirector.h" />
     <ClInclude Include="scene\StageStartDirector.h" />
     <ClInclude Include="stage\StageCatalog.h" />
+    <ClInclude Include="stage\StageProgress.h" />
     <ClInclude Include="stage\StageDefinition.h" />
     <ClInclude Include="stage\StageLaunchParams.h" />
     <ClInclude Include="scene\StageSelectScene.h" />

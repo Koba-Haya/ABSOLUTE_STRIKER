@@ -121,12 +121,13 @@ struct GPUField {
     uint32_t type;        // offset 28 (16-31: 16B)
 };
 
-static constexpr uint32_t kMaxGPUFields = 5;
+// 力の枠の数(HLSL の kMaxFields と同じ値にすること)。0 〜 4 は ScaleDust、5 〜 9 は、ボス撃破の粒の保持と解放(BossDustHold)が使う
+static constexpr uint32_t kMaxGPUFields = 10;
 
 struct GPUFieldArray {
-    GPUField fields[kMaxGPUFields]; // 5*32=160バイト
-    uint32_t count;                  // offset 160
-    float pad[3];                    // offset 164 (160-175: 16B)
+    GPUField fields[kMaxGPUFields]; // 10*32=320バイト
+    uint32_t count;                  // offset 320
+    float pad[3];                    // offset 324 (320-335: 16B)
 };
 
 // 発光パス(雲の合成のあとに、加算で描く層)の調整値。HLSL の GPUParticleGlow.hlsli の GlowParams と同じ並び(16 バイトのブロックごと)

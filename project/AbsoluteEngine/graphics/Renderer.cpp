@@ -65,6 +65,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
     objPipelineOpaque_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineOpaque_->Initialize(device, utils, compiler,
                                               includeHandler, desc));
+    {
+      // 島が蘇る見た目(Object3D と同じ形で、ピクセルシェーダーだけが違う)
+      PipelineDesc reviveDesc = UnifiedPipeline::MakeIslandReviveDesc();
+      islandRevivePipeline_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(islandRevivePipeline_->Initialize(device, utils, compiler,
+                                                   includeHandler, reviveDesc));
+    }
     desc.fillMode = D3D12_FILL_MODE_WIREFRAME;
     objPipelineWireframe_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineWireframe_->Initialize(device, utils, compiler,
@@ -651,6 +658,14 @@ float Renderer::GetAspectRatio() const {
 }
 
 void Renderer::DrawModel(ModelInstance *instance) {
+  DrawModelInternal_(instance, nullptr);
+}
+
+void Renderer::DrawIslandReviveModel(ModelInstance *instance) {
+  DrawModelInternal_(instance, islandRevivePipeline_.get());
+}
+
+void Renderer::DrawModelInternal_(ModelInstance *instance, UnifiedPipeline *pipelineOverride) {
   if (!instance || !instance->GetResource())
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -689,6 +704,10 @@ void Renderer::DrawModel(ModelInstance *instance) {
   } else {
     pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
                                        : objPipelineOpaque_.get();
+  }
+  // 専用のパイプラインの指定があれば、それを使う(反射パスは、巻き順を反転した専用のものが必要なので、通常のまま)
+  if (pipelineOverride && !mirrored) {
+    pipeline = pipelineOverride;
   }
   pipeline->SetPipelineState(cmdList);
 

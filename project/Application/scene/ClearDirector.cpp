@@ -38,7 +38,9 @@ float ClearDirector::GetPhaseEndTime(ClearPhase phase) const {
   if (phase == ClearPhase::Peel) return end;
   end += settings_.burstSeconds;
   if (phase == ClearPhase::Burst) return end;
-  return end + settings_.flowSeconds; // Flow と Cover は、同じ時刻(Flow が終わったところで Cover へ入る)
+  end += settings_.flowSeconds;
+  if (phase == ClearPhase::Flow) return end;
+  return end + settings_.releaseSeconds; // Release と Cover は、同じ時刻(Release が終わったところで Cover へ入る)
 }
 
 void ClearDirector::EnterPhase_(ClearPhase phase) {
@@ -54,6 +56,7 @@ float ClearDirector::PhaseLength_(ClearPhase phase) const {
   case ClearPhase::Peel: return settings_.peelSeconds;
   case ClearPhase::Burst: return settings_.burstSeconds;
   case ClearPhase::Flow: return settings_.flowSeconds;
+  case ClearPhase::Release: return settings_.releaseSeconds;
   default: return 0.0f; // Idle / Cover は、時間で終わらない
   }
 }
@@ -81,7 +84,9 @@ void ClearDirector::Update(float deltaTime, bool canSkip, bool skipRequested) {
     case ClearPhase::Crack: EnterPhase_(ClearPhase::Peel); break;
     case ClearPhase::Peel: EnterPhase_(ClearPhase::Burst); break;
     case ClearPhase::Burst: EnterPhase_(ClearPhase::Flow); break;
-    case ClearPhase::Flow: EnterPhase_(ClearPhase::Cover); break;
+    // Release の長さが 0 のとき(次の島を解放しないとき)は、Release を飛ばして Cover へ進む
+    case ClearPhase::Flow: EnterPhase_(settings_.releaseSeconds > 0.0f ? ClearPhase::Release : ClearPhase::Cover); break;
+    case ClearPhase::Release: EnterPhase_(ClearPhase::Cover); break;
     default: return;
     }
   }
@@ -107,7 +112,8 @@ float ClearDirector::GetWorldTimeScale() const {
     const float recover = SmoothStep(Ratio(phaseElapsed_, settings_.recoverRampSeconds));
     return slow + (1.0f - slow) * recover;
   }
-  if (phase_ == ClearPhase::Cover) return 1.0f;
+  // Release に入ったあと(Flow で、すでに通常の速さへ戻っている)と、Cover に入ったあとは、通常の速さ
+  if (phase_ == ClearPhase::Release || phase_ == ClearPhase::Cover) return 1.0f;
   return slow;
 }
 

@@ -9,6 +9,7 @@
 #include "AbsoluteEngine/graphics/3d/model/SkinCluster.h"
 #include "AbsoluteEngine/graphics/Renderer.h"
 #include "AbsoluteEngine/graphics/particle/GPUParticleManager.h"
+#include "Method.h"
 
 namespace {
 // ディゾルブのしきい値の上限。マスクの最大値(1)以上にして、外殻のすべての画素を消す
@@ -33,6 +34,7 @@ void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, 
   crackShape_ = crackShape;
   lastCellBreak_ = 0.0f;
   settings_ = settings;
+  hasFlightTarget_ = false; // 目的地は、Begin のあとに SetFlightTarget で設定する(前の演出の値を残さない)
 
   // 欠片があれば、外殻を消して、欠片へ差し替える(割る前の外殻と、組み立てた欠片は、同じ形に見える)。
   // 欠片の準備に失敗したときは、shatter_ が有効にならないので、外殻のディゾルブで消える
@@ -51,6 +53,36 @@ void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, 
     beams_.Begin(shell_, crackShape_, settings_.crackLineWidth, settings_.beams);
     explosion_.Begin(shell_, crackShape_, settings_.explosion);
   }
+  // 粒を溜める力(前の演出の力が、枠に残っていても、ここで空にする)
+  dustHold_.Begin(settings_.dustHold);
+}
+
+void BossDefeatVisual::SetFlightTarget(const Vector3 &target) {
+  hasFlightTarget_ = true;
+  flightTarget_ = target;
+}
+
+bool BossDefeatVisual::GetFlightTarget(Vector3 &target) const {
+  if (!hasFlightTarget_) return false;
+  target = flightTarget_;
+  return true;
+}
+
+void BossDefeatVisual::Shutdown() {
+  dustHold_.Clear();
+}
+
+bool BossDefeatVisual::GetBurstCenter(Vector3 &center) const {
+  return UsesVoronoiCrack_() && ComputeBurstCenter_(center);
+}
+
+bool BossDefeatVisual::ComputeBurstCenter_(Vector3 &center) const {
+  if (!shell_) return false;
+  auto *modelComponent = shell_->GetComponent<AbsoluteEngine::ModelComponent>();
+  if (!modelComponent) return false;
+  // ひびの広がり始める位置(体の中心)。爆破の球の中心と同じ
+  center = TransformPoint({crackShape_.originX, crackShape_.originY, crackShape_.originZ}, modelComponent->GetWorldMatrix());
+  return true;
 }
 
 void BossDefeatVisual::Initialize() {
@@ -100,6 +132,7 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
     ApplyCrack_(1.0f, cellBreak);
     break;
   case ClearPhase::Flow:
+  case ClearPhase::Release:
     ApplyShell_(true, kThresholdAllGone);
     cellBreak = 1.0f;
     ApplyCrack_(1.0f, cellBreak);
@@ -113,12 +146,20 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
 
   // 光線を伸ばす(ボロノイのひびを使わないときは、Begin していないので、何もしない)
   beams_.Update(phase, p);
-  explosion_.Update(phase, p);
+  explosion_.Update(phase, p, deltaTime);
+
+  // 粒を溜める力と、解き放つ力(ボロノイのひびのボスだけ)
+  Vector3 burstCenter{};
+  if (UsesVoronoiCrack_() && ComputeBurstCenter_(burstCenter)) {
+    dustHold_.Update(phase, p, burstCenter, hasFlightTarget_ ? &flightTarget_ : nullptr);
+  }
 
   // 前のフレームから今のフレームの間に消えたセルの頂点から、粒を出す。
   // 割合が進んだフレームだけ出し、進んだ分(previous から current)を、必ず 1 回ずつ通す(飛ばしても、取りこぼさない)
   if (UsesVoronoiCrack_() && cellBreak > lastCellBreak_) {
-    EmitCellDust_(lastCellBreak_, cellBreak);
+    // 解放(Burst の始まり)までの残り時間。Peel の間は、残りの割合 x Peel の長さ。それ以降(スキップで飛んだとき)は 0
+    const float secondsToRelease = phase == ClearPhase::Peel ? (1.0f - p) * settings_.peelSeconds : 0.0f;
+    EmitCellDust_(lastCellBreak_, cellBreak, secondsToRelease);
     lastCellBreak_ = cellBreak;
   }
 }
@@ -126,6 +167,10 @@ void BossDefeatVisual::Update(ClearPhase phase, float phaseProgress, float delta
 void BossDefeatVisual::Draw() {
   beams_.Draw();
   explosion_.Draw(Renderer::GetInstance());
+}
+
+void BossDefeatVisual::DrawFlash(const Vector3 &eye, const Vector3 &target) {
+  explosion_.DrawFlash(Renderer::GetInstance(), eye, target);
 }
 
 void BossDefeatVisual::ApplyShell_(bool enable, float threshold) {
@@ -162,7 +207,7 @@ void BossDefeatVisual::ApplyCrack_(float reveal, float breakAmount) {
   crack.breakAmount = breakAmount;
 }
 
-void BossDefeatVisual::EmitCellDust_(float previousBreak, float currentBreak) {
+void BossDefeatVisual::EmitCellDust_(float previousBreak, float currentBreak, float secondsToRelease) {
   auto *modelComponent = shell_->GetComponent<AbsoluteEngine::ModelComponent>();
   if (!modelComponent) return;
   ModelInstance *instance = modelComponent->GetModelInstance();
@@ -192,8 +237,13 @@ void BossDefeatVisual::EmitCellDust_(float previousBreak, float currentBreak) {
   style.colorEnd = settings_.dustColorEnd;
   style.coolRatio = settings_.dustCoolRatio;
   style.fadePower = settings_.dustFadePower;
-  style.lifeMin = settings_.dustLifeMin;
-  style.lifeMax = settings_.dustLifeMax;
+  // 寿命 = 解き放たれるまでの残り + Burst の長さ(押し出される間) + 解き放たれたあとに残る寿命。
+  // 次の島へ飛ばすときは、解き放たれたあとに残る寿命を、「Flow の間(島へ飛ぶ)+ 少しの余裕」にする(着く前に消えないように)
+  const float lifeBase = secondsToRelease + settings_.burstSeconds;
+  const float afterMin = hasFlightTarget_ ? settings_.flowSeconds + settings_.flightLifeMarginMin : settings_.dustLifeAfterReleaseMin;
+  const float afterMax = hasFlightTarget_ ? settings_.flowSeconds + settings_.flightLifeMarginMax : settings_.dustLifeAfterReleaseMax;
+  style.lifeMin = lifeBase + afterMin;
+  style.lifeMax = lifeBase + afterMax;
   style.sizeMin = settings_.dustSizeMin;
   style.sizeMax = settings_.dustSizeMax;
   style.speedMin = settings_.dustSpeedMin;

@@ -21,6 +21,14 @@ constexpr int32_t kThinSurface = 3;  // 薄い面(Half-Lambert + 環境光。蝶
 // 半透明なので、アルファ合成のエフェクト用パイプライン(Renderer::DrawEffectModel)で描くこと。
 // 色の指定: 縁の色 = SetColor(アルファは全体の濃さ)、中心の色 = SetSpecularColor、縁から中心へ変わる鋭さ = SetShininess(rim = (1 - 正対の度合い) ^ この値。大きいほど、縁の細い輪だけが濃くなり、中が透ける)
 constexpr int32_t kRimGlow = 4;
+// 爆散のプラズマ球。照明は使わず、中心は白く飛び、縁は縁の色へ変わり、球面を流れる斑が縁の色へ寄る。不透明に近い球(半透明にもできる)。
+// 色の指定: 縁の色 = SetColor(アルファは全体の濃さ)、縁の鋭さ = SetShininess(rim = (1 - 正対の度合い) ^ この値)、
+//           斑の量 = SetEnvironmentCoefficient(0 〜 1。0 で斑なし)、ノイズが流れる位相(秒) = SetSpecularColor の x
+// 半透明で重ねるので、エフェクト用パイプライン(Renderer::DrawEffectModel)で描くこと。
+constexpr int32_t kPlasma = 5;
+// ふわっとした光の輪。球の中心ほど濃く、輪郭へ向けてなめらかに透ける(プラズマ球より大きい球に使うと、外側へ光がにじむ)。
+// 色の指定: 色 = SetColor(アルファは最大の濃さ)、中心から輪郭への落ち方 = SetShininess(濃さ = 正対の度合い ^ この値。大きいほど、中心だけが濃い)
+constexpr int32_t kSoftGlow = 6;
 } // namespace ModelLightingMode
 
 class ModelInstance {

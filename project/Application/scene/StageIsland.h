@@ -22,6 +22,10 @@ public:
   // 描く。大きさは、置いたときの値のまま(距離で大きさを変えない。小さく見えるのは、遠近だけによる)
   void Draw(Renderer *renderer);
 
+  // 蘇りの見た目で描く(次の島の解放。くすんだ色から、波面が広がって、生きた色になる)。
+  // revive: 蘇りの値(ModelInstance::SetCrackParam で渡す。読み替えの取り決めは、IslandRevive.PS.hlsl の冒頭)
+  void DrawRevive(Renderer *renderer, const ModelInstance::CrackParam &revive);
+
   // 島の上面の中心(ワールド)。タレットの配置に使う
   const Vector3 &GetPosition() const { return position_; }
   float GetScale() const { return scale_; }

@@ -39,6 +39,7 @@
 #include "../actor/Enemy/RamAttackComponent.h"
 #include "../actor/Player/PlayerInput.h"
 #include "../stage/StageCatalog.h"
+#include "../stage/StageProgress.h"
 #include "../stage/StageLaunchParams.h"
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
@@ -224,6 +225,7 @@ void GameScene::Initialize(const SceneServices &services) {
       }
       // 撃破演出の爆破の球のモデルも、先に読み込む(撃破の最中に、読み込みで画面が止まらないようにする)
       bossDefeatVisual_.Initialize();
+      nextIsland_.Initialize(NextIslandDefaults::kModelPath);
       // 撃破演出の欠片のモデルと、その付属データ(読めなければ、欠片なしとして、外殻のディゾルブで消える)
       bossShardInfo_ = BossShardInfo();
       if (bossSpec.shardsModelPath && bossSpec.shardsInfoPath) {
@@ -507,6 +509,7 @@ void GameScene::Finalize() {
   bossModelHolds_.clear(); // 先読みしたボスの資産の参照を手放す
   bossMaskHold_.reset();
   playerDeathDust_.Shutdown(); // 借りているエミッタと粒の力を返す
+  bossDefeatVisual_.Shutdown(); // ボス撃破の粒に掛けた力(溜める力、解き放つ力)を外す
   postEffects_.Reset(); // 共有の Renderer に残るポストエフェクト(HP 1 の赤い枠など)を、次のシーンへ持ち越さない
 }
 
@@ -1215,7 +1218,23 @@ void GameScene::BeginClearing_() {
           pComp->SetInvulnerable(true);
       }
   }
-  clearDirector_.Begin(clearSettings_);
+  // 次の島を解放するときだけ、Flow を延ばして(粒が島へ飛び、カメラが追う)、Release を足す(島の解放)。しないときは、今までの長さ
+  const StageDefinition *nextLockedStage = FindNextLockedStage_();
+  const bool releaseNextIsland = nextLockedStage != nullptr;
+  ClearSettings clearSettings = clearSettings_;
+  if (releaseNextIsland) {
+      clearSettings.flowSeconds = ClearDefaults::kReleaseFlowSeconds;
+      clearSettings.releaseSeconds = ClearDefaults::kReleaseSeconds;
+  } else {
+      clearSettings.releaseSeconds = 0.0f;
+  }
+  nextIsland_.Reset();
+  clearDirector_.Begin(clearSettings);
+  // 次のステージを解放して、保存する(演出の途中でスキップされても、解放は取りこぼさない)。
+  // ステージ選択で、鍵が外れる演出が、この解放のあと 1 回だけ出る
+  if (nextLockedStage != nullptr) {
+      StageProgress::GetInstance().Unlock(nextLockedStage->id);
+  }
 
   // ボスの見た目の演出(外殻のひびと剥がれ)を始める。撃破されたボスは、消さずに残っている
   for (const auto& rootObj : GetRootObjects()) {
@@ -1226,11 +1245,37 @@ void GameScene::BeginClearing_() {
           const BossModelSpec& bossSpec = GetBossModelSpec(ResolveStage_().boss);
           const std::shared_ptr<AbsoluteEngine::GameObject> shards =
               bossSpec.shardsModelPath ? CreateBossShards_(bossObj, bossSpec) : nullptr;
+          // 粒を球の中に溜める時間の計算に使う、Peel と Burst の長さを、撃破演出の設定と合わせる
+          BossDefeatSettings defeatSettings;
+          defeatSettings.peelSeconds = clearSettings.peelSeconds;
+          defeatSettings.burstSeconds = clearSettings.burstSeconds;
+          defeatSettings.flowSeconds = clearSettings.flowSeconds;
           bossDefeatVisual_.Begin(bossObj, shards, bossShardInfo_, bossSpec.crackEndThreshold,
-                                  bossSpec.crackShape, BossDefeatSettings{});
+                                  bossSpec.crackShape, defeatSettings);
+          // 次の島を解放するときは、仮の島を置いて、粒の目的地にする
+          Vector3 bossCenter{0.0f, 0.0f, 0.0f};
+          if (releaseNextIsland && GetMainCamera() != nullptr && bossDefeatVisual_.GetBurstCenter(bossCenter)) {
+              nextIsland_.Begin(bossCenter, GetMainCamera()->GetEye(), GetMainCamera()->GetTarget(), NextIslandSettings{});
+              bossDefeatVisual_.SetFlightTarget(nextIsland_.GetTargetPoint());
+          }
           break;
       }
   }
+}
+
+const StageDefinition *GameScene::FindNextLockedStage_() const {
+  const StageDefinition &current = ResolveStage_();
+  // 演出の中心(ひび割れの形)が無いボスは、粒の出る場所と、島へ飛ぶ流れが作れないので、解放の演出は出さない
+  if (GetBossModelSpec(current.boss).crackShape.cellSize <= 0.0f) return nullptr;
+  const auto &stages = StageCatalog::GetInstance().GetStages();
+  for (size_t i = 0; i + 1 < stages.size(); ++i) {
+      if (stages[i].id == current.id) {
+          const StageDefinition &next = stages[i + 1];
+          // 次のステージが、まだロックされている(定義でも、保存でも)なら、解放する
+          return StageProgress::GetInstance().IsUnlocked(next) ? nullptr : &next;
+      }
+  }
+  return nullptr; // 最終ステージ(次が無い)、または一覧に無い
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> GameScene::CreateBossShards_(const std::shared_ptr<AbsoluteEngine::GameObject>& boss,
@@ -1260,6 +1305,7 @@ void GameScene::UpdateClearing_(float deltaTime) {
 
   // ボスの見た目(ひび、剥がれ、コアの光)を、いまのサブフェーズの進み具合に合わせる
   bossDefeatVisual_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress(), deltaTime);
+  nextIsland_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress());
 
   // Cover へ入ったら、クリアへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う
   if (clearDirector_.ConsumeCoverStart()) {
@@ -1499,6 +1545,23 @@ void GameScene::Draw() {
                         kGameCameraFar);
   }
 
+  // ボス撃破のカメラワーク(ボスを斜めに周回する)。描画の間だけ、カメラを差し替える(死亡演出のカメラと同じ仕組み。ゲームの進行は変えない)
+  std::optional<ScopedCameraOverride> clearView;
+  Vector3 clearCameraCenter{0.0f, 0.0f, 0.0f};
+  if (BossDefeatCamera::IsActive(clearDirector_) && !isDebugCamera_ && GetMainCamera() != nullptr &&
+      bossDefeatVisual_.GetBurstCenter(clearCameraCenter)) {
+      // 次の島を解放するときは、粒の後ろから追って、島の手前で止まる(追わないときは、Flow で、レールの位置へ戻る)
+      BossDefeatChase chase;
+      chase.viewCenter = nextIsland_.GetViewCenter();
+      chase.boundRadius = nextIsland_.GetBoundRadius();
+      bossDefeatCameraSettings_.viewFovY = kGameCameraFovY; // 島を枠に収める距離の計算に、実際の画角を使う
+      const BossDefeatCameraPose pose =
+          BossDefeatCamera::Compute(clearDirector_, GetMainCamera()->GetEye(), GetMainCamera()->GetTarget(), clearCameraCenter,
+                                    nextIsland_.IsActive() ? &chase : nullptr, bossDefeatCameraSettings_);
+      clearView.emplace(GetMainCamera(), pose.eye, pose.target, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
+                        kGameCameraFar);
+  }
+
   const Camera* activeCamera = nullptr;
   if (isDebugCamera_) {
       // Debug Camera ON: エディット中はEditorCamera、プレイ中はDebugCameraを使用する
@@ -1554,6 +1617,8 @@ void GameScene::Draw() {
   if (const auto *rail = FindRailCamera_()) {
       stageIslands_.Draw(renderer, rail->GetProgress() * rail->GetTotalLength());
   }
+  // 撃破演出の、粒が飛んでいく先の仮の島(解放するときだけ。ステージの島と同じ位置で描く)
+  nextIsland_.Draw(renderer);
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : GetRootObjects()) {
@@ -1574,6 +1639,8 @@ void GameScene::Draw() {
 
   // ボス撃破の光線(ひびの線から放射状に伸びる光の帯)。物体を描いたあとに描く
   bossDefeatVisual_.Draw();
+  // 次の島の解放の、光の柱と輪(半透明なので、島や物体を描いたあと)
+  nextIsland_.DrawEffects(renderer);
 
   // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
   wingShatter_.Draw(deathDirector_.GetDissolve());
@@ -1595,7 +1662,13 @@ void GameScene::Draw() {
 
   // GPU Particleの描画（崩壊の鱗粉）。雲の合成のあとに描く(雲海の中・手前の粒が、雲に隠されないため)。
   // 熾火の橙から灰へ冷める粒なので、加算ではなくアルファブレンド(灰が暗く見える)
-  Renderer::GetInstance()->DrawGPUParticlesAfterClouds(BlendMode::Alpha);
+  // ボス撃破の演出の間だけは、雲の合成の前に、深度ありで描く。爆破の球(深度を書く)の中に溜まった粒が、球の手前に出ず、球に隠れるようにするため
+  // (雲の合成のあとは深度が無いので、粒は、いつも手前に描かれる。この描き方では、粒に雲のもやがかかる)
+  if (clearDirector_.IsActive()) {
+    Renderer::GetInstance()->DrawGPUParticles(BlendMode::Alpha, true);
+  } else {
+    Renderer::GetInstance()->DrawGPUParticlesAfterClouds(BlendMode::Alpha);
+  }
 
   // ステージ開始演出の速度線(ブーストの強さで濃くなる)と、突き破った瞬間の白いフラッシュ。
   // どちらも、描画するカメラ(上でずらしたあとのもの)に合わせて描く。フラッシュは、カメラのすぐ前の板なので、最後に描く
@@ -1605,6 +1678,7 @@ void GameScene::Draw() {
                                               introBaseTarget_.z - introBaseEye_.z});
           speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, stageStart_.GetBoost(), speedStreakSettings_);
           stageImpact_.DrawFlash(renderer, camera->GetEye(), camera->GetTarget());
+          bossDefeatVisual_.DrawFlash(camera->GetEye(), camera->GetTarget());
       }
   }
 

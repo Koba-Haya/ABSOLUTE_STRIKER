@@ -123,6 +123,8 @@ public:
   // 軌跡の帯(リボン)。頂点は位置・UV・色。b0 は VS の変換行列だけ(PS の定数バッファ・テクスチャなし)
   static PipelineDesc MakeRibbonDesc();
   static PipelineDesc MakeCylinderDesc();
+  // 島が蘇る見た目(次の島の解放)。Object3D と同じ頂点・ルートシグネチャで、ピクセルシェーダーだけが違う(IslandRevive.PS.hlsl)
+  static PipelineDesc MakeIslandReviveDesc();
   static PipelineDesc MakeCopyImageDesc();
   static PipelineDesc MakeGrayscaleDesc();
   static PipelineDesc MakeSepiaDesc();

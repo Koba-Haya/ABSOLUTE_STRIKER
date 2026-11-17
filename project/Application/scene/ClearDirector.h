@@ -11,7 +11,8 @@
 //   Crack   : ボスの体にひびが走り、内側から光が漏れる。世界はスローモーション
 //   Peel    : 暗い外殻が剥がれて、破片が鱗粉になって舞う
 //   Burst   : 光の柱とリングが広がって破裂する
-//   Flow    : 光が取り返した島、次の島へ流れる(次の島の解放)。世界の時間は通常へ戻る
+//   Flow    : 光が取り返した島、次の島へ流れる(粒が、次の島へ飛ぶ)。世界の時間は通常へ戻る
+//   Release : 次の島が解放される(光の柱、島の色が生き返る)。次の島を解放しない(すでに解放済み、または、次の島が無い)ときは、このサブフェーズは無い(長さ 0)
 //   Cover   : クリア画面への遷移を要求する。スキップは、ここへ直接飛ぶ
 // 実時間(1 フレームの長さ)で進める。世界だけを、GetWorldTimeScale でゆっくりにする。
 
@@ -27,6 +28,9 @@ constexpr float kCrackSeconds = 4.0f;
 constexpr float kPeelSeconds = 3.0f;
 constexpr float kBurstSeconds = 0.5f;
 constexpr float kFlowSeconds = 1.5f;
+// 次の島を解放するときだけ、Flow を、この長さへ延ばし(粒が島へ飛び、カメラが追う)、Release を足す(島が解放される)
+constexpr float kReleaseFlowSeconds = 2.5f;
+constexpr float kReleaseSeconds = 2.0f;
 
 // ヒットストップのあとの、世界の時間の速さ(1 で通常、0 で停止)と、そこへ向かう時間(秒)
 constexpr float kSlowMotionScale = 0.3f;
@@ -44,6 +48,7 @@ struct ClearSettings {
   float peelSeconds = ClearDefaults::kPeelSeconds;
   float burstSeconds = ClearDefaults::kBurstSeconds;
   float flowSeconds = ClearDefaults::kFlowSeconds;
+  float releaseSeconds = 0.0f; // 0 のときは Release を飛ばして Cover へ進む(次の島を解放するときだけ、シーンが kReleaseSeconds を入れる)
   float slowMotionScale = ClearDefaults::kSlowMotionScale;
   float slowMotionRampSeconds = ClearDefaults::kSlowMotionRampSeconds;
   float recoverRampSeconds = ClearDefaults::kRecoverRampSeconds;
@@ -57,6 +62,7 @@ enum class ClearPhase {
   Peel,
   Burst,
   Flow,
+  Release,
   Cover
 };
 
@@ -69,7 +75,7 @@ public:
   void Reset();
 
   // 各サブフェーズが終わる時刻(Begin からの実時間。秒)。カメラのキーフレームなど、時刻で合わせたいものが使う。
-  // Cover は、Flow の終わりと同じ
+  // Release の長さが 0 のとき、Release の終わりは Flow の終わりと同じ。Cover は、最後のサブフェーズの終わりと同じ
   float GetPhaseEndTime(ClearPhase phase) const;
 
   // 実時間の 1 フレーム分、時間を進める。
