@@ -9,8 +9,7 @@
 #include "SceneServices.h"
 #include "SceneWorld.h"
 #include "Vector.h"
-#include "timeline/TimelineManager.h"
-#include "timeline/TimelineEditorWindow.h"
+#include "TimelineHost.h"
 
 class Camera;
 class GameCamera;
@@ -20,7 +19,6 @@ namespace AbsoluteEngine {
     class EditorCamera;
     class CommandManager;
     class ITimelineCamera;
-    class SpawnEvent;
 }
 
 enum class PlayMode {
@@ -170,7 +168,7 @@ protected:
   // シーンごとの "<sceneId>_timeline.json" の自動保存/読み込み)を使うかどうか。
   // レール演出を持たないシーン（タイトル/クリア/ゲームオーバー等）や、
   // タイムラインという概念自体を持たない別ジャンルのゲームではfalseにオーバーライドする。
-  // falseの場合、timelineManager_/timelineEditorWindow_はInitialize()で生成されず、
+  // falseの場合、timeline_(TimelineHost)はInitialize()で生成されず、
   // Timeline EditorパネルもJSON書き出しも一切発生しない。
   virtual bool UsesTimeline() const { return true; }
 
@@ -199,13 +197,9 @@ protected:
   void SetEditorCameraShake(const Vector3 &offset);
 
   // メンバ変数は全て private。派生クラスには、上の専用メソッド（GetInput、GetRootObjects など）だけを公開する。
-  // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: timelineEditorWindow_ は timelineManager_ を参照する）を
+  // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: world_ の破棄後も editorUIManager_ が残る順序）を
   // 崩さないよう、順序を変えないこと
 private:
-  // エディタのタイムライン・プレビュー用: SpawnEvent の出現位置を世界座標で返す。
-  // レール座標の指定のときは、実際の出現(Fire)と同じ手順で、発火時刻のレール位置から変換する
-  Transform ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent &spawnEvent) const;
-
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 
   // エンジン・エディタ機能
@@ -224,19 +218,10 @@ private:
   SceneNavigator navigator_;
   std::string backupSceneJson_ = "";
 
-  // タイムラインシステム（シーン独立のため BaseScene が所有する）
+  // タイムライン機能(マネージャ、エディタウィンドウ、プレビュー)のまとまり。
   // UsesTimeline()がfalseのシーンでは生成されない（nullptrのまま）
   // 派生クラスからは SetTimelineCamera/UpdateTimeline/PlayTimeline など専用メソッド経由で扱う
-  std::unique_ptr<AbsoluteEngine::TimelineManager> timelineManager_;
-  std::unique_ptr<AbsoluteEngine::TimelineEditorWindow> timelineEditorWindow_;
-
-  // タイムラインプレビューオブジェクト（タスク16）
-  // イベント選択時に生成した仮のオブジェクトへの弱参照
-  // 他のイベントへ選択が切り替わった際は古いプレビューを Destroy()してから新規生成する
-  std::weak_ptr<AbsoluteEngine::GameObject> timelinePreviewObject_;
-
-  // 前フレームの選択イベントポインタ（選択切り替え検出用）を保持する
-  AbsoluteEngine::ITimelineEvent* prevSelectedTimelineEvent_ = nullptr;
+  std::unique_ptr<AbsoluteEngine::TimelineHost> timeline_;
 
   static BaseScene* activeScene_;
 };

@@ -180,6 +180,8 @@
     <ClCompile Include="scene\BaseScene.cpp" />
     <ClCompile Include="scene\SceneWorld.cpp" />
     <ClCompile Include="scene\SceneNavigator.cpp" />
+    <ClCompile Include="scene\TimelineHost.cpp" />
+    <ClCompile Include="scene\TimelineSpawnPreview.cpp" />
     <ClCompile Include="scene\SceneLights.cpp" />
     <ClCompile Include="scene\CollisionManager.cpp" />
     <ClCompile Include="scene\GameObject.cpp" />
@@ -275,6 +277,8 @@
     <ClInclude Include="scene\SceneWorld.h" />
     <ClInclude Include="scene\SceneNavigator.h" />
     <ClInclude Include="scene\ISceneChanger.h" />
+    <ClInclude Include="scene\TimelineHost.h" />
+    <ClInclude Include="scene\TimelineSpawnPreview.h" />
     <ClInclude Include="scene\SceneLights.h" />
     <ClInclude Include="scene\CollisionManager.h" />
     <ClInclude Include="scene\GameObject.h" />

@@ -243,6 +243,12 @@
     <ClCompile Include="scene\SceneNavigator.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\TimelineHost.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\TimelineSpawnPreview.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\SceneLights.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -484,6 +490,12 @@
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\ISceneChanger.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\TimelineHost.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\TimelineSpawnPreview.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\SceneLights.h">

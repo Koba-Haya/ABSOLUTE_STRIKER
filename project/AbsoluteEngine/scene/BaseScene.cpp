@@ -14,8 +14,6 @@
 #include "DirectXCommon.h"
 #include "../camera/ITimelineCamera.h"
 #include "timeline/PrefabRegistry.h"
-// タイムラインイベントプレビュー用（タスク16）
-#include "timeline/SpawnEvent.h"
 #include <algorithm>
 #include <filesystem>
 
@@ -57,9 +55,7 @@ void BaseScene::Initialize(const SceneServices &services) {
 
     // タイムライン機能を使うシーンのみ TimelineManager/TimelineEditorWindow を生成する
     if (UsesTimeline()) {
-        timelineManager_ = std::make_unique<AbsoluteEngine::TimelineManager>();
-        timelineEditorWindow_ = std::make_unique<AbsoluteEngine::TimelineEditorWindow>();
-        timelineEditorWindow_->SetManager(timelineManager_.get());
+        timeline_ = std::make_unique<AbsoluteEngine::TimelineHost>();
     }
 
     // プレハブレジストリの初期化スキャン
@@ -76,7 +72,7 @@ void BaseScene::Initialize(const SceneServices &services) {
     // エディタUIマネージャーの初期化
     editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
     // タイムラインマネージャをインスペクタにポイントする（タスク15）。未使用シーンではnullptrのまま
-    editorUIManager_->SetTimelineManager(timelineManager_.get());
+    editorUIManager_->SetTimelineManager(timeline_ ? timeline_->GetManager() : nullptr);
 #endif
 }
 
@@ -150,7 +146,7 @@ void BaseScene::RestoreScene() {
     world_.RestoreFromString(backupSceneJson_);
 
     // タスク12: 復元後にタイムラインのカメラポインタを再接続する
-    if (timelineManager_) {
+    if (timeline_) {
         for (const auto& obj : world_.Objects()) {
             if (!obj) continue;
             if (auto* railComp = obj->GetComponent<AbsoluteEngine::ITimelineCamera>()) {
@@ -209,65 +205,17 @@ void BaseScene::UpdateEditor() {
     const float deltaTime = 1.0f / 60.0f; // 固定のdeltaTime
 
     // エディットモードでもタイムラインだけが再生中の場合は更新する
-    if (playMode_ == PlayMode::Edit && timelineManager_ && timelineManager_->GetPlayState() == AbsoluteEngine::TimelinePlayState::Playing) {
+    if (playMode_ == PlayMode::Edit && timeline_ && timeline_->IsPlaying()) {
         UpdateTimeline(deltaTime);
     }
 
     // タイムラインイベント選択に応じたプレビューオブジェクト管理（タスク16）
     // エディットモード中のみ有効（プレイ中に仮オブジェクトが混入しないように）
-    if (playMode_ == PlayMode::Edit && editorUIManager_ && timelineManager_) {
-        AbsoluteEngine::ITimelineEvent* currentSelectedEvent = timelineManager_->GetSelectedEvent();
-
-        // 選択イベントが切り替わったか、または選択解除された場合は古いプレビューを破棄する
-        if (prevSelectedTimelineEvent_ != currentSelectedEvent) {
-            // 古いプレビューオブジェクトを破棄する
-            if (auto prevPreview = timelinePreviewObject_.lock()) {
-                prevPreview->Destroy();
-                // EditorUIManagerの選択も解除する
-                editorUIManager_->SetSelectedObject(nullptr);
-            }
-            timelinePreviewObject_.reset();
-
-            // 新しいイベントが選択された場合はプレビューオブジェクトを生成する
-            if (currentSelectedEvent != nullptr) {
-                // SpawnEvent の場合のみプレビューオブジェクトを生成する
-                if (auto* spawnEv = dynamic_cast<AbsoluteEngine::SpawnEvent*>(currentSelectedEvent)) {
-                    const std::string path = AbsoluteEngine::PrefabRegistry::GetInstance().ResolveId(spawnEv->prefabId_);
-                    if (!path.empty()) {
-                        // プレハブをロードして仮オブジェクトとして生成する
-                        auto previewObj = AbsoluteEngine::SceneSerializer::LoadPrefab(path);
-                        if (previewObj) {
-                            // プレビューフラグを立ててシリアライズ対象から除外する
-                            previewObj->SetTimelinePreview(true);
-                            // スポーン位置に配置する(レール座標の指定なら、実際の出現と同じ手順で世界座標へ変換した位置)
-                            previewObj->GetTransform() = ResolveTimelineSpawnPreview(*spawnEv);
-                            // シーンに追加してギズモ操作対象に登録する
-                            AddRootObject(previewObj);
-                            editorUIManager_->SetSelectedObject(previewObj);
-                            timelinePreviewObject_ = previewObj;
-                        }
-                    }
-                }
-            }
-            prevSelectedTimelineEvent_ = currentSelectedEvent;
-        }
-
-        // プレビューオブジェクトが存在する場合はギズモ操作を SpawnEvent::spawnTransform_ に対して毎フレーム書き戻す
-        if (auto previewObj = timelinePreviewObject_.lock()) {
-            if (auto* spawnEv = dynamic_cast<AbsoluteEngine::SpawnEvent*>(currentSelectedEvent)) {
-                // ギズモまたはインスペクタで変更された Transform をイベントの値に書き戻す
-                if (spawnEv->useRail_) {
-                    // レール座標の指定のときは、位置はレール座標(ahead, lateral, vertical)だけで決まる。
-                    // ギズモで動かしても位置は書き戻さず(世界座標へ戻すと、レール座標の指定が崩れる)、
-                    // 回転とスケールだけを書き戻す。プレビューの位置は、毎フレーム、レール座標から求め直す
-                    spawnEv->spawnTransform_.rotate = previewObj->GetTransform().rotate;
-                    spawnEv->spawnTransform_.scale = previewObj->GetTransform().scale;
-                    previewObj->GetTransform().translate = ResolveTimelineSpawnPreview(*spawnEv).translate;
-                } else {
-                    spawnEv->spawnTransform_ = previewObj->GetTransform();
-                }
-            }
-        }
+    if (playMode_ == PlayMode::Edit && editorUIManager_ && timeline_) {
+        // 仮のオブジェクトの追加は、派生シーンが上書きした追加処理(AddRootObject)を通す。選択はエディタへ伝える
+        timeline_->UpdatePreview(
+            [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { AddRootObject(obj); },
+            [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { editorUIManager_->SetSelectedObject(obj); });
     }
 
     // プレイモード中のオブジェクトの更新。世界の時間の速さが 0(ヒットストップ)の間は、世界を更新しない
@@ -300,13 +248,13 @@ void BaseScene::DrawEditorUI() {
             BackupScene();
             playMode_ = PlayMode::Play;
             // タイムラインもシーンのPlayに合わせて現在位置から再生開始する
-            if (timelineManager_) timelineManager_->Play();
+            if (timeline_) timeline_->Play();
         }
     } else if (playMode_ == PlayMode::Play) {
         if (ImGui::Button("Pause")) {
             playMode_ = PlayMode::Pause;
             // タイムラインも一時停止する
-            if (timelineManager_) timelineManager_->Pause();
+            if (timeline_) timeline_->Pause();
         }
         ImGui::SameLine();
         if (ImGui::Button("Stop")) {
@@ -314,13 +262,13 @@ void BaseScene::DrawEditorUI() {
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
             // タイムラインを停止・先頭にリセットする
-            if (timelineManager_) timelineManager_->Stop();
+            if (timeline_) timeline_->Stop();
         }
     } else if (playMode_ == PlayMode::Pause) {
         if (ImGui::Button("▶ Resume")) {
             playMode_ = PlayMode::Play;
             // タイムラインも再生再開する
-            if (timelineManager_) timelineManager_->Play();
+            if (timeline_) timeline_->Play();
         }
         ImGui::SameLine();
         if (ImGui::Button("■ Stop")) {
@@ -328,7 +276,7 @@ void BaseScene::DrawEditorUI() {
             if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
             playMode_ = PlayMode::Edit;
             // タイムラインを停止・先頭にリセットする
-            if (timelineManager_) timelineManager_->Stop();
+            if (timeline_) timeline_->Stop();
         }
     }
     ImGui::End();
@@ -383,95 +331,62 @@ std::string BaseScene::GetTimelineFilePath() const {
 }
 
 void BaseScene::SaveTimeline() {
-#ifdef USE_IMGUI
-    // UsesTimeline()がfalseのシーンではtimelineManager_が存在しないため何もしない
-    if (!timelineManager_) return;
-
-    // タイムラインデータをシーンIDに紐付けたJSONファイルに保存する（保存はエディタビルドのみ）
-    const std::string filePath = GetTimelineFilePath();
-    std::filesystem::create_directories(
-        std::filesystem::path(filePath).parent_path().string());
-    timelineManager_->SaveToFile(filePath);
-#endif
+    // UsesTimeline()がfalseのシーンではtimeline_が存在しないため何もしない
+    if (!timeline_) return;
+    // タイムラインデータをシーンIDに紐付けたJSONファイルに保存する(保存はエディタビルドのみ。TimelineHost 側で判定)
+    timeline_->Save(GetTimelineFilePath());
 }
 
 void BaseScene::LoadTimeline() {
-    if (!timelineManager_) return;
-
-    // タイムラインデータを読み込む（エディタビルドでは、ファイルが無い場合は空の状態を維持）
-    const std::string filePath = GetTimelineFilePath();
-    if (std::filesystem::exists(filePath)) {
-        timelineManager_->LoadFromFile(filePath);
-    }
-#ifndef USE_IMGUI
-    else {
-        // 配布ビルドで無いと、敵が一切出ないまま進行してしまう。探した場所を表示して止める
-        AbsoluteEngine::AssetPath::ReportMissingAndExit("timeline file", filePath);
-    }
-#endif
-    // 読み込み直後に必ず Stop()を呼び、シーン上のカメラ等を
-    // タイムラインの 0.0s の状態に強制スナップする（タスクB）
-    timelineManager_->Stop();
+    if (!timeline_) return;
+    timeline_->Load(GetTimelineFilePath());
 }
 
 void BaseScene::SetTimelineCamera(AbsoluteEngine::ITimelineCamera* camera) {
-    if (!timelineManager_) return;
-    timelineManager_->SetCamera(camera);
+    if (!timeline_) return;
+    timeline_->SetCamera(camera);
 }
 
 void BaseScene::SetTimelineSpawnAheadDistance(float distance) {
-    if (!timelineManager_) return;
-    timelineManager_->SetSpawnAheadDistance(distance);
-}
-
-Transform BaseScene::ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent& spawnEvent) const {
-    Transform placed = spawnEvent.spawnTransform_;
-    if (!timelineManager_) return placed;
-
-    // 実際の出現(Fire)と同じ手順で、発火時刻のレール位置から世界座標を求める
-    float triggerTime = 0.0f;
-    timelineManager_->GetEventTriggerTime(&spawnEvent, triggerTime);
-    AbsoluteEngine::RailFrame unusedFrame{};
-    spawnEvent.ResolveSpawnTransform(timelineManager_->MakeFireContext(triggerTime), placed, unusedFrame);
-    return placed;
+    if (!timeline_) return;
+    timeline_->SetSpawnAheadDistance(distance);
 }
 
 void BaseScene::SetTimelineHoldAtEnd(bool hold) {
-    if (!timelineManager_) return;
-    timelineManager_->SetHoldAtEnd(hold);
+    if (!timeline_) return;
+    timeline_->SetHoldAtEnd(hold);
 }
 
 bool BaseScene::HasTimelineReachedEnd() const {
-    return timelineManager_ && timelineManager_->HasReachedEnd();
+    return timeline_ && timeline_->HasReachedEnd();
 }
 
 void BaseScene::SeekTimelineToEnd() {
-    if (!timelineManager_) return;
-    timelineManager_->Seek(timelineManager_->GetDuration());
+    if (!timeline_) return;
+    timeline_->SeekToEnd();
 }
 
 void BaseScene::UpdateTimeline(float deltaTime) {
-    if (!timelineManager_) return;
-    timelineManager_->Update(deltaTime);
+    if (!timeline_) return;
+    timeline_->Update(deltaTime);
 }
 
 void BaseScene::PlayTimeline() {
-    if (!timelineManager_) return;
-    timelineManager_->Play();
+    if (!timeline_) return;
+    timeline_->Play();
 }
 
 void BaseScene::DrawTimelineEditorUI() {
     // UsesTimeline()がfalseのシーンではウィンドウ自体が存在しないため描画しない
-    if (!timelineEditorWindow_) return;
+    if (!timeline_) return;
 
-    // Debug/Game カメラ切替フラグを接続する（派生クラスがオーバーライドしていればそのポインタを渡す）
-    timelineEditorWindow_->SetDebugCameraFlag(GetDebugCameraFlag());
-
-    // トラック/イベントの追加・削除等を既存のオートセーブ経路に接続する
+    // トラック/イベントの追加・削除等を既存のオートセーブ経路に接続する(エディタUIが無ければ空)
+    std::function<void()> onModified;
     if (editorUIManager_) {
         AbsoluteEngine::EditorUIManager* uiManager = editorUIManager_.get();
-        timelineEditorWindow_->SetOnModifiedCallback([uiManager]() { uiManager->SetSceneModified(); });
+        onModified = [uiManager]() { uiManager->SetSceneModified(); };
     }
 
-    timelineEditorWindow_->Draw(GetTimelineFilePath());
+    // Debug/Game カメラ切替フラグは、派生クラスがオーバーライドしていればそのポインタを渡す
+    timeline_->DrawEditorWindow(GetTimelineFilePath(), GetDebugCameraFlag(), std::move(onModified));
 }
