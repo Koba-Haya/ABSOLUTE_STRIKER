@@ -147,6 +147,9 @@
     <ClCompile Include="graphics\3d\model\ModelInstance.cpp">
       <Filter>engine\graphics\3d\model</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\3d\model\CrackPointPicker.cpp">
+      <Filter>engine\graphics\3d\model</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\3d\model\ModelManager.cpp">
       <Filter>engine\graphics\3d\model</Filter>
     </ClCompile>
@@ -367,6 +370,9 @@
       <Filter>engine\graphics\3d\model</Filter>
     </ClInclude>
     <ClInclude Include="graphics\3d\model\ModelUtils.h">
+      <Filter>engine\graphics\3d\model</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\3d\model\CrackPointPicker.h">
       <Filter>engine\graphics\3d\model</Filter>
     </ClInclude>
     <ClInclude Include="graphics\3d\model\SkinCluster.h">

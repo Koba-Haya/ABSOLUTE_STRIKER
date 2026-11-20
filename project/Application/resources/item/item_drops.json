@@ -1,8 +1,31 @@
 {
     "drops": [
         { "enemy": "Enemy", "item": "lockOnPlus", "chance": 0.2 },
+        { "enemy": "Enemy", "item": "maxHpPlus", "chance": 0.06 },
+        { "enemy": "Enemy", "item": "lockRadiusPlus", "chance": 0.08 },
+        { "enemy": "Enemy", "item": "dodgePlus", "chance": 0.08 },
+        { "enemy": "Enemy", "item": "firePlus", "chance": 0.08 },
+        { "enemy": "Enemy", "item": "pullPlus", "chance": 0.08 },
+
         { "enemy": "EnemyHoming", "item": "lockOnPlus", "chance": 0.25 },
+        { "enemy": "EnemyHoming", "item": "maxHpPlus", "chance": 0.08 },
+        { "enemy": "EnemyHoming", "item": "lockRadiusPlus", "chance": 0.08 },
+        { "enemy": "EnemyHoming", "item": "dodgePlus", "chance": 0.08 },
+        { "enemy": "EnemyHoming", "item": "firePlus", "chance": 0.08 },
+        { "enemy": "EnemyHoming", "item": "pullPlus", "chance": 0.08 },
+
         { "enemy": "EnemyTurret", "item": "lockOnPlus", "chance": 1.0 },
-        { "enemy": "EnemyCrosser", "item": "lockOnPlus", "chance": 0.2 }
+        { "enemy": "EnemyTurret", "item": "maxHpPlus", "chance": 0.5 },
+        { "enemy": "EnemyTurret", "item": "lockRadiusPlus", "chance": 0.5 },
+        { "enemy": "EnemyTurret", "item": "dodgePlus", "chance": 0.5 },
+        { "enemy": "EnemyTurret", "item": "firePlus", "chance": 0.5 },
+        { "enemy": "EnemyTurret", "item": "pullPlus", "chance": 0.5 },
+
+        { "enemy": "EnemyCrosser", "item": "lockOnPlus", "chance": 0.2 },
+        { "enemy": "EnemyCrosser", "item": "maxHpPlus", "chance": 0.06 },
+        { "enemy": "EnemyCrosser", "item": "lockRadiusPlus", "chance": 0.08 },
+        { "enemy": "EnemyCrosser", "item": "dodgePlus", "chance": 0.08 },
+        { "enemy": "EnemyCrosser", "item": "firePlus", "chance": 0.08 },
+        { "enemy": "EnemyCrosser", "item": "pullPlus", "chance": 0.08 }
     ]
 }

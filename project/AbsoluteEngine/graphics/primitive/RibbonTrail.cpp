@@ -73,6 +73,11 @@ void RibbonTrail::Fade(float deltaTime) {
     AgePoints_(deltaTime);
 }
 
+void RibbonTrail::SetPath(const std::vector<Point>& pointsOldestFirst) {
+    points_.assign(pointsOldestFirst.begin(), pointsOldestFirst.end());
+    hasHead_ = false; // 先頭位置は足さない(指定した点だけで帯を作る)
+}
+
 bool RibbonTrail::HasRibbon() const {
     return points_.size() + (hasHead_ ? 1 : 0) >= 2;
 }

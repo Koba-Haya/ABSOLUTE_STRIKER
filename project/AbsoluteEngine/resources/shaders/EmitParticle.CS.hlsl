@@ -1,4 +1,4 @@
-#include "GPUParticle.hlsli"
+#include "GPUParticleEmit.hlsli"
 
 ConstantBuffer<EmitterArray> gEmitters : register(b0);
 ConstantBuffer<PerFrame> gPerFrame : register(b1);
@@ -6,15 +6,10 @@ RWStructuredBuffer<GPUParticle> gParticles : register(u0);
 RWStructuredBuffer<int32_t> gFreeListIndex : register(u1);
 RWStructuredBuffer<uint32_t> gFreeList : register(u2);
 
-static const uint32_t kMaxParticles = 1024;
 static const uint32_t kThreadsPerEmitter = 64;
 // 乱数の種の時間を折り返す周期(秒)と、種の大きさの倍率(sin の引数を、精度の保てる範囲に収める)
 static const float32_t kSeedTimePeriod = 64.0f;
 static const float32_t kSeedScale = 0.37f;
-// 色が変わりきる寿命の割合の下限(0 で割らないため)
-static const float32_t kMinCoolRatio = 0.01f;
-// 長さがこれ以下の向きは、正規化できないので使わない
-static const float32_t kMinDirectionLength = 0.0001f;
 
 // エミッタ1つにつき1スレッドグループ(64スレッド)を割り当てて並列化する。
 // 1グループのスレッド数を超えるcountはストライドループで担当する。
@@ -80,25 +75,8 @@ void main(uint32_t3 DTid : SV_DispatchThreadID) {
                 gParticles[particleIndex].glowOnly = 0.0f;
                 gParticles[particleIndex].glowGain = 1.0f;
             } else {
-                // スタイル付き: エミッタの指定の範囲でランダムに決める(一様な大きさ、向きはランダムで、速さを範囲から選ぶ)
-                float32_t size = lerp(e.sizeMin, e.sizeMax, generator.Generate1d());
-                gParticles[particleIndex].scale = float32_t3(size, size, size);
-
-                float32_t3 direction = generator.Generate3d() * 2.0f - 1.0f;
-                float32_t directionLength = length(direction);
-                direction = directionLength > kMinDirectionLength ? direction / directionLength : float32_t3(0.0f, 1.0f, 0.0f);
-                float32_t speed = lerp(e.speedMin, e.speedMax, generator.Generate1d());
-                gParticles[particleIndex].velocity = e.baseVelocity + direction * speed;
-
-                gParticles[particleIndex].lifeTime = lerp(e.lifeMin, e.lifeMax, generator.Generate1d());
-                gParticles[particleIndex].color = float32_t4(e.colorStart, 1.0f);
-                gParticles[particleIndex].colorStart = e.colorStart;
-                gParticles[particleIndex].colorEnd = e.colorEnd;
-                gParticles[particleIndex].coolRate = 1.0f / max(e.coolRatio, kMinCoolRatio);
-                gParticles[particleIndex].fadePower = e.fadePower;
-                gParticles[particleIndex].heat = 1.0f;
-                gParticles[particleIndex].glowOnly = e.glowOnly;
-                gParticles[particleIndex].glowGain = e.glowGain;
+                // スタイル付き: エミッタの指定の範囲でランダムに決める(決め方は、粒を出す他のシェーダーと共有する GPUParticleEmit.hlsli)
+                InitStyledParticle(gParticles, particleIndex, e, float32_t3(0.0f, 0.0f, 0.0f), generator);
             }
             gParticles[particleIndex].currentTime = 0.0f;
         } else {

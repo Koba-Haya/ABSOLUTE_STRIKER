@@ -31,6 +31,8 @@ protected:
 private:
   // 展示: 操作を受け付けず、覆いが晴れてから一定時間たったら、カーソルのステージ(先頭)を自動で決定する
   void UpdateExhibition_();
+  // 鍵が外れる演出が終わったら、見せたことを保存して、一覧の項目のロックを外す(演出の最中は、入力を受け付けない)
+  void UpdateUnlockAnimation_();
   // メニューの入力(カーソルの移動と決定)を受け付ける。キーとパッドの読み取りは UiMenuList に任せる。遷移の最中は受け付けない
   void UpdateInput_();
   // 選んでいるステージが変わっていたら、カードの中身と背景を切り替える
@@ -42,11 +44,13 @@ private:
   // カーソルのステージを決定する。解放済みなら、荷物をつけてゲームへ切り替える。ロック中なら何もしない
   void DecideCursorStage_();
 
-  float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れてからの経過(秒)
+  float exhibitionHoldTimer_ = 0.0f; // 展示: 覆いが晴れて(鍵の演出が終わって)からの経過(秒)
+  bool exhibitionCursorReturned_ = false; // 展示: カーソルを先頭のステージへ戻したか
   ResultBackdrop backdrop_; // 背景の空(遷移の覆いが描画を通るようにもする)
   BitmapFont font_;         // UI の文字(日本語可)
   StageCard card_;          // 中央のカード(選んだステージの紹介)
   UiPanel listPanel_;       // 一覧の外枠(カードの下)
   UiMenuList menu_;         // ステージの一覧(選択位置は menu_.GetCursor。StageCatalog::GetStages の添字と同じ並び)
+  std::string unlockStageId_; // 鍵が外れる演出を、これから見せる(見せている最中の)ステージの ID。無ければ空
   int shownCursor_ = -1;    // カードと背景に反映済みの選択位置(-1 は未反映)
 };

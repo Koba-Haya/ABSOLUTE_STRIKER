@@ -6,7 +6,6 @@ RWStructuredBuffer<GPUParticle> gParticles : register(u0);
 RWStructuredBuffer<int32_t> gFreeListIndex : register(u1);
 RWStructuredBuffer<uint32_t> gFreeList : register(u2);
 
-static const uint32_t kMaxParticles = 1024;
 // ゆらぎ(Turbulence)の位相をずらす定数。軸ごとに違う値にして、3 軸の動きが同じ波にならないようにする
 static const float32_t3 kTurbulencePhase = float32_t3(1.7f, 4.1f, 2.3f);
 static const float32_t3 kTurbulenceFrequencyScale = float32_t3(1.0f, 1.31f, 0.77f);
@@ -63,7 +62,7 @@ float32_t3 ApplyFields(float32_t3 position, float32_t time, out float32_t dragOu
     return accel;
 }
 
-[numthreads(1024, 1, 1)]
+[numthreads(kParticleThreadsPerGroup, 1, 1)]
 void main(uint32_t3 DTid : SV_DispatchThreadID) {
     uint32_t particleIndex = DTid.x;
 

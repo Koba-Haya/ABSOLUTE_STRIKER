@@ -49,6 +49,8 @@ VertexShaderOutput main(VertexShaderInput input)
 
     float4 worldPos4 = mul(skinnedPosition, gTransformationMatrix.World);
     output.worldPosition = worldPos4.xyz;
+    // スキニング前の位置(バインドポーズ)。動いても、表面の同じ点は、同じ値になる
+    output.localPosition = input.position.xyz;
 
     return output;
 }

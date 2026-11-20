@@ -1,38 +1,36 @@
 #include "ItemEffectApplier.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "../actor/Player/LockOnSystem.h"
 #include "../actor/Player/PlayerComponent.h"
 #include "PlayerUpgradeState.h"
 
-namespace {
-// ロックオン上限の加算分の最大(上限の最大値 - 初期値)。設定の最大値が初期値より小さいときは 0
-int MaxLockOnBonus(const ItemUpgradeSettings &settings) {
-  return std::max(0, settings.lockOnMaxCap - LockOnSystem::kDefaultMaxLockTargets);
-}
-} // namespace
-
 bool ItemEffectApplier::CanApply(const ItemDefinition &item, const PlayerUpgradeState &state, const ItemUpgradeSettings &settings) {
-  switch (item.effect) {
-  case ItemEffectKind::LockOnMax:
-    return state.GetLockOnBonus() < MaxLockOnBonus(settings);
-  }
-  return false;
+  return state.GetRemainingEarnable(item.effect, settings.Get(item.effect).maxStacks) > 0;
 }
 
 bool ItemEffectApplier::Apply(const ItemDefinition &item, PlayerUpgradeState &state, const ItemUpgradeSettings &settings,
                               PlayerComponent &player) {
-  switch (item.effect) {
-  case ItemEffectKind::LockOnMax: {
-    const int added = state.AddLockOnBonus(item.amount, MaxLockOnBonus(settings));
-    SyncToPlayer(state, settings, player);
-    return added > 0;
-  }
-  }
-  return false;
+  const int added = state.AddEarned(item.effect, item.amount, settings.Get(item.effect).maxStacks);
+  SyncToPlayer(state, settings, player);
+  return added > 0;
 }
 
-void ItemEffectApplier::SyncToPlayer(const PlayerUpgradeState &state, const ItemUpgradeSettings & /*settings*/, PlayerComponent &player) {
-  player.SetMaxLockTargets(LockOnSystem::kDefaultMaxLockTargets + state.GetLockOnBonus());
+float ItemEffectApplier::GetValue(ItemEffectKind kind, const PlayerUpgradeState &state, const ItemUpgradeSettings &settings) {
+  const ItemEffectSpec &spec = settings.Get(kind);
+  // 合計(継承した分 + 今回取った分)は、上限で頭打ちにする(継承の倍率で、上限を超えないように)
+  const float stacks = (std::min)(state.GetTotal(kind), static_cast<float>(spec.maxStacks));
+  return stacks * spec.perStack;
+}
+
+void ItemEffectApplier::SyncToPlayer(const PlayerUpgradeState &state, const ItemUpgradeSettings &settings, PlayerComponent &player) {
+  auto value = [&](ItemEffectKind kind) { return GetValue(kind, state, settings); };
+
+  player.SetMaxLockTargets(LockOnSystem::kDefaultMaxLockTargets + static_cast<int>(std::lround(value(ItemEffectKind::LockOnMax))));
+  player.SetMaxHp(PlayerComponent::kBaseMaxHp + static_cast<int>(std::lround(value(ItemEffectKind::MaxHp))));
+  player.SetLockRadius(LockOnSystem::kDefaultLockRadiusPixels + value(ItemEffectKind::LockRadius));
+  player.SetDodgeCooldownReduction(value(ItemEffectKind::DodgeCooldown));
+  player.SetFireIntervalScale(1.0f - value(ItemEffectKind::FireRate));
 }

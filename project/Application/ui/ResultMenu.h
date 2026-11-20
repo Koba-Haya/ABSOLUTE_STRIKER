@@ -26,11 +26,17 @@ public:
   ResultMenu() = default;
   ~ResultMenu() = default;
 
-  /// <summary>文字の資源とパネル、項目を用意する。ファイルが無いときは、探した場所を表示して終了する</summary>
-  void Initialize();
+  /// <summary>
+  /// 文字の資源とパネル、項目を用意する。ファイルが無いときは、探した場所を表示して終了する。
+  /// scale: パネルの幅、高さ、余白、項目の文字の倍率(既定 1)。画面の縦の余裕が少ないとき(結果の集計の下)に、小さくする
+  /// </summary>
+  void Initialize(float scale = 1.0f);
 
   /// <summary>現れる動きを始める(待ち秒の意味は UiPanel::Open と同じ)。呼ぶまでは、何も描かない</summary>
   void Open(float delaySeconds = 0.0f);
+
+  /// <summary>メニューのパネルの上端(画面ピクセル。Initialize のあと有効)。その上に、別の表示(結果の集計)を置くときの境目に使う</summary>
+  float GetPanelTop() const { return panelTop_; }
 
   /// <summary>現れる動きを始めたか</summary>
   bool IsOpen() const { return opened_; }
@@ -57,4 +63,5 @@ private:
   UiPanel panel_;    // 枠(出現の動き、透明度)
   UiMenuList menu_;  // 項目
   bool opened_ = false;
+  float panelTop_ = 0.0f; // パネルの上端(画面ピクセル)
 };

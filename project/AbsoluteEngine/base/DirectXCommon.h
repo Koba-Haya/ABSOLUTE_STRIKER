@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "externals/DirectXTex/d3dx12.h"
 #include "SrvAllocator.h"
 #include "DirectXResourceUtils.h"
@@ -38,6 +38,11 @@ public:
 	// 描画前後の処理
 	void PreDraw();
 	void PostDraw();
+
+	// 垂直同期の間隔(Present に渡す値。1 = 画面の更新ごと、2 = 2 回に 1 回)。通常は 1。
+	// 開発用: 大きくすると、疑似的に、遅い画面(60Hz の画面で 2 なら 30Hz)の環境を再現できる(固定タイムステップの確認に使う)
+	void SetPresentInterval(UINT interval) { presentInterval_ = interval < 1 ? 1 : interval; }
+	UINT GetPresentInterval() const { return presentInterval_; }
 
 	// 参照用のゲッタ
 	ID3D12Device* GetDevice() const { return device_.Get(); }
@@ -106,6 +111,16 @@ public:
 	void FinishRenderingWithDepth(class RenderTexture* target, class DepthTexture* depthTarget);
 	void ResetRenderTarget(); // 強制的にバックバッファへ（遷移なし）
 
+	// --- 資源の遅延解放 ---
+	// 資源を、いま積んでいるフレームの GPU の実行が終わるまで、解放せずに預かる(EndFrame で、実行の完了を待ったあとに解放する)。
+	// 背景: テクスチャのアップロードの命令は、フレームのコマンドリストに積まれ、実行はフレームの最後。
+	//       その前にテクスチャ(や転送用バッファ)を解放すると、GPU が解放済みのメモリを読み、デバイスが外れる(DEVICE_HUNG)。
+	// 描画の資源を持つクラスのデストラクタが、自分の資源を、解放せずにこれへ渡す。
+	// DirectXCommon の破棄後(終了処理の中)に渡されたものは、すぐに解放する
+	static void DeferRelease(Microsoft::WRL::ComPtr<ID3D12Resource> resource);
+	// いま積んでいるフレームの番号(EndFrame のたびに 1 増える)。「資源が作られたフレームの中で破棄された」ことの検出に使う
+	static uint64_t GetFrameCounter();
+
 	ID3D12Resource* GetCurrentBackBuffer() const {
 		return swapChainResources_[swapChain_->GetCurrentBackBufferIndex()].Get();
 	}
@@ -123,6 +138,9 @@ private:
 	void InitDXC_();
 	void TransitionBackBufferToRenderTarget_();
 	void TransitionBackBufferToPresent_();
+	// GPU のデバイスが外れていないかを調べ、外れていたら、その理由と、直前に GPU が実行していた命令(DRED の記録)を、ログへ出す。
+	// 毎フレームの終わりに呼ぶ。ログは、デバイスが外れた最初の 1 回だけ出す(原因の調査用。ゲームの動きは変えない)
+	void CheckDeviceRemoved_();
 
 private:
 	// 初期化入力
@@ -165,6 +183,10 @@ private:
 	ComPtr<ID3D12Fence> fence_;
 	uint64_t fenceValue_ = 0;
 	HANDLE fenceEvent_ = nullptr;
+	UINT presentInterval_ = 1; // 垂直同期の間隔(SetPresentInterval)
+
+	// デバイスが外れたことを、すでにログへ出したか(1 回だけ出すため)
+	bool deviceRemovedLogged_ = false;
 
 	// GPU 時間の計測。frameTimerSlot_ は 1 フレーム全体("Frame")の区間番号
 	GpuTimer gpuTimer_;

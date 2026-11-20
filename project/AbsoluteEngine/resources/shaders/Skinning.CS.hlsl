@@ -51,7 +51,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
         output.position.w = 1.0f;
         output.normal = normalize(mul(input.normal, skinNormalMatrix));
         output.texcoord = input.texcoord;
-        output.pad = float3(0, 0, 0);
+        // pad は、モデル本来の頂点位置(スキニング前)。そのまま描画側へ渡す
+        output.pad = input.pad;
 
         gOutputVertices[vertexIndex] = output;
     }

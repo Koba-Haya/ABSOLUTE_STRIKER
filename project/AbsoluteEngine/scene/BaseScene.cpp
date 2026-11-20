@@ -527,6 +527,11 @@ bool BaseScene::HasTimelineReachedEnd() const {
     return timelineManager_ && timelineManager_->HasReachedEnd();
 }
 
+void BaseScene::SeekTimelineToEnd() {
+    if (!timelineManager_) return;
+    timelineManager_->Seek(timelineManager_->GetDuration());
+}
+
 void BaseScene::UpdateTimeline(float deltaTime) {
     if (!timelineManager_) return;
     timelineManager_->Update(deltaTime);

@@ -1,5 +1,6 @@
 #pragma once
 #include "Vector.h"
+#include "Matrix.h"
 #include <cstdint>
 
 // HLSL 側の GPUParticle(GPUParticle.hlsli)と 1:1 でレイアウトを合わせること(StructuredBuffer なので、4 バイト単位でそのまま並ぶ)
@@ -65,12 +66,41 @@ struct GPUEmitter {
     float pad4[3];         // offset 132 (128-143: 16B)
 };
 
+// 粒の最大数。粒のバッファ、空きの一覧、描画のインスタンス数、計算シェーダの起動数が、すべてこの値で決まる。
+// HLSL 側(GPUParticle.hlsli)の kMaxParticles と同じ値にすること
+static constexpr uint32_t kMaxGPUParticles = 16384;
+// 更新・初期化の計算シェーダの 1 グループのスレッド数(HLSL の上限は 1024)。HLSL 側の kParticleThreadsPerGroup と同じ値にすること
+static constexpr uint32_t kGPUParticleThreadsPerGroup = 1024;
+// 更新・初期化の計算シェーダを起動するグループ数(全ての粒に、1 つずつスレッドが当たる数。切り上げ)
+static constexpr uint32_t kGPUParticleGroupCount = (kMaxGPUParticles + kGPUParticleThreadsPerGroup - 1) / kGPUParticleThreadsPerGroup;
+
 static constexpr uint32_t kMaxGPUEmitters = 8;
 
 // b0 にバインドするConstantBuffer本体。8要素×144バイト=1152バイトで16Bアライン済み。
 struct GPUEmitterArray {
     GPUEmitter emitters[kMaxGPUEmitters];
 };
+
+// モデルの頂点から粒を出す計算(SurfaceEmitParticle.CS)の、1 回分の定数。HLSL 側の SurfaceEmitParams と 1:1 で並びを合わせる。256 バイト
+struct GPUSurfaceEmitParams {
+    GPUEmitter style;           // offset 0   (144 バイト。粒の見た目と寿命・速さの範囲)
+    Matrix4x4 world;            // offset 144 (モデル空間からワールドへ)
+    Vector3 crackOrigin;        // offset 208
+    float crackCellScale;       // offset 220 (208-223: 16B) 1 / セルの大きさ
+    float crackSpreadRadius;    // offset 224
+    float prevBreak;            // offset 228 前のフレームの crackBreak
+    float curBreak;             // offset 232 今のフレームの crackBreak
+    float emitChance;           // offset 236 (224-239: 16B) 消える頂点のうち、粒を出す割合
+    float outwardSpeed;         // offset 240 origin から外向きに足す速さ
+    uint32_t vertexCount;       // offset 244
+    float pad[2];               // offset 248 (240-255: 16B)
+};
+static_assert(sizeof(GPUSurfaceEmitParams) == 256, "GPUSurfaceEmitParams must match SurfaceEmitParams in SurfaceEmitParticle.CS.hlsl");
+
+// 1 フレームに受け付ける、頂点から粒を出す依頼の数(定数バッファのスロット数)
+static constexpr uint32_t kMaxGPUSurfaceEmitRequests = 4;
+// 頂点から粒を出す計算シェーダーの、1 グループのスレッド数(HLSL の kThreadsPerGroup と同じ値にすること)
+static constexpr uint32_t kGPUSurfaceEmitThreadsPerGroup = 64;
 
 // GPU Particleに適用するフィールド（CG3で学んだFieldのGPU Particle版）
 enum class GPUFieldType : uint32_t {
@@ -91,12 +121,13 @@ struct GPUField {
     uint32_t type;        // offset 28 (16-31: 16B)
 };
 
-static constexpr uint32_t kMaxGPUFields = 5;
+// 力の枠の数(HLSL の kMaxFields と同じ値にすること)。0 〜 4 は ScaleDust、5 〜 9 は、ボス撃破の粒の保持と解放(BossDustHold)が使う
+static constexpr uint32_t kMaxGPUFields = 10;
 
 struct GPUFieldArray {
-    GPUField fields[kMaxGPUFields]; // 5*32=160バイト
-    uint32_t count;                  // offset 160
-    float pad[3];                    // offset 164 (160-175: 16B)
+    GPUField fields[kMaxGPUFields]; // 10*32=320バイト
+    uint32_t count;                  // offset 320
+    float pad[3];                    // offset 324 (320-335: 16B)
 };
 
 // 発光パス(雲の合成のあとに、加算で描く層)の調整値。HLSL の GPUParticleGlow.hlsli の GlowParams と同じ並び(16 バイトのブロックごと)

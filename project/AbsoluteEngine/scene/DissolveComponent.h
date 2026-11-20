@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "Transform.h"
+#include "../graphics/3d/model/ModelInstance.h"
 #include <string>
 
 namespace AbsoluteEngine {
@@ -18,6 +19,10 @@ public:
     Vector3 edgeColor = {1.0f, 0.4f, 0.3f};
     Vector3 maskColor = {1.0f, 1.0f, 1.0f};
     float emberAmount = 0.0f; // 縁を熾火(灰 -> 赤 -> 橙)で光らせる強さ(0 〜 1。0 は従来どおり)
+
+    // ボロノイのひび割れ(ディゾルブと同じく、「モデルの表面が消えていく」演出のシェーダー効果なので、ここにまとめて持つ)。
+    // crack.enable が false なら、何も描かない。ModelComponent が、毎フレーム、モデルへ反映する
+    ModelInstance::CrackParam crack;
 };
 
 } // namespace AbsoluteEngine

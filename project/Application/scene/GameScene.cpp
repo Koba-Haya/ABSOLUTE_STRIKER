@@ -39,6 +39,11 @@
 #include "../actor/Enemy/RamAttackComponent.h"
 #include "../actor/Player/PlayerInput.h"
 #include "../stage/StageCatalog.h"
+#include "../stage/StageProgress.h"
+#include "../result/RatingCatalog.h"
+#include "../item/ItemCatalog.h"
+#include "../item/PlayerUpgradeState.h"
+#include "../result/RunEvaluator.h"
 #include "../stage/StageLaunchParams.h"
 #include "../ScreenSize.h"
 #include "CloudSeaDebugUi.h"
@@ -53,11 +58,15 @@
 #include "SceneManager.h"
 #include "SceneIds.h"
 #include "ExhibitionMode.h"
+#include "../exhibition/ExhibitionController.h"
+#include "../exhibition/ExhibitionHint.h"
+#include "../exhibition/ExhibitionResultMaker.h"
 #include "StageStartDemoMode.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AnimationManager.h"
+#include "ModelResource.h"
 #include "../actor/Player/PlayerModelDefs.h"
 #include "AbsoluteEngine/scene/DissolveComponent.h"
 #include "Input.h"
@@ -148,10 +157,18 @@ constexpr float kSeaSkyFloorHeightMax = -30.0f;
 constexpr const char *kPlayerModelPath = GameAssetPaths::kPlayerModel;
 constexpr float kPlayerWingspan = 3.7f;
 
+// ボスのモデルへ掛ける環境光の反射の強さ。1.0 だと、空を映す鏡のようになり、テクスチャの色(外殻の赤、羽根の茶)が見えなくなるため、
+// 自機(蝶)と同じ 0 にする(テクスチャの色をそのまま出す)。光沢が欲しくなったら、小さい値(0.1 前後)から足す
+constexpr float kBossEnvironmentCoefficient = 0.0f;
+
 // 死亡演出のスキップに使う入力(発射ボタン(Space・パッド A・マウス左)とは別のキーにして、連打による誤スキップを避ける)。
 // キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
 constexpr BYTE kDeathSkipKey = DIK_0;
 constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
+
+// ボス撃破演出のスキップに使う入力(死亡演出のスキップと同じキー。2 つの演出は同時に起きないので、衝突しない)
+constexpr BYTE kClearSkipKey = kDeathSkipKey;
+constexpr WORD kClearSkipPadButton = kDeathSkipPadButton;
 
 // 死亡演出の間、敵(全部)を画面から消すまでの時間(秒)。死亡の瞬間から、この時間をかけて縮んで見えなくなる。
 // 描かないだけで、敵は存在し続ける(撃破扱いにならず、スコア・編隊のカウント・撃破の演出に影響しない)
@@ -162,6 +179,25 @@ constexpr BYTE kDebugReviveKey = DIK_9;
 // 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
 // SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
 constexpr bool kDebugFlowShortcutEnabled = false;
+
+// 開発用のショートカット(8: ボス戦へ飛ぶ、7: ボスを倒す、B: 骨の表示)を使えるビルドか。
+// エディタ付きのビルド(Debug / Development。USE_IMGUI が定義される)だけ true にする。Release(提出・展示)では、常に無効
+// (来た人がキーを押しても何も起きないように。フラグの切り替え忘れも、起きない)。展示モードの間も、この値によらず無効
+#ifdef USE_IMGUI
+constexpr bool kDebugShortcutsAvailable = true;
+#else
+constexpr bool kDebugShortcutsAvailable = false;
+#endif
+
+// 開発用: ボス戦まで飛ばすショートカット。撃破演出の確認や録画のため、道中を待たずにボス戦へ入る。
+// キーは主列の 8(0 は演出のスキップ、9 は蘇生、B は骨の表示に使用済み)
+constexpr bool kDebugSkipToBossEnabled = kDebugShortcutsAvailable;
+constexpr BYTE kDebugSkipToBossKey = DIK_8;
+
+// 開発用: ボスを一撃で倒すショートカット。撃破演出の確認や録画のため。
+// キーは主列の 7(0 はスキップ、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+constexpr bool kDebugKillBossEnabled = kDebugShortcutsAvailable;
+constexpr BYTE kDebugKillBossKey = DIK_7;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
@@ -193,6 +229,26 @@ void GameScene::Initialize(const SceneServices &services) {
     }
     Logger::GetInstance().Log("[Stage] start: id=%s dataName=%s (payload=%s)", stage.id.c_str(), stage.dataName.c_str(),
                               params != nullptr ? "yes" : "none");
+    // このステージのボスのモデルを、先に読み込んで持っておく(ボス戦の出現の瞬間に、ディスクから読んで画面が止まるのを避ける。
+    // ModelManager のキャッシュは弱い参照なので、ここで強い参照を持ち続ける)
+    {
+      auto *assets = AbsoluteEngine::AssetManager::GetInstance();
+      const BossModelSpec &bossSpec = GetBossModelSpec(stage.boss);
+      bossModelHolds_.clear();
+      bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.modelPath));
+      if (bossSpec.dissolveMaskPath) {
+        bossMaskHold_ = assets->Load<TextureResource>(bossSpec.dissolveMaskPath);
+      }
+      // 撃破演出の爆破の球のモデルも、先に読み込む(撃破の最中に、読み込みで画面が止まらないようにする)
+      bossDefeatVisual_.Initialize();
+      nextIsland_.Initialize(NextIslandDefaults::kModelPath);
+      // 撃破演出の欠片のモデルと、その付属データ(読めなければ、欠片なしとして、外殻のディゾルブで消える)
+      bossShardInfo_ = BossShardInfo();
+      if (bossSpec.shardsModelPath && bossSpec.shardsInfoPath) {
+        bossModelHolds_.push_back(assets->Load<ModelResource>(bossSpec.shardsModelPath));
+        bossShardInfo_.Load(bossSpec.shardsInfoPath);
+      }
+    }
   }
 
   BaseScene::Initialize(services);
@@ -314,8 +370,19 @@ void GameScene::Initialize(const SceneServices &services) {
   } else {
       playerComp->Initialize();
   }
+  // 展示: 1 周ごとに、島の解放、ベスト記録、継承を初期へ戻す(毎周、解放の演出と、継承の選択を見せるため。仮の状態なので、保存はされない)。
+  // 強化の状態の初期化(下の BeginStage)が、継承を読むので、その前に行う
+  if (ExhibitionMode::IsEnabled()) {
+      ExhibitionController::ResetLoopState();
+  }
   // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
   itemSystem_.BeginStage(playerObj_);
+  // 展示: 継承の選択に候補を出すため、強化を、最初からいくつか持たせる(BeginStage のあとに行う。BeginStage が、今回取った分を 0 に戻すため)
+  if (ExhibitionMode::IsEnabled()) {
+      for (const ExhibitionMode::InitialUpgrade &upgrade : ExhibitionMode::kInitialUpgrades) {
+          itemSystem_.GrantEarned(upgrade.kind, upgrade.count);
+      }
+  }
 
   // -----------------------------------------------------------------------
   // 自機のモデルを、蝶に差し替える。
@@ -466,7 +533,11 @@ void GameScene::Finalize() {
   MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
+  bossModelHolds_.clear(); // 先読みしたボスの資産の参照を手放す
+  bossMaskHold_.reset();
   playerDeathDust_.Shutdown(); // 借りているエミッタと粒の力を返す
+  bossDefeatVisual_.Shutdown(); // ボス撃破の粒に掛けた力(溜める力、解き放つ力)を外す
+  postEffects_.Reset(); // 共有の Renderer に残るポストエフェクト(HP 1 の赤い枠など)を、次のシーンへ持ち越さない
 }
 
 void GameScene::BeginIntro_() {
@@ -760,6 +831,9 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
     }
 
+    // リザルトの評価のための計測: 敵の出現(編隊のメンバーなら、編隊の ID も)
+    runStats_.OnEnemySpawned(formationComp != nullptr, formationComp ? formationComp->GetFormationId() : 0);
+
     // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
     enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
         // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
@@ -767,17 +841,23 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
 
         // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
         // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
-        if (reason != EnemyDestroyReason::Player) return;
+        if (reason != EnemyDestroyReason::Player) {
+            runStats_.OnEnemySelfDestructed(); // 自滅した敵は、撃破率の母数から外す(評価のための計測)
+            return;
+        }
 
         // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
         itemSystem_.OnEnemyDestroyed(*this, enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();
+        runStats_.OnEnemyKilled();
 
-        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する(戻り値の初期メンバー数は、いまは使わない)
+        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する。戻り値(初期メンバー数)が 0 より大きいときが、全滅の合図
         if (formationComp) {
-            scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId());
+            if (scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId()) > 0) {
+                runStats_.OnFormationCleared();
+            }
         }
     };
 }
@@ -801,6 +881,8 @@ Camera* GameScene::GetGameplayCamera_() const {
 void GameScene::UpdatePostEffects_(float deltaTime) {
   PostEffectDirector::FrameState state;
   state.isBossPhase = phase_ == GamePhase::Boss;
+  // ボス撃破の演出中は、HP 1 の赤い枠などが演出の見栄えを損なうので、ポストエフェクトを止める
+  state.suppressAll = phase_ == GamePhase::Clearing;
   // ステージ開始演出の加速(ブースト)の間、画面にブラーを掛ける。ブラーの中心は、画面の中心(自機のいる辺り)
   state.speedBlur = stageStart_.GetBoost();
   if (playerObj_) {
@@ -814,7 +896,7 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 
 void GameScene::UpdateMouseCapture_() {
   // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
-  if (ExhibitionMode::kEnabled) {
+  if (ExhibitionMode::IsEnabled()) {
       MouseCapture::Apply(false);
       return;
   }
@@ -872,18 +954,27 @@ void GameScene::SpawnBoss_() {
       cameraEye.y + forward.y * kBossInitialDistanceFromCamera,
       cameraEye.z + forward.z * kBossInitialDistanceFromCamera
   };
-  bossObj->GetTransform().scale = {4.0f, 4.0f, 4.0f};
+  // このステージのボスの種類(stages.json の "boss")から、モデル・大きさ・当たり判定の半径を決める
+  const BossModelSpec &bossSpec = GetBossModelSpec(ResolveStage_().boss);
+  bossObj->GetTransform().scale = {bossSpec.scale, bossSpec.scale, bossSpec.scale};
   auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-  bossModelComp->LoadModel("resources/app/cube/cube.obj");
-  bossModelComp->SetEnvironmentCoefficient(1.0f);
-  bossModelComp->SetColor({0.7f, 0.1f, 0.9f, 1.0f}); // ザコ敵と見分けられるようボスは紫に
+  bossModelComp->LoadModel(bossSpec.modelPath);
+  bossModelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
+  // 撃破演出の、外殻のひびと剥がれ(ディゾルブ)。専用のマスクがあれば使う(無ければ、共有のノイズのマスク)。普通は無効で、撃破演出が制御する
+  if (bossSpec.dissolveMaskPath) {
+    bossModelComp->LoadDissolveMask(bossSpec.dissolveMaskPath);
+  }
   bossObj->AddComponent(std::move(bossModelComp));
+  bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  bossObj->AddComponent(std::make_unique<BossComponent>());
+  auto bossComp = std::make_unique<BossComponent>();
+  bossComp->SetCollisionRadius(bossSpec.colliderRadius);
+
+  bossObj->AddComponent(std::move(bossComp));
 
   auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
   colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = 5.0f; // ボスなので大きめに
+  colliderComp->radius = bossSpec.colliderRadius; // ボスなので大きめに
   bossObj->AddComponent(std::move(colliderComp));
   bossObj->SetTag("Boss");
 
@@ -899,12 +990,59 @@ void GameScene::CheckDebugFlowShortcut_() {
     return;
   }
   if (GetInput()->TriggerKey(DIK_RETURN)) {
-    phase_ = GamePhase::Clear;
-    RequestResultScene_(SceneId::Clear);
+    // 本物の撃破の経路を通す。道中なら、ボスを出す(1 回目)。ボス戦なら、ボスを倒す(2 回目)。
+    // 倒すと、CheckGameEnd_ が撃破演出を始め、演出の終わりにクリアへの遷移を要求する
+    if (phase_ == GamePhase::InProgress) {
+      phase_ = GamePhase::Boss;
+      SpawnBoss_();
+    } else {
+      KillBossForDebug_();
+    }
   } else if (GetInput()->TriggerKey(DIK_BACK)) {
     // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
     KillPlayer_();
   }
+}
+
+void GameScene::KillBossForDebug_() {
+  // HP を 0 にする本物の撃破の経路。倒れると、CheckGameEnd_ が撃破演出(BeginClearing_)を始める
+  for (const auto& obj : GetRootObjects()) {
+    if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
+      boss->TakeDamage(boss->GetMaxHp());
+    }
+  }
+}
+
+void GameScene::CheckKillBossShortcut_() {
+  if (!kDebugKillBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+    return;
+  }
+  // ボス戦の最中だけ受け付ける(道中や、演出・終了の要求の最中は何もしない。二重に倒さない)
+  if (phase_ != GamePhase::Boss) {
+    return;
+  }
+  if (GetInput()->TriggerKey(kDebugKillBossKey)) {
+    KillBossForDebug_();
+  }
+}
+
+void GameScene::CheckSkipToBossShortcut_() {
+  if (!kDebugSkipToBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+    return;
+  }
+  // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
+  if (phase_ != GamePhase::InProgress || stageStart_.IsActive()) {
+    return;
+  }
+  if (GetInput()->TriggerKey(kDebugSkipToBossKey)) {
+    SkipToBoss_();
+  }
+}
+
+void GameScene::SkipToBoss_() {
+  // タイムラインを終端へ飛ばす。次の更新で「終点に到達した」合図(HasTimelineReachedEnd)が立ち、本物のボス戦への移行(SpawnBoss_)が走る。
+  // 出ていた敵は、終端での巻き戻しで片づく
+  SeekTimelineToEnd();
 }
 
 void GameScene::UpdateExhibitionFlow_(float deltaTime) {
@@ -912,16 +1050,22 @@ void GameScene::UpdateExhibitionFlow_(float deltaTime) {
   if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
     return;
   }
-  // スタート演出の最中は数えない(終わってから、kGameHoldSec 秒たったら、自機を死なせる)
+  // スタート演出の最中は数えない(終わってから数える)
   if (stageStart_.IsActive()) {
     return;
   }
   exhibitionHoldTimer_ += deltaTime;
-  if (exhibitionHoldTimer_ < ExhibitionMode::kGameHoldSec) {
-    return;
+  if (phase_ == GamePhase::InProgress) {
+    // 道中: 少しだけ見せてから、ボス戦へ飛ぶ(次の更新で、本物のボス戦への移行が走る)
+    if (exhibitionHoldTimer_ >= ExhibitionMode::kGameHoldSec) {
+      exhibitionHoldTimer_ = 0.0f;
+      SkipToBoss_();
+    }
+  } else if (!exhibitionBossKilled_ && exhibitionHoldTimer_ >= ExhibitionMode::kBossHoldSec) {
+    // ボス戦: すぐ倒す。本物の撃破の経路(HP を 0 にする)を通すので、撃破演出、島の解放、クリア画面への遷移が、本番と同じに進む
+    exhibitionBossKilled_ = true;
+    KillBossForDebug_();
   }
-  // 本物の死亡処理を通す(HP を 0 にする。CheckGameEnd_ が死亡演出を始め、演出の終わりにゲームオーバーへの遷移を要求する)
-  KillPlayer_();
 }
 
 void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
@@ -942,7 +1086,12 @@ void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
 }
 
 void GameScene::RequestResultScene_(const std::string &sceneId) {
-  RequestSceneChange(sceneId, StageLaunchParams{ResolveStage_().id});
+  StageLaunchParams params{ResolveStage_().id};
+  // クリアのときは、今回のプレイの結果(評価)を、クリア画面へ渡す
+  if (sceneId == SceneId::Clear) {
+    params.result = clearResult_;
+  }
+  RequestSceneChange(sceneId, std::move(params));
 }
 
 void GameScene::KillPlayer_() {
@@ -997,7 +1146,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   if (GetInput()) {
       skipRequested = GetInput()->TriggerKey(kDeathSkipKey) || GetInput()->WasPadPressed(kDeathSkipPadButton);
   }
-  deathDirector_.Update(deltaTime, !ExhibitionMode::kEnabled, skipRequested);
+  deathDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
 
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション)
   SetWorldTimeScale(deathDirector_.GetWorldTimeScale());
@@ -1022,7 +1171,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   }
 }
 
-void GameScene::RemoveBulletsDuringDeath_() {
+void GameScene::RemoveBulletsDuringCutscene_() {
   for (const auto& obj : GetRootObjects()) {
       if (!obj) continue;
       const std::string& tag = obj->GetTag();
@@ -1062,7 +1211,7 @@ void GameScene::ReviveForDebug_() {
 }
 
 void GameScene::CheckDebugReviveShortcut_() {
-  if (!kDebugFlowShortcutEnabled || ExhibitionMode::kEnabled || !GetInput()) return;
+  if (!kDebugFlowShortcutEnabled || ExhibitionMode::IsEnabled() || !GetInput()) return;
   if (GetInput()->TriggerKey(kDebugReviveKey)) {
       ReviveForDebug_();
   }
@@ -1095,12 +1244,154 @@ void GameScene::CheckGameEnd_() {
   }
 
   if (phase_ == GamePhase::Boss) {
-      const bool bossAlive = std::any_of(GetRootObjects().begin(), GetRootObjects().end(),
-          [](const auto& obj) { return obj && obj->GetComponent<BossComponent>(); });
-      if (!bossAlive) {
-          phase_ = GamePhase::Clear;
-          RequestResultScene_(SceneId::Clear);
+      // ボスの撃破を見つける。撃破されたボスは、消さずに残る(BossComponent::IsActive が false)ので、
+      // 「ボスがいない」だけでなく「ボスが撃破済み」も撃破とみなす
+      bool bossDefeated = true;
+      for (const auto& obj : GetRootObjects()) {
+          const auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr;
+          if (boss && boss->IsActive()) {
+              bossDefeated = false;
+              break;
+          }
       }
+      if (bossDefeated) {
+          BeginClearing_();
+      }
+  }
+}
+
+void GameScene::BeginClearing_() {
+  phase_ = GamePhase::Clearing;
+  // 演出の間、操作を受け付けず、ダメージも受けない(残った敵や、消し損ねた弾で死なないため)
+  SetPlayerInputLocked_(true);
+  if (playerObj_) {
+      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+          pComp->SetInvulnerable(true);
+      }
+  }
+  // 次の島を解放するときだけ、Flow を延ばして(粒が島へ飛び、カメラが追う)、Release を足す(島の解放)。しないときは、今までの長さ
+  // 計測した成績の数字を、ログに出す(リザルトの評価を作るまでの、確認用)
+  {
+      const RunStats &stats = runStats_.GetStats();
+      Logger::GetInstance().Log(
+          "[RunStats] score=%d kills=%d | spawned=%d killed=%d selfDestruct=%d | formations=%d/%d | damage=%d hits=%d bossHits=%d | "
+          "time=%.1fs | maxLock=%d maxKillsInWindow=%d",
+          scoreTracker_.GetScore(), scoreTracker_.GetKillCount(), stats.enemiesSpawned, stats.enemiesKilled, stats.enemiesSelfDestructed,
+          stats.formationsCleared, stats.formationsSpawned, stats.damageTaken, stats.hitCount, stats.bossHitCount, stats.playSeconds,
+          stats.maxLockCount, stats.maxKillsInWindow);
+  }
+  // 今回のプレイを評価して、結果を決める(クリア画面へ渡す。内訳をログに出す)
+  {
+      int playerMaxHp = 0;
+      if (playerObj_) {
+          if (const auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+              playerMaxHp = pComp->GetMaxHp();
+          }
+      }
+      if (ExhibitionMode::IsEnabled()) {
+          // 展示: ボス戦だけを通すので、実際の成績は低い。固定の成績(ランダムなランク)を、本物の評価に通して使う
+          clearResult_ = ExhibitionResultMaker::Make(ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+      } else {
+          clearResult_ = RunEvaluator::Evaluate(runStats_.GetStats(), scoreTracker_.GetScore(), scoreTracker_.GetKillCount(),
+                                                ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+      }
+      const RunResult& r = *clearResult_;
+      Logger::GetInstance().Log("[Rating] rank=%s total=%.1f | score=%.1f kill=%.1f damage=%.1f formation=%.1f multiLock=%.1f bossNoDamage=%.1f",
+                                RankToString(r.rank), r.totalPoints, r.scoreEntry.points, r.killEntry.points, r.damageEntry.points,
+                                r.formationEntry.points, r.multiLockEntry.points, r.bossNoDamageEntry.points);
+  }
+  const StageDefinition *nextLockedStage = FindNextLockedStage_();
+  const bool releaseNextIsland = nextLockedStage != nullptr;
+  ClearSettings clearSettings = clearSettings_;
+  if (releaseNextIsland) {
+      clearSettings.flowSeconds = ClearDefaults::kReleaseFlowSeconds;
+      clearSettings.releaseSeconds = ClearDefaults::kReleaseSeconds;
+  } else {
+      clearSettings.releaseSeconds = 0.0f;
+  }
+  nextIsland_.Reset();
+  clearDirector_.Begin(clearSettings);
+  // 次のステージを解放して、保存する(演出の途中でスキップされても、解放は取りこぼさない)。
+  // ステージ選択で、鍵が外れる演出が、この解放のあと 1 回だけ出る
+  if (nextLockedStage != nullptr) {
+      StageProgress::GetInstance().Unlock(nextLockedStage->id);
+  }
+
+  // ボスの見た目の演出(外殻のひびと剥がれ)を始める。撃破されたボスは、消さずに残っている
+  for (const auto& rootObj : GetRootObjects()) {
+      const auto* boss = rootObj ? rootObj->GetComponent<BossComponent>() : nullptr;
+      if (boss) {
+          // 欠片のオブジェクトを足すと、ルートの一覧が変わる(参照が無効になりうる)ので、ボスの参照を先に手元へ複製しておく
+          const std::shared_ptr<AbsoluteEngine::GameObject> bossObj = rootObj;
+          const BossModelSpec& bossSpec = GetBossModelSpec(ResolveStage_().boss);
+          const std::shared_ptr<AbsoluteEngine::GameObject> shards =
+              bossSpec.shardsModelPath ? CreateBossShards_(bossObj, bossSpec) : nullptr;
+          // 粒を球の中に溜める時間の計算に使う、Peel と Burst の長さを、撃破演出の設定と合わせる
+          BossDefeatSettings defeatSettings;
+          defeatSettings.peelSeconds = clearSettings.peelSeconds;
+          defeatSettings.burstSeconds = clearSettings.burstSeconds;
+          defeatSettings.flowSeconds = clearSettings.flowSeconds;
+          bossDefeatVisual_.Begin(bossObj, shards, bossShardInfo_, bossSpec.crackEndThreshold,
+                                  bossSpec.crackShape, defeatSettings);
+          // 次の島を解放するときは、仮の島を置いて、粒の目的地にする
+          Vector3 bossCenter{0.0f, 0.0f, 0.0f};
+          if (releaseNextIsland && GetMainCamera() != nullptr && bossDefeatVisual_.GetBurstCenter(bossCenter)) {
+              nextIsland_.Begin(bossCenter, GetMainCamera()->GetEye(), GetMainCamera()->GetTarget(), NextIslandSettings{});
+              bossDefeatVisual_.SetFlightTarget(nextIsland_.GetTargetPoint());
+          }
+          break;
+      }
+  }
+}
+
+const StageDefinition *GameScene::FindNextLockedStage_() const {
+  const StageDefinition &current = ResolveStage_();
+  // 演出の中心(ひび割れの形)が無いボスは、粒の出る場所と、島へ飛ぶ流れが作れないので、解放の演出は出さない
+  if (GetBossModelSpec(current.boss).crackShape.cellSize <= 0.0f) return nullptr;
+  const auto &stages = StageCatalog::GetInstance().GetStages();
+  for (size_t i = 0; i + 1 < stages.size(); ++i) {
+      if (stages[i].id == current.id) {
+          const StageDefinition &next = stages[i + 1];
+          // 次のステージが、まだロックされている(定義でも、保存でも)なら、解放する
+          return StageProgress::GetInstance().IsUnlocked(next) ? nullptr : &next;
+      }
+  }
+  return nullptr; // 最終ステージ(次が無い)、または一覧に無い
+}
+
+std::shared_ptr<AbsoluteEngine::GameObject> GameScene::CreateBossShards_(const std::shared_ptr<AbsoluteEngine::GameObject>& boss,
+                                                                          const BossModelSpec& bossSpec) {
+  // 欠片のモデルは、ボスの外殻と同じ位置・向き・大きさで置く(割る前と、組み立てた欠片が、同じ見た目になるように)。
+  // 動き(骨の書き換え)は BossShatter が行うので、ここでは、置くだけ。アニメーションは再生しない
+  auto shardsObj = std::make_shared<AbsoluteEngine::GameObject>("BossShards");
+  shardsObj->GetTransform() = boss->GetTransform();
+  auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+  modelComp->LoadModel(bossSpec.shardsModelPath);
+  modelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
+  shardsObj->AddComponent(std::move(modelComp));
+  AddRootObject(shardsObj);
+  return shardsObj;
+}
+
+void GameScene::UpdateClearing_(float deltaTime) {
+  // スキップ: 0 キーかパッドの Start。展示中は受け付けない
+  bool skipRequested = false;
+  if (GetInput()) {
+      skipRequested = GetInput()->TriggerKey(kClearSkipKey) || GetInput()->WasPadPressed(kClearSkipPadButton);
+  }
+  clearDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
+
+  // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション、最後に通常へ戻る)
+  SetWorldTimeScale(clearDirector_.GetWorldTimeScale());
+
+  // ボスの見た目(ひび、剥がれ、コアの光)を、いまのサブフェーズの進み具合に合わせる
+  bossDefeatVisual_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress(), deltaTime);
+  nextIsland_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress());
+
+  // Cover へ入ったら、クリアへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う
+  if (clearDirector_.ConsumeCoverStart()) {
+      phase_ = GamePhase::Clear;
+      RequestResultScene_(SceneId::Clear);
   }
 }
 
@@ -1136,9 +1427,10 @@ void GameScene::UpdateHud_() {
     status.hpRatio = 0.0f;
   }
   // ロックオンの表示に出す値(輪の半径は、判定と同じ定数)。捕まえている敵の画面座標は、HUD の更新にも使うので 1 回だけ求める
-  status.lockRadius = LockOnSystem::kLockRadiusPixels;
+  status.lockRadius = LockOnSystem::kDefaultLockRadiusPixels;
   if (pComp) {
     const LockOnSystem &lockOn = pComp->GetLockOn();
+    status.lockRadius = lockOn.GetLockRadius(); // 強化で広がった値
     status.lockingMode = lockOn.IsLockingMode();
     status.cursorPos = pComp->GetCursorPos();
     status.lockedPositions = lockOn.GetLockedScreenPositions(GetMainCamera());
@@ -1193,6 +1485,10 @@ void GameScene::Update() {
   if (deathDirector_.IsActive()) {
       UpdateDying_(deltaTime);
   }
+  // ボス撃破演出(実時間)。死亡演出と同様に、世界の時間の速さをここで決める
+  if (clearDirector_.IsActive()) {
+      UpdateClearing_(deltaTime);
+  }
 
   // ポストエフェクトの調停（Editモードでもタイマーは進める）
   UpdatePostEffects_(deltaTime);
@@ -1224,7 +1520,7 @@ void GameScene::Update() {
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (!ExhibitionMode::kEnabled && GetInput() && GetInput()->TriggerKey(DIK_B)) {
+      if (kDebugShortcutsAvailable && !ExhibitionMode::IsEnabled() && GetInput() && GetInput()->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
@@ -1243,6 +1539,18 @@ void GameScene::Update() {
       const float worldDeltaTime = deltaTime * GetWorldTimeScale();
       ParticleManager::GetInstance()->Update(worldDeltaTime);
 
+      // 強化を取ったことを知らせる文字を動かす
+      itemSystem_.Update(deltaTime);
+
+      // リザルトの評価のための計測(時間、被ダメージ、同時ロック数)。数えるのは、通常の進行とボス戦の間だけ
+      if (playerObj_) {
+          if (const auto* playerComp = playerObj_->GetComponent<PlayerComponent>()) {
+              const bool countingStats = phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss;
+              runStats_.Update(worldDeltaTime, countingStats, phase_ == GamePhase::Boss, playerComp->GetHp(),
+                               playerComp->GetLockOn().GetLockedCount());
+          }
+      }
+
       // EffectManagerの更新（RingEffectなど）
       EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
 
@@ -1256,10 +1564,12 @@ void GameScene::Update() {
 
       if (StageStartDemoMode::kEnabled) {
           UpdateStageStartDemoFlow_(deltaTime);
-      } else if (ExhibitionMode::kEnabled) {
+      } else if (ExhibitionMode::IsEnabled()) {
           UpdateExhibitionFlow_(deltaTime);
       } else {
           CheckDebugFlowShortcut_();
+          CheckSkipToBossShortcut_();
+          CheckKillBossShortcut_();
       }
       CheckGameEnd_();
       ApplyDeathPose_();
@@ -1281,7 +1591,11 @@ void GameScene::Update() {
               }
               deathCamera_.Update(deltaTime, focus, spread);
           }
-          RemoveBulletsDuringDeath_();
+          RemoveBulletsDuringCutscene_();
+      }
+      // 撃破演出の間も、弾は残さない(ボスの弾、残った敵の弾が、演出の中で飛んでこないように)
+      if (clearDirector_.IsActive()) {
+          RemoveBulletsDuringCutscene_();
       }
       // 崩壊の鱗粉。死亡演出が始まっていないフレームも呼ぶ(出ている粒を動かし続け、シーンの開始時に前の粒を消すため)
       playerDeathDust_.Update(deathDirector_.IsActive(), deathDirector_.GetDissolve(), wingShatter_,
@@ -1322,6 +1636,23 @@ void GameScene::Draw() {
   if (deathCamera_.IsActive() && !isDebugCamera_ && GetMainCamera() != nullptr) {
       const DeathCameraPose& pose = deathCamera_.GetPose();
       deathView.emplace(GetMainCamera(), pose.eye, pose.target, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
+                        kGameCameraFar);
+  }
+
+  // ボス撃破のカメラワーク(ボスを斜めに周回する)。描画の間だけ、カメラを差し替える(死亡演出のカメラと同じ仕組み。ゲームの進行は変えない)
+  std::optional<ScopedCameraOverride> clearView;
+  Vector3 clearCameraCenter{0.0f, 0.0f, 0.0f};
+  if (BossDefeatCamera::IsActive(clearDirector_) && !isDebugCamera_ && GetMainCamera() != nullptr &&
+      bossDefeatVisual_.GetBurstCenter(clearCameraCenter)) {
+      // 次の島を解放するときは、粒の後ろから追って、島の手前で止まる(追わないときは、Flow で、レールの位置へ戻る)
+      BossDefeatChase chase;
+      chase.viewCenter = nextIsland_.GetViewCenter();
+      chase.boundRadius = nextIsland_.GetBoundRadius();
+      bossDefeatCameraSettings_.viewFovY = kGameCameraFovY; // 島を枠に収める距離の計算に、実際の画角を使う
+      const BossDefeatCameraPose pose =
+          BossDefeatCamera::Compute(clearDirector_, GetMainCamera()->GetEye(), GetMainCamera()->GetTarget(), clearCameraCenter,
+                                    nextIsland_.IsActive() ? &chase : nullptr, bossDefeatCameraSettings_);
+      clearView.emplace(GetMainCamera(), pose.eye, pose.target, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
                         kGameCameraFar);
   }
 
@@ -1380,6 +1711,8 @@ void GameScene::Draw() {
   if (const auto *rail = FindRailCamera_()) {
       stageIslands_.Draw(renderer, rail->GetProgress() * rail->GetTotalLength());
   }
+  // 撃破演出の、粒が飛んでいく先の仮の島(解放するときだけ。ステージの島と同じ位置で描く)
+  nextIsland_.Draw(renderer);
 
   // エディタ上で配置したオブジェクト群の描画
   for (auto& obj : GetRootObjects()) {
@@ -1397,6 +1730,11 @@ void GameScene::Draw() {
       obj->Draw();
       obj->GetTransform().scale = originalScale;
   }
+
+  // ボス撃破の光線(ひびの線から放射状に伸びる光の帯)。物体を描いたあとに描く
+  bossDefeatVisual_.Draw();
+  // 次の島の解放の、光の柱と輪(半透明なので、島や物体を描いたあと)
+  nextIsland_.DrawEffects(renderer);
 
   // 崩壊の破片(蝶と同じテクスチャ・マスク・しきい値で、縁から朽ちながら飛ぶ)
   wingShatter_.Draw(deathDirector_.GetDissolve());
@@ -1418,7 +1756,13 @@ void GameScene::Draw() {
 
   // GPU Particleの描画（崩壊の鱗粉）。雲の合成のあとに描く(雲海の中・手前の粒が、雲に隠されないため)。
   // 熾火の橙から灰へ冷める粒なので、加算ではなくアルファブレンド(灰が暗く見える)
-  Renderer::GetInstance()->DrawGPUParticlesAfterClouds(BlendMode::Alpha);
+  // ボス撃破の演出の間だけは、雲の合成の前に、深度ありで描く。爆破の球(深度を書く)の中に溜まった粒が、球の手前に出ず、球に隠れるようにするため
+  // (雲の合成のあとは深度が無いので、粒は、いつも手前に描かれる。この描き方では、粒に雲のもやがかかる)
+  if (clearDirector_.IsActive()) {
+    Renderer::GetInstance()->DrawGPUParticles(BlendMode::Alpha, true);
+  } else {
+    Renderer::GetInstance()->DrawGPUParticlesAfterClouds(BlendMode::Alpha);
+  }
 
   // ステージ開始演出の速度線(ブーストの強さで濃くなる)と、突き破った瞬間の白いフラッシュ。
   // どちらも、描画するカメラ(上でずらしたあとのもの)に合わせて描く。フラッシュは、カメラのすぐ前の板なので、最後に描く
@@ -1428,6 +1772,7 @@ void GameScene::Draw() {
                                               introBaseTarget_.z - introBaseEye_.z});
           speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, stageStart_.GetBoost(), speedStreakSettings_);
           stageImpact_.DrawFlash(renderer, camera->GetEye(), camera->GetTarget());
+          bossDefeatVisual_.DrawFlash(camera->GetEye(), camera->GetTarget());
       }
   }
 
@@ -1459,13 +1804,21 @@ void GameScene::Draw() {
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
   // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive()) {
+  // ボス撃破の演出の間(clearDirector_)も、出さない(演出の邪魔になるため。スコア、進行バー、レティクルのすべて)
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive() &&
+      !clearDirector_.IsActive()) {
       // 雲は通常 EndRenderScene で描かれるため、先に描いた HUD が雲に隠れてしまう。
       // HUD を描く前に雲を合成しておく(GameOverBackdrop::ResolveClouds と同じ方法)。以降の 2D は、深度なしのパイプラインで描かれる
       renderer->FlushVolumeClouds();
       gameHUD_->Draw();
       hudStatus_.Draw();
+      itemSystem_.Draw();
   }
+
+  // 展示モードの切り替えの案内。HUD を出さない間(演出の最中など)も、常に出す。
+  // 雲を先に合成しておく(雲が、案内を隠さないように。HUD と同じ方法。すでに合成済みなら、何も起きない)
+  renderer->FlushVolumeClouds();
+  ExhibitionHint::GetInstance().Draw();
 
   Matrix4x4 projInverse;
   if (isDebugCamera_) {
@@ -1600,6 +1953,23 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Player HP: %d / %d", hp, maxHp);
 
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
+    // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
+    for (const ItemDefinition& def : ItemCatalog::GetInstance().GetItems()) {
+        const PlayerUpgradeState& upgradeState = PlayerUpgradeState::Persistent();
+        const int maxStacks = ItemCatalog::GetInstance().GetUpgradeSettings().Get(def.effect).maxStacks;
+        ImGui::Text("Upgrade %s: earned %d + inherited %.1f  (max %d)", def.id.c_str(), upgradeState.GetEarned(def.effect),
+                    upgradeState.GetInherited(def.effect), maxStacks);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(("Grant##" + def.id).c_str())) {
+            itemSystem_.DebugGrant(def);
+        }
+    }
+    {
+        const RunStats& stats = runStats_.GetStats();
+        ImGui::Text("Run: spawned %d  killed %d  selfDestruct %d", stats.enemiesSpawned, stats.enemiesKilled, stats.enemiesSelfDestructed);
+        ImGui::Text("Run: formations %d / %d  maxLock %d  multiKill %d", stats.formationsCleared, stats.formationsSpawned, stats.maxLockCount, stats.maxKillsInWindow);
+        ImGui::Text("Run: damage %d  hits %d  bossHits %d  time %.1fs", stats.damageTaken, stats.hitCount, stats.bossHitCount, stats.playSeconds);
+    }
 
     // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
     if (phase_ == GamePhase::Boss) {

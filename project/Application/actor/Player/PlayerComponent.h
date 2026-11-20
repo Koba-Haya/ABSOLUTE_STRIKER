@@ -14,6 +14,9 @@ class BaseScene;
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
 public:
+  // 最大 HP の基本の値(強化で増える前)
+  static constexpr int kBaseMaxHp = 5;
+
   PlayerComponent() = default;
   ~PlayerComponent() override = default;
 
@@ -22,6 +25,14 @@ public:
   const LockOnSystem& GetLockOn() const { return lockon_; }
   // ロックオンできる数の上限を変える(アイテムなどの強化用。ロックの操作そのものは、ここでは行わない)
   void SetMaxLockTargets(int maxTargets) { lockon_.SetMaxLockTargets(maxTargets); }
+  // ロックオンの範囲の半径を変える(強化用)
+  void SetLockRadius(float radius) { lockon_.SetLockRadius(radius); }
+  // 最大 HP を変える(強化用)。増えた分だけ、HP も回復する。減ったときは、HP が最大 HP を超えないようにする
+  void SetMaxHp(int maxHp);
+  // 回避(バレルロール)のクールダウンを、seconds 秒だけ短くする(強化用。短縮しても、下限より短くならない)
+  void SetDodgeCooldownReduction(float seconds) { dodgeCooldownReduction_ = seconds < 0.0f ? 0.0f : seconds; }
+  // 通常弾の間隔の倍率(強化用。1 で通常、小さいほど連射が速い。下限より小さくならない)
+  void SetFireIntervalScale(float scale);
 
   void Initialize();
   void Update(float deltaTime) override;
@@ -46,6 +57,10 @@ public:
 
   // 回避行動（バレルロール）中は無敵
   bool IsInvincible() const { return dodgeTimer_ > 0.0f; }
+
+  // 演出のための無敵。true の間は、どんなダメージも受けない(ボス撃破の演出中に、残った敵や弾で死なないため)。
+  // 回避の無敵(IsInvincible)とは別: こちらは TakeDamage 自体を止め、被弾のよろめきも出さない
+  void SetInvulnerable(bool invulnerable) { invulnerable_ = invulnerable; }
 
   // 操作のロック。true の間は、キー・パッド・マウスのどれも受け付けない(何も操作していない状態にする)。
   // ステージ開始演出の間、自機が演出どおりに飛ぶよう、シーンが使う
@@ -82,6 +97,7 @@ private:
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
+  bool invulnerable_ = false; // true の間はダメージを受けない(SetInvulnerable)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ
 
@@ -103,8 +119,10 @@ private:
   // 重なって方向が定まらない場合のフォールバックにのみ使う。
   Vector3 camDirCached_{ 0, 0, 1 }; // 初期値は正面方向
 
-  int hp_ = 5;
-  int maxHp_ = 5;
+  int hp_ = kBaseMaxHp;
+  int maxHp_ = kBaseMaxHp;
+  float dodgeCooldownReduction_ = 0.0f; // 回避のクールダウンの短縮(秒。強化)
+  float fireIntervalScale_ = 1.0f;      // 通常弾の間隔の倍率(強化)
   float shootCooldown_ = 0.0f;
 
   // 回避行動（バレルロール）：残り無敵時間・クールダウン・ロール方向（+1/-1）

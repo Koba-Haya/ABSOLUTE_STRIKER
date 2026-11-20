@@ -80,6 +80,30 @@ public:
     void Fade(float deltaTime);
 
     /// <summary>
+    /// 通過点を、外から直接指定する(履歴を、この点の列で置き換える)。以後、新しい点は記録しない(Update は呼ばない)。
+    /// 弾の軌跡ではなく、決まった形の帯(光線など)を描くときに使う。
+    /// 各点の age は、年齢の割合 × Params::lifetime で指定する(割合 0 が最も太く明るく、1 が最も細く薄い)。
+    /// 先細りとフェードは、位置ではなく年齢の割合で決まるので、割合の並びで、帯の形(明るさの落ち方)を決められる。
+    /// </summary>
+    /// <param name="pointsOldestFirst">古い点(細く薄い側)から順に並べた点の列</param>
+    void SetPath(const std::vector<Point>& pointsOldestFirst);
+
+    /// <summary>
+    /// 帯の先端の幅(ワールド単位)を変える。通過点は消さない。
+    /// </summary>
+    void SetWidth(float width) { params_.width = width; }
+
+    /// <summary>
+    /// 帯の色(頂点カラー。アルファで全体の濃さも変えられる)を変える。通過点は消さない。
+    /// </summary>
+    void SetColor(const Vector4& color) { params_.color = color; }
+
+    /// <summary>
+    /// 帯の寿命(秒)。SetPath で、年齢の割合から age を作るときに使う。
+    /// </summary>
+    float GetLifetime() const { return params_.lifetime; }
+
+    /// <summary>
     /// 帯を作れる状態か(帯には通過点が2つ以上必要)。false になったら、尾は消えきったとみなせる。
     /// </summary>
     bool HasRibbon() const;

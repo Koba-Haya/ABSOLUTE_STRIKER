@@ -30,7 +30,9 @@ protected:
 	virtual void Initialize();
 	// 終了
 	virtual void Finalize();
-	// 毎フレーム更新
+	// 論理の更新。実際の経過時間を測って、1 秒に 60 回(1 回 1/60 秒)呼ばれる(画面の更新の速さに関係なく。固定タイムステップ)。
+	// 1 回の描画の前に、0 回(画面の更新が速い環境)から数回(遅い環境)呼ばれる。
+	// 描画(Draw)は、Update を呼んだ回だけ呼ばれる
 	virtual void Update();
 	// 描画
 	virtual void Draw() = 0;

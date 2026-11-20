@@ -1,0 +1,25 @@
+{
+    "weights": {
+        "score": 25,
+        "kill": 20,
+        "damage": 25,
+        "formation": 10,
+        "multiLock": 10,
+        "bossNoDamage": 10
+    },
+    "multiLockTargets": {
+        "lock": 6,
+        "killsInWindow": 4
+    },
+    "ranks": {
+        "S": 90,
+        "A": 75,
+        "B": 55
+    },
+    "inheritance": {
+        "S": { "slots": 3, "rarity": 2.0 },
+        "A": { "slots": 2, "rarity": 1.5 },
+        "B": { "slots": 2, "rarity": 1.0 },
+        "C": { "slots": 1, "rarity": 1.0 }
+    }
+}

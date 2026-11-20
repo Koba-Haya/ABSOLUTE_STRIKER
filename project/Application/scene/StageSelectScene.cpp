@@ -2,8 +2,10 @@
 #include "ExhibitionMode.h"
 #include "SceneIds.h"
 #include "../ScreenSize.h"
+#include "../exhibition/ExhibitionHint.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageLaunchParams.h"
+#include "../stage/StageProgress.h"
 #include <string>
 #include <vector>
 
@@ -81,8 +83,19 @@ void StageSelectScene::Initialize(const SceneServices &services) {
   std::vector<UiMenuList::Item> items;
   items.reserve(stages.size());
   for (const StageDefinition &stage : stages) {
-    items.push_back({stage.displayName, !stage.unlocked});
+    items.push_back({stage.displayName, !StageProgress::GetInstance().IsUnlocked(stage)});
   }
+  // 解放されたが、鍵が外れる演出を、まだ見せていないステージ(どのステージでも、解放のたびに 1 回だけ)。
+  // 演出が終わるまでは、一覧の項目も、ロック中のままにする(演出の前に、見えてしまわないように)
+  unlockStageId_ = StageProgress::GetInstance().FindPendingUnlock();
+  int unlockIndex = -1;
+  for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
+    if (!unlockStageId_.empty() && stages[i].id == unlockStageId_) {
+      unlockIndex = i;
+      items[i].locked = true;
+    }
+  }
+  if (unlockIndex < 0) unlockStageId_.clear(); // 一覧に無いステージの印は、演出しない
   menu_.SetItems(std::move(items));
 
   // クリアやゲームオーバーから戻ったときは、遊んでいたステージにカーソルを合わせる(荷物が無い、または一覧に無ければ先頭のまま)
@@ -93,6 +106,11 @@ void StageSelectScene::Initialize(const SceneServices &services) {
         break;
       }
     }
+  }
+
+  // 演出するステージがあれば、カーソルを、そのステージに合わせる(クリアから戻ったとき、解放されたステージが、すぐ目に入る)
+  if (unlockIndex >= 0) {
+    menu_.SetCursor(unlockIndex);
   }
 
   // 配置を決め、パネルを開き始める(遷移の覆いが晴れるころに開く)
@@ -121,6 +139,9 @@ void StageSelectScene::SyncSelection_() {
 
   const StageDefinition &stage = StageCatalog::GetInstance().GetStages()[shownCursor_];
   card_.SetStage(&stage, shownCursor_ + 1); // ステージの番号は、一覧の並びで決まる(1 から)
+  if (stage.id == unlockStageId_) {
+    card_.PlayUnlockAnimation(); // 解放されたステージの、初めての表示: 鍵が外れる演出
+  }
   ApplyBackdrop_(stage);
 }
 
@@ -130,12 +151,15 @@ void StageSelectScene::ApplyBackdrop_(const StageDefinition &stage) {
 
 void StageSelectScene::Update() {
   backdrop_.Update(kFrameDeltaSeconds);
-  if (ExhibitionMode::kEnabled) {
+  if (ExhibitionMode::IsEnabled()) {
     UpdateExhibition_();
   } else {
     UpdateInput_();
   }
   SyncSelection_();
+  // 鍵の演出は、遷移(水滴の覆い)が晴れてから始める(覆われている間に、演出が進んでしまわないため)
+  card_.SetUnlockAnimationAllowed(!IsSceneTransitioning());
+  UpdateUnlockAnimation_();
 
 #ifdef USE_IMGUI
   // 開発用の一覧(補助。本番の画面は Draw のカードと一覧)。パネルと重ならないよう、画面の左上に出す
@@ -151,15 +175,16 @@ void StageSelectScene::Update() {
 
   for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
     const StageDefinition &stage = stages[i];
-    const std::string label = stage.displayName + (stage.unlocked ? "" : "  [LOCKED]") + "##" + stage.id;
-    if (!stage.unlocked) {
+    const bool stageUnlocked = StageProgress::GetInstance().IsUnlocked(stage);
+    const std::string label = stage.displayName + (stageUnlocked ? "" : "  [LOCKED]") + "##" + stage.id;
+    if (!stageUnlocked) {
       ImGui::BeginDisabled();
     }
     if (ImGui::Selectable(label.c_str(), i == menu_.GetCursor(), 0, ImVec2(0.0f, kEntryHeight))) {
       menu_.SetCursor(i);
       DecideCursorStage_();
     }
-    if (!stage.unlocked) {
+    if (!stageUnlocked) {
       ImGui::EndDisabled();
     }
   }
@@ -179,6 +204,7 @@ void StageSelectScene::Draw() {
     // 一覧(選択、点滅、ロック表示は UiMenuList が担当する)
     menu_.Draw(listPanel_.GetBodyOrigin(), listPanel_.GetBodySize().x, listAlpha);
   }
+  ExhibitionHint::GetInstance().Draw();
 
   // 操作の案内: 画面の下端の中央。一覧と一緒に現れる
   if (listAlpha > 0.0f) {
@@ -190,11 +216,31 @@ void StageSelectScene::Draw() {
   backdrop_.End();
 }
 
+void StageSelectScene::UpdateUnlockAnimation_() {
+  if (unlockStageId_.empty() || !card_.IsUnlockAnimationFinished()) return;
+  // 演出が終わった: 見せたことを保存して(次からは出さない)、一覧の項目のロックを外す
+  StageProgress::GetInstance().MarkUnlockShown(unlockStageId_);
+  const auto &stages = StageCatalog::GetInstance().GetStages();
+  for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
+    if (stages[i].id == unlockStageId_) menu_.SetItemLocked(i, false);
+  }
+  unlockStageId_.clear();
+}
+
 void StageSelectScene::UpdateExhibition_() {
   // 遷移の覆いが晴れてから数える(覆われている間に、決定してしまわないため)
   if (IsSceneTransitioning()) return;
+  // 鍵が外れる演出の最中は待つ(最後まで見せるため。演出が終わると、unlockStageId_ が空になる)
+  if (!unlockStageId_.empty()) return;
   exhibitionHoldTimer_ += kFrameDeltaSeconds;
-  if (exhibitionHoldTimer_ >= ExhibitionMode::kStageSelectHoldSec) {
+  if (exhibitionHoldTimer_ < ExhibitionMode::kStageSelectHoldSec) return;
+  exhibitionHoldTimer_ = 0.0f;
+
+  // 1 回目: カーソルを、先頭のステージ(展示で遊ぶステージ)へ戻す。2 回目: そのステージで決定する
+  if (!exhibitionCursorReturned_) {
+    menu_.SetCursor(0);
+    exhibitionCursorReturned_ = true;
+  } else {
     DecideCursorStage_();
   }
 }
@@ -202,6 +248,8 @@ void StageSelectScene::UpdateExhibition_() {
 void StageSelectScene::UpdateInput_() {
   // 遷移の最中は受け付けない(前のシーンで押していたボタンで、すぐに決定してしまうのを防ぐ)
   if (!GetInput() || IsSceneTransitioning()) return;
+  // 鍵が外れる演出の最中は受け付けない(カーソルを動かすと、演出を最後まで見せられないため。約 2 秒)
+  if (!unlockStageId_.empty()) return;
 
   // 入力の読み取りと、カーソルの移動、ロックの判定は UiMenuList に任せる。ここでは「決定されたか」だけを見る
   if (menu_.Update(GetInput()) == UiMenuList::Event::Decided) {
@@ -211,6 +259,6 @@ void StageSelectScene::UpdateInput_() {
 
 void StageSelectScene::DecideCursorStage_() {
   const StageDefinition &stage = StageCatalog::GetInstance().GetStages()[menu_.GetCursor()];
-  if (!stage.unlocked) return;
+  if (!StageProgress::GetInstance().IsUnlocked(stage)) return;
   RequestSceneChange(SceneId::Game, StageLaunchParams{stage.id});
 }

@@ -112,6 +112,9 @@ protected:
   // タイムラインが終端に到達して止まったか(SetTimelineHoldAtEnd(true) のとき)。
   // 「終点に到達した」という明示の合図。タイムラインが無いシーンでは常に false
   bool HasTimelineReachedEnd() const;
+  // タイムラインを終端の時刻へジャンプさせる(デバッグ用。ボス戦まで飛ばすのに使う)。
+  // 途中のイベントは、1 回に発火する。SetTimelineHoldAtEnd(true) のときは、次の更新で終端へ着いた扱いになり、出した敵は巻き戻して片づく
+  void SeekTimelineToEnd();
 
   // タイムラインを更新する（プレイモード中に毎フレーム呼ぶ）
   void UpdateTimeline(float deltaTime);

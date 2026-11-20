@@ -3,6 +3,7 @@
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
+#include "../inheritance/InheritanceState.h"
 #include "ItemCatalog.h"
 #include "ItemEffectApplier.h"
 #include "ItemSpawner.h"
@@ -10,11 +11,32 @@
 
 void ItemSystem::BeginStage(const std::shared_ptr<AbsoluteEngine::GameObject> &player) {
   player_ = player;
+  if (!toastReady_) {
+    toast_.Initialize(); // 文字の資源の読み込みは、最初の 1 回だけ
+    toastReady_ = true;
+  }
   const ItemUpgradeSettings &settings = ItemCatalog::GetInstance().GetUpgradeSettings();
   PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
   // 持ち越さない設定なら 0 に戻る。持ち越す設定なら、前のステージの値を、ここで自機へ戻す
   state.BeginStage(settings.carryOverBetweenStages);
+  // 継承した分(前の世代から引き継いだ強化)を、ここで入れる。ゲームオーバーからのやり直しでも、同じ値が入る
+  for (size_t i = 0; i < kItemEffectKindCount; ++i) {
+    const ItemEffectKind kind = static_cast<ItemEffectKind>(i);
+    state.SetInherited(kind, InheritanceState::GetInstance().GetInheritedStacks(kind));
+  }
   if (player) {
+    if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
+      ItemEffectApplier::SyncToPlayer(state, settings, *playerComp);
+    }
+  }
+}
+
+void ItemSystem::GrantEarned(ItemEffectKind kind, int count) {
+  const ItemUpgradeSettings &settings = ItemCatalog::GetInstance().GetUpgradeSettings();
+  PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
+  state.AddEarned(kind, count, settings.Get(kind).maxStacks);
+  // 自機へ反映する(最大 HP などの効果が、すぐ出る)
+  if (const auto player = player_.lock()) {
     if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
       ItemEffectApplier::SyncToPlayer(state, settings, *playerComp);
     }
@@ -40,5 +62,16 @@ void ItemSystem::OnCollected_(const ItemDefinition &item) {
   auto *playerComp = player->GetComponent<PlayerComponent>();
   if (!playerComp) return;
 
-  ItemEffectApplier::Apply(item, PlayerUpgradeState::Persistent(), ItemCatalog::GetInstance().GetUpgradeSettings(), *playerComp);
+  // 効果が実際に出たときだけ、取ったことを知らせる(上限で何も起きなかったときは、出さない)
+  if (ItemEffectApplier::Apply(item, PlayerUpgradeState::Persistent(), ItemCatalog::GetInstance().GetUpgradeSettings(), *playerComp)) {
+    toast_.Show(item.name);
+  }
+}
+
+void ItemSystem::Update(float deltaTime) {
+  toast_.Update(deltaTime);
+}
+
+void ItemSystem::Draw() {
+  toast_.Draw();
 }

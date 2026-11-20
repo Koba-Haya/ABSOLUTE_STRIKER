@@ -21,6 +21,7 @@
 #include "PrimitiveDrawer.h"
 #include "RibbonDrawer.h"
 #include "RibbonTrail.h"
+#include "CrackPointPicker.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
@@ -64,6 +65,13 @@ void Renderer::Initialize(DirectXCommon *dx) {
     objPipelineOpaque_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineOpaque_->Initialize(device, utils, compiler,
                                               includeHandler, desc));
+    {
+      // 島が蘇る見た目(Object3D と同じ形で、ピクセルシェーダーだけが違う)
+      PipelineDesc reviveDesc = UnifiedPipeline::MakeIslandReviveDesc();
+      islandRevivePipeline_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(islandRevivePipeline_->Initialize(device, utils, compiler,
+                                                   includeHandler, reviveDesc));
+    }
     desc.fillMode = D3D12_FILL_MODE_WIREFRAME;
     objPipelineWireframe_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(objPipelineWireframe_->Initialize(device, utils, compiler,
@@ -246,6 +254,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ribbonPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ribbonPipeline_->Initialize(device, utils, compiler,
                                            includeHandler, ribbonDesc));
+    // アルファ合成版: 加算だと、明るい空や雲の上で、光が白く飛んで見えなくなるため、色を保つ版も持つ
+    PipelineDesc ribbonAlphaDesc = ribbonDesc;
+    ribbonAlphaDesc.blendMode = BlendMode::Alpha;
+    ribbonAlphaPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(ribbonAlphaPipeline_->Initialize(device, utils, compiler,
+                                                includeHandler, ribbonAlphaDesc));
     PipelineDesc cylinderDesc = UnifiedPipeline::MakeCylinderDesc();
     cylinderPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(cylinderPipeline_->Initialize(device, utils, compiler,
@@ -336,6 +350,9 @@ void Renderer::Initialize(DirectXCommon *dx) {
   spotLightCB_->Map(0, nullptr, reinterpret_cast<void **>(&spotLightMapped_));
 
   GPUParticleManager::GetInstance()->Initialize(dx_);
+
+  // ボロノイのひびの線の上の頂点を選ぶ計算(撃破演出の光線用)。シェーダーのコンパイルを含むので、起動時に作っておく
+  CrackPointPicker::GetInstance()->Initialize(dx_);
 
   primitiveTransformCB_ = CreateUploadBuffer(sizeof(TransformCB));
   primitiveTransformCB_->Map(
@@ -641,6 +658,14 @@ float Renderer::GetAspectRatio() const {
 }
 
 void Renderer::DrawModel(ModelInstance *instance) {
+  DrawModelInternal_(instance, nullptr);
+}
+
+void Renderer::DrawIslandReviveModel(ModelInstance *instance) {
+  DrawModelInternal_(instance, islandRevivePipeline_.get());
+}
+
+void Renderer::DrawModelInternal_(ModelInstance *instance, UnifiedPipeline *pipelineOverride) {
   if (!instance || !instance->GetResource())
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -679,6 +704,10 @@ void Renderer::DrawModel(ModelInstance *instance) {
   } else {
     pipeline = instance->IsWireframe() ? objPipelineWireframe_.get()
                                        : objPipelineOpaque_.get();
+  }
+  // 専用のパイプラインの指定があれば、それを使う(反射パスは、巻き順を反転した専用のものが必要なので、通常のまま)
+  if (pipelineOverride && !mirrored) {
+    pipeline = pipelineOverride;
   }
   pipeline->SetPipelineState(cmdList);
 
@@ -1570,7 +1599,7 @@ void Renderer::DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE text
   cylinder->Draw(cmdList);
 }
 
-void Renderer::DrawRibbon(const RibbonTrail &trail) {
+void Renderer::DrawRibbon(const RibbonTrail &trail, BlendMode blendMode) {
   if (!ribbonDrawer_ || !ribbonTransformMapped_)
     return;
   auto *cmdList = dx_->GetCommandList();
@@ -1584,7 +1613,8 @@ void Renderer::DrawRibbon(const RibbonTrail &trail) {
   const Matrix4x4 invView = Inverse(view_);
   const Vector3 cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
 
-  ribbonPipeline_->SetPipelineState(cmdList);
+  UnifiedPipeline *pipeline = (blendMode == BlendMode::Alpha && ribbonAlphaPipeline_) ? ribbonAlphaPipeline_.get() : ribbonPipeline_.get();
+  pipeline->SetPipelineState(cmdList);
   cmdList->SetGraphicsRootConstantBufferView(
       0, ribbonTransformCB_->GetGPUVirtualAddress());
 

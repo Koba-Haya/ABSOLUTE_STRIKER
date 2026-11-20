@@ -91,7 +91,7 @@ void ModelComponent::LoadTexture(const std::string& path) {
     }
 }
 
-void ModelComponent::PlayAnimation(const std::string& animationName, bool loop, float blendSeconds) {
+void ModelComponent::PlayAnimation(const std::string& animationName, bool loop, float blendSeconds, bool restart) {
     if (!modelInstance_) return;
 
     if (!animationSet_) {
@@ -106,7 +106,7 @@ void ModelComponent::PlayAnimation(const std::string& animationName, bool loop, 
         Logger::GetInstance().Log("[ModelComponent] animation not found: model=%s name=%s", modelPath_.c_str(), animationName.c_str());
         return;
     }
-    modelInstance_->PlayAnimation(animation, loop, blendSeconds);
+    modelInstance_->PlayAnimation(animation, loop, blendSeconds, restart);
 }
 
 bool ModelComponent::IsAnimationFinished() const {
@@ -148,6 +148,7 @@ void ModelComponent::Draw() {
         auto dissolve = owner_->GetComponent<DissolveComponent>();
         if (dissolve) {
             modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor, dissolve->emberAmount);
+            modelInstance_->SetCrackParam(dissolve->crack);
         }
         
         modelInstance_->Draw();

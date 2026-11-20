@@ -140,6 +140,9 @@ public:
 
   // 描画メソッド群
   void DrawModel(ModelInstance *model);
+  // 島が蘇る見た目(次の島の解放)で描く。DrawModel と同じ描き方で、ピクセルシェーダーだけが IslandRevive.PS.hlsl。
+  // 蘇りの値は、ModelInstance::SetCrackParam で渡す(読み替えの取り決めは、IslandRevive.PS.hlsl の冒頭)。反射パスでは、通常の描き方になる
+  void DrawIslandReviveModel(ModelInstance *model);
   void DrawSprite(Sprite *sprite);
   // たくさんの四角形(文字など)を、1 回の描画命令でまとめて描く(BitmapFont が使う)。
   // vertices は quadCount * 4 個で、1 クワッドの並びは Sprite の単位四角形と同じ(左下、左上、右下、右上)。
@@ -218,8 +221,9 @@ public:
   void DrawEffectModel(ModelInstance *model, bool writeDepth = false);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
-  // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ
-  void DrawRibbon(const RibbonTrail &trail);
+  // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ。
+  // blendMode: Add(既定。加算で光らせる。暗い背景向き)か Alpha(通常のアルファ合成。明るい背景でも、色が白く飛ばない)。それ以外は Add として描く
+  void DrawRibbon(const RibbonTrail &trail, BlendMode blendMode = BlendMode::Add);
 
   enum class PostProcessMode {
     Normal,
@@ -307,6 +311,9 @@ private:
   SpotLightGroupCB *spotLightMapped_ = nullptr;
 
   std::unique_ptr<UnifiedPipeline> objPipelineOpaque_;
+  std::unique_ptr<UnifiedPipeline> islandRevivePipeline_; // 島が蘇る見た目(DrawIslandReviveModel)
+  // DrawModel の本体。pipelineOverride が nullptr でなければ、通常のモデルのパイプラインの代わりに使う(反射パスを除く)
+  void DrawModelInternal_(ModelInstance *model, UnifiedPipeline *pipelineOverride);
   std::unique_ptr<UnifiedPipeline> objPipelineWireframe_;
   std::unique_ptr<UnifiedPipeline> objPipelineMirrored_; // 反射パス用(鏡映で巻き順が逆になるので、表裏の判定を反転)
   std::unique_ptr<UnifiedPipeline> skinnedPipelineOpaque_;
@@ -353,6 +360,7 @@ private:
   std::unique_ptr<UnifiedPipeline> effectDepthPipeline_; // エフェクト用(深度を書き込む版。DrawEffectModel の writeDepth)
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
+  std::unique_ptr<UnifiedPipeline> ribbonAlphaPipeline_; // リボン(通常のアルファ合成版。DrawRibbon の blendMode が Alpha のとき)
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;
   std::unique_ptr<SpriteBatchDrawer> spriteBatchDrawer_; // 文字などのクワッドをまとめて描く(共有バッファ)
   ComPtr<ID3D12Resource> ribbonTransformCB_;

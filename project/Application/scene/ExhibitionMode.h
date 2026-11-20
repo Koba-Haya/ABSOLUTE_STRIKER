@@ -1,28 +1,55 @@
 #pragma once
-#include "SceneIds.h"
+#include <array>
 
-// 展示用の自動巡回の設定。
-// kEnabled が true の間は、操作を一切受け付けず(死亡演出のスキップも無効)、次の順に繰り返す:
-//   (起動の最初の 1 回だけ: タイトル -> ステージ選択)-> ゲーム(スタート演出)-> スタート演出が終わって kGameHoldSec 秒後に、自動で死ぬ
-//   -> 死亡演出(崩壊、落下、雲)-> 霧と水滴の遷移 -> ゲームオーバー -> ゲーム(スタート演出)-> ...
-// 自動で死ぬときは、デバッグのショートカットではなく、本物の死亡処理(GameScene::KillPlayer_ -> Dying)を通す。
-// クリアは見せない。自動プレイ(撃つ・避ける)はしない。
-// 通常の開発・プレイでは false にする(キー入力で進める従来の動作に戻る)
+#include "SceneIds.h"
+#include "../item/ItemDefinition.h"
+
+// 展示用の自動巡回の設定(クリア演出の展示)。
+// IsEnabled が true の間は、操作を一切受け付けず、次の順に繰り返す:
+//   ゲーム(スタート演出)-> ボス戦へ飛ぶ -> すぐ倒す -> 撃破演出と島の解放 -> クリア画面(固定の結果、継承の自動操作)
+//   -> ステージ選択(鍵が外れる演出)-> 自動で決定 -> ゲーム ...
+// 展示の間は、保存データを書き込まない(メモリ上の仮の状態で動く。ExhibitionController が、入るときに実際のデータを退避し、出るときに戻す)。
+// 周回のたびに、仮の状態を初期へ戻す(島の解放、ベスト記録、継承を、毎周見せるため)。
+// 切り替え: 実行中に TAB キーで、入る / 出る(ExhibitionController)。起動時は、通常のプレイ。
 namespace ExhibitionMode {
 
-constexpr bool kEnabled = false;
+// 展示モードに入っているか(実行中に変わる値。入る / 出るは ExhibitionController だけが呼ぶ)
+inline bool &EnabledFlag_() {
+  static bool enabled = false;
+  return enabled;
+}
+inline bool IsEnabled() { return EnabledFlag_(); }
+inline void SetEnabled(bool enabled) { EnabledFlag_() = enabled; }
 
-// ステージ選択が表示されてから(遷移の覆いが晴れてから)、自動で先頭のステージを決定するまでの時間(秒)
-constexpr float kStageSelectHoldSec = 1.0f;
+// ステージ選択で、鍵が外れる演出が終わってから、カーソルを先頭のステージへ戻すまで / 戻してから決定するまでの時間(秒)
+constexpr float kStageSelectHoldSec = 1.2f;
 // タイトルが表示されてから、自動でスタート演出を始めるまでの時間(秒)。ロゴが出きる時間(2 秒)より長くする
 constexpr float kTitleWaitSec = 3.0f;
-// スタート演出が終わってから、自機を自動で死なせる(死亡演出を始める)までの時間(秒)。
-// レールを飛ぶ様子を、少しだけ見せてから、見せ場(崩壊、落下カメラ、雲、霧と水滴)へ進む
+// スタート演出が終わってから、ボス戦へ飛ぶまでの時間(秒)。レールを飛ぶ様子を、少しだけ見せる
 constexpr float kGameHoldSec = 1.0f;
-// クリア / ゲームオーバーの覆いが晴れてから、タイトルへの遷移を要求するまでの時間(秒)
+// ボス戦に入ってから、ボスを倒すまでの時間(秒)
+constexpr float kBossHoldSec = 1.0f;
+// 結果の集計が終わってから、継承の選択を始めるまでの時間(秒。集計を、ゆっくり見せる)
+constexpr float kTallyHoldSec = 2.5f;
+// 継承の確定(メニューが開く)から、ステージ選択へ進む要求を出すまでの時間(秒)
 constexpr float kResultHoldSec = 3.0f;
+// 継承の選択で、自動操作が 1 回動かす間隔(秒)と、1 つの強化の行で選ぶ個数の上限(個数が見える様子を見せる)
+constexpr float kPickStepSec = 0.8f;
+constexpr int kPickMaxPerRow = 2;
 // ゲームオーバー: 覆いが晴れてから、ゲームへ戻る要求を出すまでは「カメラの降下の長さ + この秒数」
 // (降下は GameOverBackdrop が持つ。降下が終わって灰が集まりきり、核が灯る姿勢を、少し見せてから、復活の演出(リトライ)を始める)
 constexpr float kGameOverHoldMarginSec = 1.5f;
+
+// 展示で、プレイの最初から持たせる強化(継承の選択に、候補を出すため。ランクで枠が変わる(S 3、A 2、B 2、C 1)ので、枠より多めに持たせる)
+struct InitialUpgrade {
+  ItemEffectKind kind;
+  int count;
+};
+constexpr std::array<InitialUpgrade, 4> kInitialUpgrades = {{
+    {ItemEffectKind::LockOnMax, 2},
+    {ItemEffectKind::MaxHp, 2},
+    {ItemEffectKind::FireRate, 1},
+    {ItemEffectKind::LockRadius, 1},
+}};
 
 } // namespace ExhibitionMode

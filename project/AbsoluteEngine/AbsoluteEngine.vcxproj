@@ -145,6 +145,7 @@
     <ClCompile Include="graphics\2d\SpriteResource.cpp" />
     <ClCompile Include="graphics\3d\AssetLoader.cpp" />
     <ClCompile Include="graphics\3d\model\AnimationManager.cpp" />
+    <ClCompile Include="graphics\3d\model\CrackPointPicker.cpp" />
     <ClCompile Include="graphics\3d\model\ModelInstance.cpp" />
     <ClCompile Include="graphics\3d\model\ModelManager.cpp" />
     <ClCompile Include="graphics\3d\model\ModelResource.cpp" />
@@ -233,6 +234,7 @@
     <ClInclude Include="graphics\3d\model\ModelManager.h" />
     <ClInclude Include="graphics\3d\model\ModelResource.h" />
     <ClInclude Include="graphics\3d\model\ModelUtils.h" />
+    <ClInclude Include="graphics\3d\model\CrackPointPicker.h" />
     <ClInclude Include="graphics\3d\model\SkinCluster.h" />
     <ClInclude Include="graphics\descriptor\SrvAllocator.h" />
     <ClInclude Include="graphics\descriptor\SrvHandle.h" />

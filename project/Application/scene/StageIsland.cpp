@@ -25,6 +25,12 @@ void StageIsland::SetPlacement(const Vector3 &position, float scale, const Vecto
   rotate_ = rotate;
 }
 
+void StageIsland::DrawRevive(Renderer *renderer, const ModelInstance::CrackParam &revive) {
+  model_.SetWorld(MakeAffineMatrix({scale_, scale_, scale_}, rotate_, position_));
+  model_.SetCrackParam(revive);
+  renderer->DrawIslandReviveModel(&model_);
+}
+
 void StageIsland::Draw(Renderer *renderer) {
   // Quaternion 版と区別するため、オイラー角を Vector3 で渡す
   model_.SetWorld(MakeAffineMatrix({scale_, scale_, scale_}, rotate_, position_));

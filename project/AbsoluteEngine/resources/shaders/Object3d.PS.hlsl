@@ -1,4 +1,5 @@
 #include "object3d.hlsli"
+#include "CrackVoronoi.hlsli"
 #define MAX_POINT_LIGHTS 16
 #define MAX_DIR_LIGHTS   4
 #define MAX_SPOT_LIGHTS  8
@@ -22,6 +23,18 @@ struct Material
     float pad3;
     float3 dissolveMaskColor;
     float pad4;
+
+    // --- Crack (ボロノイのひび割れ。撃破演出用。enableCrack が 0 なら何もしない) ---
+    int enableCrack;
+    float crackCellScale;    // 1 / セルの大きさ(モデル本来の単位)。大きいほど、細かく割れる
+    float crackLineWidth;    // ひびの線の太さの最大値(セルの大きさに対する割合)
+    float crackReveal;       // ひびが広がった割合(0 = なし、1 = 全体に広がり切った)
+    float3 crackColor;       // ひびの光る色
+    float crackIntensity;    // ひびの光の強さ(色に掛ける)
+    float3 crackOrigin;      // ひびが広がり始める位置(モデル本来の座標)
+    float crackSpreadRadius; // origin から、ひびが最後に届く所までの距離
+    float crackBreak;        // セルが消えた割合(0 = 消えない、1 = すべて消えた)。消える前のセルは、面全体が光る
+    float3 crackPad;
 };
 
 struct Camera
@@ -109,6 +122,67 @@ struct PixelShaderOutput
 static const int LIGHTING_MODE_THIN_SURFACE = 3;
 // 薄い面の環境光の強さ(面の色に掛ける)。光が当たらない側(翅の裏、影の側)の最低限の明るさ
 static const float THIN_SURFACE_AMBIENT = 0.45f;
+// 光る球の殻(ModelLightingMode::kRimGlow)。照明は使わない。
+// 視線に斜めの度合い rim(0 = 正対する中心、1 = 縁)を、rim = (1 - 正対の度合い) ^ shininess で求める。
+// shininess が大きいほど、縁の細い輪だけが濃くなる(球の中は、ほぼ透ける)。中心の色(specularColor)から縁の色(color)へ変え、
+// 透明度も、中心は RIM_GLOW_CENTER_ALPHA 倍、縁は 1 倍にする(中心が透けるので、球の中の物が見える)
+static const int LIGHTING_MODE_RIM_GLOW = 4;
+static const float RIM_GLOW_CENTER_ALPHA = 0.04f;
+// shininess の下限(0 乗は、どこでも 1 になって、縁と中心の差が消えるため)
+static const float RIM_GLOW_MIN_SHARPNESS = 0.01f;
+
+// 爆散のプラズマ球(ModelLightingMode::kPlasma)。照明は使わず、視線との向きと、球面の上を流れるノイズで、色を決める。
+//   中心 = 白く飛ぶほど明るい白、縁 = 縁の色(color)へ変わる(rim = (1 - 正対の度合い) ^ shininess)
+//   球面の斑 = ノイズの高い所を、縁の色へ寄せる(球の中に残った、崩れる体の影のように見える)。斑の量は environmentCoefficient(0 で斑なし)
+//   ノイズの流れる位相 = specularColor.x(秒。外から時間を渡す)
+static const int LIGHTING_MODE_PLASMA = 5;
+// 球面ノイズの細かさ(球の法線に掛ける倍率。大きいほど、斑が細かい)と、流れる速さ(位相に掛ける倍率)
+static const float PLASMA_NOISE_SCALE = 2.4f;
+static const float3 PLASMA_FLOW_SPEED = float3(0.35f, -0.25f, 0.20f);
+// 斑になるノイズの値の範囲(この範囲で、0 から 1 へ)
+static const float PLASMA_PATCH_LOW = 0.48f;
+static const float PLASMA_PATCH_HIGH = 0.68f;
+// 中心の白の明るさ(1 を超えて、出力で頭打ちにして、白く飛ばす)
+static const float PLASMA_CORE_BRIGHTNESS = 1.6f;
+// 縁の色へ寄る強さ(rim に掛ける。大きいほど、縁の色が、内側まで広がる)
+static const float PLASMA_RIM_GAIN = 1.3f;
+// 斑の色の明るさ(縁の色に掛ける。1 より小さくして、斑を少し暗くする)
+static const float PLASMA_PATCH_DARKEN = 0.85f;
+// ふわっとした光の輪(ModelLightingMode::kSoftGlow)。球の中心ほど濃く、輪郭へ向けて、なめらかに透ける。
+// 色 = color の rgb、濃さ = color.a * (正対の度合い ^ shininess)。プラズマ球より大きい球に使うと、プラズマ球の外側に、光がにじんで見える
+static const int LIGHTING_MODE_SOFT_GLOW = 6;
+
+// 3 次元の値ノイズの、格子点の乱数(0 〜 1)
+static float PlasmaHash(float3 p)
+{
+    p = frac(p * 0.3183099f + 0.1f);
+    p *= 17.0f;
+    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+// 3 次元の値ノイズ(0 〜 1)。格子点の乱数を、なめらかに補間する
+static float PlasmaNoise(float3 x)
+{
+    float3 i = floor(x);
+    float3 f = frac(x);
+    f = f * f * (3.0f - 2.0f * f);
+    float n000 = PlasmaHash(i);
+    float n100 = PlasmaHash(i + float3(1, 0, 0));
+    float n010 = PlasmaHash(i + float3(0, 1, 0));
+    float n110 = PlasmaHash(i + float3(1, 1, 0));
+    float n001 = PlasmaHash(i + float3(0, 0, 1));
+    float n101 = PlasmaHash(i + float3(1, 0, 1));
+    float n011 = PlasmaHash(i + float3(0, 1, 1));
+    float n111 = PlasmaHash(i + float3(1, 1, 1));
+    return lerp(lerp(lerp(n000, n100, f.x), lerp(n010, n110, f.x), f.y),
+                lerp(lerp(n001, n101, f.x), lerp(n011, n111, f.x), f.y), f.z);
+}
+
+// 3 段重ねたノイズ(大きな斑に、細かい斑を重ねる。0 〜 約 1)
+static float PlasmaFbm(float3 p)
+{
+    return PlasmaNoise(p) * 0.55f + PlasmaNoise(p * 2.03f) * 0.30f + PlasmaNoise(p * 4.11f) * 0.15f;
+}
 
 // ディゾルブの縁を熾火のように光らせる配色(不死鳥が燃え尽きて灰になる見た目)。
 // 帯の中の位置 w(0 = いまにも消える外縁、1 = 帯の内側の端)で、次のように色が変わる:
@@ -142,6 +216,13 @@ static float3 ComputeDiffuse(float3 N, float3 Ldir, int lightingMode)
     }
 }
 
+// ===== ボロノイのひび割れ =====
+// ひびが先頭から広がる帯の幅(広がり具合に対する割合。大きいほど、先端がぼやけて、ゆっくり太くなる)
+static const float CRACK_SPREAD_SOFTNESS = 0.35f;
+// ひびの周りに、にじむ光の幅(線の太さに対する倍率)と、その強さ
+static const float CRACK_HALO_SCALE = 3.0f;
+static const float CRACK_HALO_STRENGTH = 0.35f;
+
 PixelShaderOutput main(VertexShaderOutput input)
 {
     PixelShaderOutput output;
@@ -159,6 +240,45 @@ PixelShaderOutput main(VertexShaderOutput input)
     if (gMaterial.enableLighting == 0)
     {
         output.color = float4(gMaterial.color.rgb * textureColor.rgb, alpha);
+        return output;
+    }
+
+    // 光る球の殻: 照明の計算はせず、視線との向きだけで、色と透明度を決める
+    if (gMaterial.enableLighting == LIGHTING_MODE_RIM_GLOW)
+    {
+        float3 glowNormal = normalize(input.normal);
+        float3 glowView = normalize(gCamera.worldPosition - input.worldPosition);
+        float facing = abs(dot(glowNormal, glowView)); // 裏面も、表面と同じ扱い
+        float rim = pow(1.0f - facing, max(gMaterial.shininess, RIM_GLOW_MIN_SHARPNESS));
+        float3 glowRGB = lerp(gMaterial.specularColor, gMaterial.color.rgb, rim);
+        float glowAlpha = gMaterial.color.a * lerp(RIM_GLOW_CENTER_ALPHA, 1.0f, rim);
+        output.color = float4(glowRGB, glowAlpha);
+        return output;
+    }
+
+    // 爆散のプラズマ球: 中心は白く飛び、縁は縁の色。球面を流れる斑が、縁の色へ寄る
+    if (gMaterial.enableLighting == LIGHTING_MODE_PLASMA)
+    {
+        float3 plasmaNormal = normalize(input.normal);
+        float3 plasmaView = normalize(gCamera.worldPosition - input.worldPosition);
+        float plasmaFacing = abs(dot(plasmaNormal, plasmaView));
+        float plasmaRim = saturate(pow(1.0f - plasmaFacing, max(gMaterial.shininess, RIM_GLOW_MIN_SHARPNESS)) * PLASMA_RIM_GAIN);
+        float3 plasmaQ = plasmaNormal * PLASMA_NOISE_SCALE + PLASMA_FLOW_SPEED * gMaterial.specularColor.x;
+        float plasmaPatch = smoothstep(PLASMA_PATCH_LOW, PLASMA_PATCH_HIGH, PlasmaFbm(plasmaQ)) * saturate(gMaterial.environmentCoefficient);
+        float3 plasmaRGB = lerp(float3(1.0f, 1.0f, 1.0f) * PLASMA_CORE_BRIGHTNESS, gMaterial.color.rgb, plasmaRim);
+        plasmaRGB = lerp(plasmaRGB, gMaterial.color.rgb * PLASMA_PATCH_DARKEN, plasmaPatch);
+        output.color = float4(plasmaRGB, gMaterial.color.a);
+        return output;
+    }
+
+    // ふわっとした光の輪: 中心ほど濃く、輪郭へ向けて透ける
+    if (gMaterial.enableLighting == LIGHTING_MODE_SOFT_GLOW)
+    {
+        float3 softNormal = normalize(input.normal);
+        float3 softView = normalize(gCamera.worldPosition - input.worldPosition);
+        float softFacing = abs(dot(softNormal, softView));
+        float softGlow = pow(softFacing, max(gMaterial.shininess, RIM_GLOW_MIN_SHARPNESS));
+        output.color = float4(gMaterial.color.rgb, gMaterial.color.a * softGlow);
         return output;
     }
 
@@ -325,6 +445,41 @@ PixelShaderOutput main(VertexShaderOutput input)
             float3 emberEdge = ApplyEmber(finalRGB, gMaterial.dissolveEdgeColor, edgeWeight);
             finalRGB = lerp(plainEdge, emberEdge, saturate(gMaterial.dissolveEmber));
         }
+    }
+
+    // ===== ボロノイのひび割れ =====
+    // 照明の計算のあとに、色を直接のせる(ひびは、自分で光るので、影の側でも暗くならない)
+    if (gMaterial.enableCrack != 0)
+    {
+        // localPosition は、モデル本来の頂点位置(スキニング前)。表面の同じ点は、動いても同じ値なので、ひびは、ボスに付いてくる
+        float3 nearestFeature;
+        float3 nearestId;
+        float edge = CrackEdgeDistance(input.localPosition * gMaterial.crackCellScale, nearestFeature, nearestId);
+
+        // セルごとの光り始める時刻(計算は、粒を出す側と共有する CrackVoronoi.hlsli)。
+        // 代表点と番号は、セルの中で同じ値なので、1 つのセルは、まとめて光って、まとめて消える
+        float heatStart = CrackCellHeatStart(nearestFeature, nearestId, gMaterial.crackCellScale, gMaterial.crackOrigin, gMaterial.crackSpreadRadius);
+        // crackBreak が heatStart を越えると、セルの面が光りだし、HEAT_WINDOW のあとに消える(crackBreak = 1 で、必ず全部消える)
+        if (gMaterial.crackBreak >= heatStart + CRACK_BREAK_HEAT_WINDOW)
+        {
+            discard;
+        }
+        float cellHeat = saturate((gMaterial.crackBreak - heatStart) / CRACK_BREAK_HEAT_WINDOW);
+
+        // 広がり: origin に近い所から先に太くなる。dist01 は、origin(0)から、いちばん遠い所(1)までの割合
+        float dist01 = length(input.localPosition - gMaterial.crackOrigin) / max(gMaterial.crackSpreadRadius, CRACK_MIN_VALUE);
+        float front = gMaterial.crackReveal * (1.0f + CRACK_SPREAD_SOFTNESS);
+        float spread = saturate((front - dist01) / CRACK_SPREAD_SOFTNESS);
+
+        float width = gMaterial.crackLineWidth * spread;
+        float crackLine = (1.0f - smoothstep(0.0f, max(width, CRACK_MIN_VALUE), edge)) * step(CRACK_MIN_VALUE, width);
+        float crackHalo = (1.0f - smoothstep(0.0f, max(width * CRACK_HALO_SCALE, CRACK_MIN_VALUE), edge)) * step(CRACK_MIN_VALUE, width);
+
+        float3 crackRGB = gMaterial.crackColor * gMaterial.crackIntensity;
+        // 消える直前のセルは、面全体が、ひびと同じ光になる
+        finalRGB = lerp(finalRGB, crackRGB, cellHeat);
+        finalRGB = lerp(finalRGB, crackRGB, saturate(crackLine));
+        finalRGB += crackRGB * crackHalo * CRACK_HALO_STRENGTH;
     }
 
     output.color = float4(finalRGB, alpha);
