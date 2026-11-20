@@ -237,6 +237,15 @@
     <ClCompile Include="scene\BaseScene.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\SceneWorld.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\SceneNavigator.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\SceneLights.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\SceneTransition.cpp" />
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
@@ -466,6 +475,18 @@
       <Filter>engine\math</Filter>
     </ClInclude>
     <ClInclude Include="scene\BaseScene.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneWorld.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneNavigator.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ISceneChanger.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneLights.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\ISceneFactory.h">

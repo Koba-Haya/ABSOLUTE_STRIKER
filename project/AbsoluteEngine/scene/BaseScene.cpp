@@ -1,14 +1,12 @@
 #include "BaseScene.h"
-#include "SceneManager.h"
 #include "../graphics/3d/model/ModelManager.h"
 #include "../graphics/texture/TextureManager.h"
-#include "LightNodeComponent.h"
+#include "SceneLights.h"
 #include "../base/AssetPath.h"
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
-#include "CollisionManager.h"
 #include "GameObject.h"
 #include "Input.h"
 #include "Renderer.h"
@@ -83,12 +81,12 @@ void BaseScene::Initialize(const SceneServices &services) {
 }
 
 void BaseScene::RemoveRootObject(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-  rootObjects_.erase(std::remove(rootObjects_.begin(), rootObjects_.end(), obj), rootObjects_.end());
+  world_.Remove(obj);
 }
 
 void BaseScene::RemoveRootObjectsIf(
     const std::function<bool(const std::shared_ptr<AbsoluteEngine::GameObject>&)>& shouldRemove) {
-  rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), shouldRemove), rootObjects_.end());
+  world_.RemoveIf(shouldRemove);
 }
 
 const Camera* BaseScene::GetEditorViewCamera() const {
@@ -114,32 +112,27 @@ void BaseScene::SetEditorCameraShake(const Vector3 &offset) {
 }
 
 void BaseScene::RequestSceneChange(const std::string &sceneId) {
-  if (sceneManager_) {
-    sceneManager_->RequestChange(sceneId);
-  }
+  navigator_.RequestChange(sceneId);
 }
 
 void BaseScene::RequestSceneChange(const std::string &sceneId, std::any payload) {
-  if (sceneManager_) {
-    sceneManager_->RequestChange(sceneId, std::move(payload));
-  }
+  navigator_.RequestChange(sceneId, std::move(payload));
 }
 
 void BaseScene::RequestSceneChangeKeepingPayload(const std::string &sceneId) {
-  // 荷物はコピーして渡す(このシーンが、遷移の間も自分の荷物を読めるように、手元にも残す)
-  RequestSceneChange(sceneId, launchPayload_);
+  navigator_.RequestChangeKeepingPayload(sceneId);
 }
 
 bool BaseScene::IsSceneTransitioning() const {
-  return sceneManager_ != nullptr && sceneManager_->IsTransitioning();
+  return navigator_.IsTransitioning();
 }
 
 float BaseScene::GetTransitionRevealProgress() const {
-  return sceneManager_ != nullptr ? sceneManager_->GetRevealProgress() : 1.0f;
+  return navigator_.GetRevealProgress();
 }
 
 float BaseScene::GetTransitionRevealSeconds() const {
-  return sceneManager_ != nullptr ? sceneManager_->GetRevealSeconds() : 0.0f;
+  return navigator_.GetRevealSeconds();
 }
 
 AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
@@ -150,16 +143,15 @@ AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
 }
 
 void BaseScene::BackupScene() {
-    backupSceneJson_ = AbsoluteEngine::SceneSerializer::SerializeToString(rootObjects_, true);
+    backupSceneJson_ = world_.SerializeToString();
 }
 
 void BaseScene::RestoreScene() {
-    rootObjects_.clear();
-    AbsoluteEngine::SceneSerializer::DeserializeFromString(backupSceneJson_, rootObjects_);
+    world_.RestoreFromString(backupSceneJson_);
 
     // タスク12: 復元後にタイムラインのカメラポインタを再接続する
     if (timelineManager_) {
-        for (const auto& obj : rootObjects_) {
+        for (const auto& obj : world_.Objects()) {
             if (!obj) continue;
             if (auto* railComp = obj->GetComponent<AbsoluteEngine::ITimelineCamera>()) {
                 SetTimelineCamera(railComp);
@@ -187,7 +179,7 @@ bool BaseScene::LoadEditorScene() {
         AbsoluteEngine::AssetPath::ReportMissingAndExit("scene file", filePath);
 #endif
     }
-    AbsoluteEngine::SceneSerializer::Deserialize(filePath, rootObjects_);
+    world_.LoadFromFile(filePath);
     return true;
 }
 
@@ -196,7 +188,7 @@ void BaseScene::SaveEditorScene() {
     // 保存はエディタビルドのみ。配布ビルドではソース/配布物のJSONを書き換えない
     std::string saveDir = AbsoluteEngine::AssetPath::ResolveEditableData("editor/scenes/");
     std::filesystem::create_directories(saveDir);
-    AbsoluteEngine::SceneSerializer::Serialize(GetSceneFilePath(), rootObjects_);
+    world_.SaveToFile(GetSceneFilePath());
     // タイムラインデータも同時に保存してシーンとタイムラインのデータを完全同期する（タスクB）
     SaveTimeline();
 #endif
@@ -284,16 +276,8 @@ void BaseScene::UpdateEditor() {
         // タイムラインをオブジェクトより先に更新する
         UpdateTimeline(worldDeltaTime);
 
-        // 追加されたオブジェクトでループが壊れないようインデックスで回す
-        size_t count = rootObjects_.size();
-        for (size_t i = 0; i < count; ++i) {
-            auto obj = rootObjects_[i];
-            if (obj && obj->IsActive()) {
-                obj->Update(worldDeltaTime);
-            }
-        }
-        
-        AbsoluteEngine::CollisionManager::GetInstance().Update(rootObjects_);
+        // オブジェクトの更新と衝突判定
+        world_.Update(worldDeltaTime);
     }
 
     // ガベージコレクション（IsActive() == false なオブジェクトを削除）
@@ -303,9 +287,7 @@ void BaseScene::UpdateEditor() {
     // する場合など）でもここを通さないと、破棄されたはずのオブジェクトがrootObjects_に
     // 残り続けて描画され続けてしまう（削除したはずのオブジェクトが消えない/再スポーンが
     // 別オブジェクトとして重なって見えるバグの原因だった）
-    rootObjects_.erase(std::remove_if(rootObjects_.begin(), rootObjects_.end(), [](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-        return !obj || !obj->IsActive();
-    }), rootObjects_.end());
+    world_.CollectGarbage();
 }
 
 void BaseScene::DrawEditorUI() {
@@ -362,7 +344,7 @@ void BaseScene::DrawEditorUI() {
         //   描画されている絵とギズモ/クリック判定がズレて、意味不明な視点に見える不具合になる）
         const Camera* viewCam = GetEditorViewCamera();
         if (!viewCam) viewCam = editorCamera_.get();
-        editorUIManager_->DrawUI(rootObjects_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
+        editorUIManager_->DrawUI(world_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
 
         // オートセーブの実行
         // 【バグ修正】ここにplayMode_のガードが無かったため、GameScene（常にPlayModeで
@@ -383,72 +365,8 @@ void BaseScene::DrawEditorUI() {
 }
 
 void BaseScene::ApplyEditorLightsToRenderer(Renderer* renderer) {
-    if (!renderer) return;
-
-    std::vector<DirLight> dirLights;
-    std::vector<PointLight> pointLights;
-    std::vector<SpotLight> spotLights;
-
-    auto collectLights = [&](auto& self, const std::shared_ptr<AbsoluteEngine::GameObject>& obj) -> void {
-        if (!obj) return;
-        const auto& t = obj->GetTransform();
-
-        auto lightComp = obj->GetComponent<AbsoluteEngine::LightNodeComponent>();
-        if (lightComp && lightComp->type != AbsoluteEngine::LightNodeComponent::Type::None) {
-            const auto& light = *lightComp;
-            
-            // Transformの回転から方向ベクトルを計算
-            Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);
-            Matrix4x4 rotY = MakeRotateYMatrix(t.rotate.y);
-            Matrix4x4 rotZ = MakeRotateZMatrix(t.rotate.z);
-            Matrix4x4 rotMatrix = Multiply(Multiply(rotZ, rotX), rotY);
-            
-            Vector3 defaultDir = {0.0f, -1.0f, 0.0f};
-            Vector3 dir = TransformNormal(defaultDir, rotMatrix);
-            dir = Normalize(dir);
-
-            if (light.type == AbsoluteEngine::LightNodeComponent::Type::Directional) {
-                DirLight dl;
-                dl.color = light.color;
-                dl.intensity = light.intensity;
-                dl.direction = dir;
-                dl.enabled = true;
-                dirLights.push_back(dl);
-            } else if (light.type == AbsoluteEngine::LightNodeComponent::Type::Point) {
-                PointLight pl;
-                pl.color = light.color;
-                pl.intensity = light.intensity;
-                pl.radius = light.radius;
-                pl.decay = light.decay;
-                pl.position = t.translate; 
-                pl.enabled = true;
-                pointLights.push_back(pl);
-            } else if (light.type == AbsoluteEngine::LightNodeComponent::Type::Spot) {
-                SpotLight sl;
-                sl.color = light.color;
-                sl.intensity = light.intensity;
-                sl.distance = light.distance;
-                sl.decay = light.decay;
-                sl.coneAngleDeg = light.coneAngleDeg;
-                sl.position = t.translate;
-                sl.direction = dir;
-                sl.enabled = true;
-                spotLights.push_back(sl);
-            }
-        }
-
-        for (const auto& child : obj->GetChildren()) {
-            self(self, child);
-        }
-    };
-
-    for (const auto& obj : rootObjects_) {
-        collectLights(collectLights, obj);
-    }
-
-    renderer->SetDirectionalLights(dirLights, true);
-    renderer->SetPointLights(pointLights, true);
-    renderer->SetSpotLights(spotLights, true);
+    // ライトの収集と Renderer への受け渡しは SceneLights が担当する
+    AbsoluteEngine::SceneLights::ApplyToRenderer(world_, renderer);
 }
 
 // ============================================================

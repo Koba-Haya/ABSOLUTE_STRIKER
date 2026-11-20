@@ -27,22 +27,22 @@ EditorUIManager::EditorUIManager() {
     }
 }
 
-void EditorUIManager::DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera) {
+void EditorUIManager::DrawUI(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera) {
 #ifdef USE_IMGUI
-  DrawMenuBar(rootObjects);
+  DrawMenuBar(world);
   DrawToolbar();
-  DrawAssetBrowser(rootObjects);
-  DrawPrefabsBrowser(rootObjects);
-  DrawHierarchy(rootObjects);
+  DrawAssetBrowser(world);
+  DrawPrefabsBrowser(world);
+  DrawHierarchy(world);
   DrawInspector();
-  DrawViewport(rootObjects, viewMatrix, projectionMatrix);
+  DrawViewport(world, viewMatrix, projectionMatrix);
   DrawPostProcessSettings();
-  HandleShortcuts(rootObjects, camera);
+  HandleShortcuts(world, camera);
 #endif
 }
 
 #ifdef USE_IMGUI
-void EditorUIManager::DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawMenuBar(SceneWorld& world) {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
       // カレントディレクトリ（実行ファイルの位置）に依存しないよう、プロジェクトフォルダへの絶対パスを指定
@@ -50,11 +50,11 @@ void EditorUIManager::DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& root
 
       if (ImGui::MenuItem("Save Scene")) {
         std::filesystem::create_directories(saveDir);
-        SceneSerializer::Serialize(saveDir + "scene.json", rootObjects);
+        world.SaveToFile(saveDir + "scene.json");
       }
 
       if (ImGui::MenuItem("Load Scene")) {
-        SceneSerializer::Deserialize(saveDir + "scene.json", rootObjects);
+        world.LoadFromFile(saveDir + "scene.json");
         selectedObject_.reset(); // ロード後は選択をクリア
       }
 
@@ -84,7 +84,7 @@ void EditorUIManager::DrawToolbar() {
   ImGui::End();
 }
 
-void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawAssetBrowser(SceneWorld& world) {
   ImGui::Begin("Assets");
   std::string resourcesPath = AbsoluteEngine::EnginePath::Resolve("resources");
   
@@ -129,7 +129,7 @@ void EditorUIManager::DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>&
   ImGui::End();
 }
 
-void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawPrefabsBrowser(SceneWorld& world) {
   ImGui::Begin("Prefabs");
   std::string prefabsPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs");
   
@@ -149,9 +149,9 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
             auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
             if (prefabInstance) {
                 if (commandManager_) {
-                  commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+                  commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
               } else {
-                  rootObjects.push_back(prefabInstance);
+                  world.Add(prefabInstance);
                   SetSceneModified();
               }
                 SelectObject(prefabInstance);
@@ -175,7 +175,7 @@ void EditorUIManager::DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>
   ImGui::End();
 }
 
-void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects, EditorCamera* camera) {
+void EditorUIManager::HandleShortcuts(SceneWorld& world, EditorCamera* camera) {
   // 右クリック押下中はカメラ操作のためショートカット無効
   if (ImGui::IsMouseDown(1)) return;
 
@@ -206,7 +206,7 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
         if (parent) {
           cmd = std::make_shared<DeleteObjectCommand>(sel, parent);
         } else {
-          cmd = std::make_shared<DeleteObjectCommand>(sel, &rootObjects);
+          cmd = std::make_shared<DeleteObjectCommand>(sel, &world);
         }
         if (commandManager_) commandManager_->ExecuteCommand(cmd);
         selectedObject_.reset();
@@ -225,7 +225,7 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
       if (sel) {
         cmd = std::make_shared<CreateObjectCommand>(newObj, sel);
       } else {
-        cmd = std::make_shared<CreateObjectCommand>(newObj, &rootObjects);
+        cmd = std::make_shared<CreateObjectCommand>(newObj, &world);
       }
       if (commandManager_) commandManager_->ExecuteCommand(cmd);
       SelectObject(newObj); // ペーストしたものを選択状態に
@@ -233,7 +233,7 @@ void EditorUIManager::HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& 
   }
 }
 
-void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::DrawViewport(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
   // ImGuizmoの設定
   ImGuizmo::SetOrthographic(false);
   ImGuizmo::BeginFrame();
@@ -253,10 +253,10 @@ void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& roo
       ImGui::Image(static_cast<ImTextureID>(srvHandle.ptr), viewportSize);
   }
 
-  HandleViewportDragDrop(rootObjects, viewMatrix, projectionMatrix);
+  HandleViewportDragDrop(world, viewMatrix, projectionMatrix);
 
   // Viewportウィンドウ内でのマウスピッキング処理（BeginとEndの間で行うことでHoveredが正しくとれる）
-  HandleMousePicking(rootObjects, viewMatrix, projectionMatrix);
+  HandleMousePicking(world.Objects(), viewMatrix, projectionMatrix);
 
   // タイトルバー等を除いた実際の描画領域を取得する
   ImVec2 vMin = ImGui::GetWindowContentRegionMin();
@@ -269,7 +269,7 @@ void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& roo
 
   // デバッグ描画
   if (showColliderDebug_) {
-    DrawColliderDebug(rootObjects, viewMatrix, projectionMatrix, vMin, vMax);
+    DrawColliderDebug(world.Objects(), viewMatrix, projectionMatrix, vMin, vMax);
   }
 
   auto obj = selectedObject_.lock();
@@ -330,7 +330,7 @@ void EditorUIManager::DrawViewport(std::vector<std::shared_ptr<GameObject>>& roo
   ImGui::End();
 }
 
-void EditorUIManager::HandleMousePicking(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::HandleMousePicking(const SceneWorld::ObjectList& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
   // Viewportウィンドウがホバーされているか、ギズモを操作中でないか確認
   if (!ImGui::IsWindowHovered() || ImGuizmo::IsOver()) return;
 
@@ -478,7 +478,7 @@ static bool WorldToScreen(const Vector3& worldPos, const Matrix4x4& viewProj, co
   return true;
 }
 
-void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax) {
+void EditorUIManager::DrawColliderDebug(const SceneWorld::ObjectList& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax) {
   Matrix4x4 viewProj = Multiply(viewMatrix, projectionMatrix);
   ImDrawList* drawList = ImGui::GetWindowDrawList();
   ImU32 color = IM_COL32(0, 255, 0, 255); // 緑色
@@ -555,14 +555,14 @@ void EditorUIManager::DrawColliderDebug(const std::vector<std::shared_ptr<GameOb
 }
 #endif
 #ifdef USE_IMGUI
-void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawHierarchy(SceneWorld& world) {
   ImGui::Begin("Hierarchy");
 
   // イテレータ無効化を防ぐため、ループ前にスナップショットを取ってから描画する
-  // （ドラッグ＆ドロップやコンテキストメニュー等でループ中に rootObjects が変更されても安全）
-  auto rootSnapshot = rootObjects;
+  // （ドラッグ＆ドロップやコンテキストメニュー等でループ中にシーンのオブジェクト一覧が変更されても安全）
+  auto rootSnapshot = world.Objects();
   for (const auto& obj : rootSnapshot) {
-    DrawGameObjectNode(obj, rootObjects);
+    DrawGameObjectNode(obj, world);
   }
 
   // Hierarchyウィンドウ全体へのドロップ受け入れ
@@ -574,9 +574,9 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
       if (prefabInstance) {
         if (commandManager_) {
-          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
         } else {
-          rootObjects.push_back(prefabInstance);
+          world.Add(prefabInstance);
           SetSceneModified();
         }
         SelectObject(prefabInstance);
@@ -595,9 +595,9 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       newObj->GetTransform().translate = {0, 0, 0};
       
       if (commandManager_) {
-        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+        commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world));
       } else {
-        rootObjects.push_back(newObj);
+        world.Add(newObj);
         SetSceneModified();
       }
       SelectObject(newObj);
@@ -615,9 +615,9 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
       if (ImGui::Selectable("Create Empty")) {
           auto newObj = std::make_shared<GameObject>("GameObject");
           if (commandManager_) {
-              commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+              commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world));
           } else {
-              rootObjects.push_back(newObj);
+              world.Add(newObj);
               SetSceneModified();
           }
           SelectObject(newObj);
@@ -629,7 +629,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               lightComp->type = LightNodeComponent::Type::Directional;
               newObj->AddComponent(std::move(lightComp));
               newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
           if (ImGui::Selectable("Point Light")) {
@@ -637,7 +637,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               auto lightComp = std::make_unique<LightNodeComponent>();
               lightComp->type = LightNodeComponent::Type::Point;
               newObj->AddComponent(std::move(lightComp));
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
           if (ImGui::Selectable("Spot Light")) {
@@ -645,7 +645,7 @@ void EditorUIManager::DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& ro
               auto lightComp = std::make_unique<LightNodeComponent>();
               lightComp->type = LightNodeComponent::Type::Spot;
               newObj->AddComponent(std::move(lightComp));
-              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects)); } else { rootObjects.push_back(newObj); SetSceneModified(); }
+              if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
           ImGui::EndMenu();
@@ -666,7 +666,7 @@ void EditorUIManager::SelectObject(const std::shared_ptr<GameObject>& obj) {
     }
 }
 
-void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects) {
+void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, SceneWorld& world) {
   if (!obj) return;
 
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
@@ -689,7 +689,7 @@ void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::v
 
   if (isOpen && !obj->GetChildren().empty()) {
     for (const auto& child : obj->GetChildren()) {
-      DrawGameObjectNode(child, rootObjects);
+      DrawGameObjectNode(child, world);
     }
     ImGui::TreePop();
   }
@@ -1107,7 +1107,7 @@ void EditorUIManager::DrawCameraControls(EditorCamera& camera) {
 #endif
 }
 
-void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
+void EditorUIManager::HandleViewportDragDrop(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix) {
 #ifdef USE_IMGUI
   if (ImGui::BeginDragDropTarget()) {
     
@@ -1168,9 +1168,9 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
         if (prefabInstance) {
           prefabInstance->GetTransform().translate = targetPos;
           if (commandManager_) {
-            commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &rootObjects));
+            commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
           } else {
-            rootObjects.push_back(prefabInstance);
+            world.Add(prefabInstance);
           }
           SelectObject(prefabInstance);
         }
@@ -1190,9 +1190,9 @@ void EditorUIManager::HandleViewportDragDrop(std::vector<std::shared_ptr<GameObj
         newObj->GetTransform().translate = targetPos;
         
         if (commandManager_) {
-          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &rootObjects));
+          commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world));
         } else {
-          rootObjects.push_back(newObj);
+          world.Add(newObj);
         }
         SelectObject(newObj);
       }

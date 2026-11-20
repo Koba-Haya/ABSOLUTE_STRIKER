@@ -8,10 +8,11 @@
 
 #include "SceneServices.h"
 #include "BaseScene.h"
+#include "ISceneChanger.h"
 #include "ISceneFactory.h"
 #include "SceneTransition.h"
 
-class SceneManager {
+class SceneManager final : public ISceneChanger {
 public:
   // (今のシーンの ID, 次のシーンの ID) から、使う遷移の設定を返す関数。
   // std::nullopt を返した組み合わせは、遷移なしで即座に切り替わる。
@@ -35,12 +36,12 @@ public:
 
   // シーンの切り替えを要求する。組み合わせの表(TransitionResolver)に遷移があれば、覆ってから入れ替える。
   // 遷移の進行中や、すでに要求済みのときの呼び出しは無視する(シーン側が毎フレーム呼んでも、二重に始まらない)
-  void RequestChange(const std::string &nextSceneId);
+  void RequestChange(const std::string &nextSceneId) override;
   // 次のシーンへ渡す荷物(payload)つきで、シーンの切り替えを要求する。遷移の扱いは上の RequestChange と同じ。
   // 荷物は、覆いが完全になって次のシーンを作る時点まで預かり、次のシーンの Initialize より前に渡す。
   // エンジンは荷物の中身を知らない(型の取り出しは、受け取るシーンが TryGetLaunchPayload で行う)。
   // 荷物の型はコピーできること(std::any の条件)。要求が無視されたとき(遷移の進行中、要求済み)は、荷物も捨てる
-  void RequestChange(const std::string &nextSceneId, std::any payload);
+  void RequestChange(const std::string &nextSceneId, std::any payload) override;
   // 遷移の設定を指定して切り替える(デバッグ用など)
   void RequestChange(const std::string &nextSceneId, const TransitionSpec &spec);
   // 遷移なしで、すぐに切り替える。進行中の遷移があれば中断する
@@ -50,13 +51,13 @@ public:
   // 今のシーンの ID(Start 前は空)
   const std::string &GetCurrentSceneId() const { return currentSceneId_; }
   // 画面遷移の進行中か(覆っている、保っている、晴れている途中)
-  bool IsTransitioning() const { return transition_.IsActive(); }
+  bool IsTransitioning() const override { return transition_.IsActive(); }
   // 新しいシーンが表示され始め、覆いが晴れている途中か
   bool IsRevealing() const { return transition_.IsRevealing(); }
   // 晴れる途中の進み具合(0 = 晴れ始める前、1 = 完全に晴れた。時間に比例する。遷移中でなければ 1)
-  float GetRevealProgress() const { return transition_.GetRevealProgress(); }
+  float GetRevealProgress() const override { return transition_.GetRevealProgress(); }
   // 晴れる区間の長さ(秒)
-  float GetRevealSeconds() const { return transition_.GetInSeconds(); }
+  float GetRevealSeconds() const override { return transition_.GetInSeconds(); }
 
   const SceneServices &GetServices() const { return services_; }
 

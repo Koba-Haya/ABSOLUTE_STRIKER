@@ -113,7 +113,7 @@ void SceneManager::ApplySceneChangeIfNeeded() {
   CpuTimer::Scope initScope("SceneManager.NewScene.Initialize(total)");
   current_ = std::move(next_);
   currentSceneId_ = nextSceneId_;
-  current_->SetSceneManager(this);
+  current_->SetSceneChanger(this);
   current_->Initialize(services_);
 }
 

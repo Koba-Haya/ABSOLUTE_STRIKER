@@ -3,6 +3,7 @@
 #include <vector>
 #include <algorithm>
 #include "../scene/GameObject.h"
+#include "../scene/SceneWorld.h"
 #include "../Type/Transform.h"
 #include "../../externals/nlohmann/json.hpp"
 
@@ -42,69 +43,63 @@ private:
 // オブジェクト生成のコマンド
 class CreateObjectCommand : public ICommand {
 public:
-    CreateObjectCommand(std::shared_ptr<GameObject> target, std::vector<std::shared_ptr<GameObject>>* rootObjects)
-        : target_(target), rootObjects_(rootObjects) {}
+    CreateObjectCommand(std::shared_ptr<GameObject> target, SceneWorld* world)
+        : target_(target), world_(world) {}
 
     CreateObjectCommand(std::shared_ptr<GameObject> target, std::shared_ptr<GameObject> parent)
-        : target_(target), parent_(parent), rootObjects_(nullptr) {}
+        : target_(target), parent_(parent), world_(nullptr) {}
 
     void Execute() override {
         if (auto p = parent_.lock()) {
             p->AddChild(target_);
-        } else if (rootObjects_) {
-            rootObjects_->push_back(target_);
+        } else if (world_) {
+            world_->Add(target_);
         }
     }
 
     void Undo() override {
         if (auto p = parent_.lock()) {
             p->RemoveChild(target_);
-        } else if (rootObjects_) {
-            auto it = std::find(rootObjects_->begin(), rootObjects_->end(), target_);
-            if (it != rootObjects_->end()) {
-                rootObjects_->erase(it);
-            }
+        } else if (world_) {
+            world_->Remove(target_);
         }
     }
 
 private:
     std::shared_ptr<GameObject> target_;
     std::weak_ptr<GameObject> parent_;
-    std::vector<std::shared_ptr<GameObject>>* rootObjects_;
+    SceneWorld* world_; // 所有しない。ルート直下のオブジェクトの追加・削除を、このシーンの世界へ依頼する
 };
 
 // オブジェクト削除のコマンド
 class DeleteObjectCommand : public ICommand {
 public:
-    DeleteObjectCommand(std::shared_ptr<GameObject> target, std::vector<std::shared_ptr<GameObject>>* rootObjects)
-        : target_(target), rootObjects_(rootObjects) {}
+    DeleteObjectCommand(std::shared_ptr<GameObject> target, SceneWorld* world)
+        : target_(target), world_(world) {}
 
     DeleteObjectCommand(std::shared_ptr<GameObject> target, std::shared_ptr<GameObject> parent)
-        : target_(target), parent_(parent), rootObjects_(nullptr) {}
+        : target_(target), parent_(parent), world_(nullptr) {}
 
     void Execute() override {
         if (auto p = parent_.lock()) {
             p->RemoveChild(target_);
-        } else if (rootObjects_) {
-            auto it = std::find(rootObjects_->begin(), rootObjects_->end(), target_);
-            if (it != rootObjects_->end()) {
-                rootObjects_->erase(it);
-            }
+        } else if (world_) {
+            world_->Remove(target_);
         }
     }
 
     void Undo() override {
         if (auto p = parent_.lock()) {
             p->AddChild(target_);
-        } else if (rootObjects_) {
-            rootObjects_->push_back(target_);
+        } else if (world_) {
+            world_->Add(target_);
         }
     }
 
 private:
     std::shared_ptr<GameObject> target_;
     std::weak_ptr<GameObject> parent_;
-    std::vector<std::shared_ptr<GameObject>>* rootObjects_;
+    SceneWorld* world_; // 所有しない。ルート直下のオブジェクトの追加・削除を、このシーンの世界へ依頼する
 };
 
 // 汎用コンポーネント状態変更のコマンド

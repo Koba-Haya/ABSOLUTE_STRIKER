@@ -5,7 +5,9 @@
 #include <memory>
 #include <vector>
 
+#include "SceneNavigator.h"
 #include "SceneServices.h"
+#include "SceneWorld.h"
 #include "Vector.h"
 #include "timeline/TimelineManager.h"
 #include "timeline/TimelineEditorWindow.h"
@@ -21,8 +23,6 @@ namespace AbsoluteEngine {
     class SpawnEvent;
 }
 
-class SceneManager;
-
 enum class PlayMode {
   Edit,
   Play,
@@ -33,11 +33,12 @@ class BaseScene {
 public:
   virtual ~BaseScene();
 
-  void SetSceneManager(SceneManager *sm) { sceneManager_ = sm; }
+  // シーン切り替えの窓口(SceneManager)を受け取る。SceneManager が、シーンを作った後に呼ぶ
+  void SetSceneChanger(ISceneChanger *changer) { navigator_.SetChanger(changer); }
   void SetSceneId(const std::string& id) { sceneId_ = id; }
   // 前のシーンから渡された荷物を受け取る。SceneManager が、シーンを作った直後、Initialize の前に呼ぶ。
   // 荷物なしの切り替えでは、空の std::any が渡る
-  void SetLaunchPayload(std::any payload) { launchPayload_ = std::move(payload); }
+  void SetLaunchPayload(std::any payload) { navigator_.SetPayload(std::move(payload)); }
 
   virtual void Initialize(const SceneServices &services);
   virtual void Finalize() {}
@@ -54,11 +55,11 @@ public:
   void SetWorldTimeScale(float scale) { worldTimeScale_ = scale < 0.0f ? 0.0f : scale; }
   float GetWorldTimeScale() const { return worldTimeScale_; }
 
-  const std::vector<std::shared_ptr<AbsoluteEngine::GameObject>>& GetRootObjects() const { return rootObjects_; }
+  const std::vector<std::shared_ptr<AbsoluteEngine::GameObject>>& GetRootObjects() const { return world_.Objects(); }
   // タイムラインのSpawnEventなど、あらゆる箇所からのオブジェクト追加を一元管理できるよう virtual 化する
   // 派生クラスでオーバーライドすることで、Application固有の処理（コールバック注入など）を追加できる（DI）
-  virtual void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { rootObjects_.push_back(obj); }
-  void ClearRootObjects() { rootObjects_.clear(); }
+  virtual void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { world_.Add(std::move(obj)); }
+  void ClearRootObjects() { world_.Clear(); }
   // 指定したオブジェクトをシーンから取り除く（含まれていなければ何もしない）
   // GetRootObjects() の巡回中は呼ばないこと（巡回中に削除するとイテレータが無効になる）。
   // 巡回中に消したいものは、いったん集めておき、巡回の後で呼ぶ
@@ -139,7 +140,7 @@ protected:
   // 返す参照は、このシーンが生きている間だけ有効
   template <typename T>
   const T *TryGetLaunchPayload() const {
-    return std::any_cast<T>(&launchPayload_);
+    return navigator_.TryGetPayload<T>();
   }
 
   // 画面遷移の進行状況を問い合わせる（読み取り専用）。SceneManager 自体は派生クラスに公開しない
@@ -205,14 +206,13 @@ private:
   // レール座標の指定のときは、実際の出現(Fire)と同じ手順で、発火時刻のレール位置から変換する
   Transform ResolveTimelineSpawnPreview(const AbsoluteEngine::SpawnEvent &spawnEvent) const;
 
-  SceneManager *sceneManager_ = nullptr;
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 
   // エンジン・エディタ機能
   std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
-  // シーン直下のオブジェクト一覧。派生クラスからは GetRootObjects()（読み取り）、AddRootObject（追加）、
-  // RemoveRootObject / RemoveRootObjectsIf（削除）経由で扱う
-  std::vector<std::shared_ptr<AbsoluteEngine::GameObject>> rootObjects_;
+  // シーン直下のオブジェクトの管理(追加・削除・更新・回収・保存と復元)。派生クラスからは GetRootObjects()（読み取り）、
+  // AddRootObject（追加）、RemoveRootObject / RemoveRootObjectsIf（削除）経由で扱う
+  AbsoluteEngine::SceneWorld world_;
   // エディタ用カメラ（常に EditorCamera として生成する）。派生クラスからは GetEditorCamera() などの専用メソッド経由で扱う
   std::unique_ptr<AbsoluteEngine::EditorCamera> editorCamera_;
   std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
@@ -220,7 +220,8 @@ private:
   PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
   float worldTimeScale_ = 1.0f;        // 世界の時間の速さ(SetWorldTimeScale)
   std::string sceneId_ = "";
-  std::any launchPayload_; // 前のシーンから渡された荷物(派生クラスからは TryGetLaunchPayload 経由で扱う)
+  // シーン切り替えの要求と、前のシーンから渡された荷物(派生クラスからは RequestSceneChange / TryGetLaunchPayload 経由で扱う)
+  SceneNavigator navigator_;
   std::string backupSceneJson_ = "";
 
   // タイムラインシステム（シーン独立のため BaseScene が所有する）
