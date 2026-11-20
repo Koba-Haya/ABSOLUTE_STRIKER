@@ -147,7 +147,7 @@ void DirectXCommon::EndFrame() {
 
   ID3D12CommandList *lists[]{commandList_.Get()};
   commandQueue_->ExecuteCommandLists(1, lists);
-  swapChain_->Present(1, 0);
+  swapChain_->Present(presentInterval_, 0);
 
   fenceValue_++;
   commandQueue_->Signal(fence_.Get(), fenceValue_);

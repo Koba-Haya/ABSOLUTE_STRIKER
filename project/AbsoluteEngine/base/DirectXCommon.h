@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "externals/DirectXTex/d3dx12.h"
 #include "SrvAllocator.h"
 #include "DirectXResourceUtils.h"
@@ -38,6 +38,11 @@ public:
 	// 描画前後の処理
 	void PreDraw();
 	void PostDraw();
+
+	// 垂直同期の間隔(Present に渡す値。1 = 画面の更新ごと、2 = 2 回に 1 回)。通常は 1。
+	// 開発用: 大きくすると、疑似的に、遅い画面(60Hz の画面で 2 なら 30Hz)の環境を再現できる(固定タイムステップの確認に使う)
+	void SetPresentInterval(UINT interval) { presentInterval_ = interval < 1 ? 1 : interval; }
+	UINT GetPresentInterval() const { return presentInterval_; }
 
 	// 参照用のゲッタ
 	ID3D12Device* GetDevice() const { return device_.Get(); }
@@ -178,6 +183,7 @@ private:
 	ComPtr<ID3D12Fence> fence_;
 	uint64_t fenceValue_ = 0;
 	HANDLE fenceEvent_ = nullptr;
+	UINT presentInterval_ = 1; // 垂直同期の間隔(SetPresentInterval)
 
 	// デバイスが外れたことを、すでにログへ出したか(1 回だけ出すため)
 	bool deviceRemovedLogged_ = false;
