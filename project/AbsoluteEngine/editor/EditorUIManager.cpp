@@ -34,7 +34,7 @@ void EditorUIManager::DrawUI(SceneWorld& world, const Matrix4x4& viewMatrix, con
   DrawAssetBrowser(world);
   DrawPrefabsBrowser(world);
   DrawHierarchy(world);
-  DrawInspector();
+  DrawInspector(world);
   DrawViewport(world, viewMatrix, projectionMatrix);
   DrawPostProcessSettings();
   HandleShortcuts(world, camera);
@@ -146,7 +146,7 @@ void EditorUIManager::DrawPrefabsBrowser(SceneWorld& world) {
         if (ImGui::Button(prefabName.c_str(), ImVec2(-FLT_MIN, 30))) {
             // クリックでも配置できるようにする
             std::string fullPath = AbsoluteEngine::EnginePath::Resolve("resources/prefabs/" + filename);
-            auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+            auto prefabInstance = SceneSerializer::LoadPrefab(fullPath, world.Deps());
             if (prefabInstance) {
                 if (commandManager_) {
                   commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
@@ -214,13 +214,13 @@ void EditorUIManager::HandleShortcuts(SceneWorld& world, EditorCamera* camera) {
 
       // Ctrl+Cでコピー
       if (ctrl && ImGui::IsKeyPressed(ImGuiKey_C)) {
-        clipboardObject_ = SceneSerializer::CopyGameObject(sel);
+        clipboardObject_ = SceneSerializer::CopyGameObject(sel, world.Deps());
       }
     }
 
     // Ctrl+Vでペースト
     if (ctrl && ImGui::IsKeyPressed(ImGuiKey_V) && clipboardObject_) {
-      auto newObj = SceneSerializer::CopyGameObject(clipboardObject_);
+      auto newObj = SceneSerializer::CopyGameObject(clipboardObject_, world.Deps());
       std::shared_ptr<ICommand> cmd;
       if (sel) {
         cmd = std::make_shared<CreateObjectCommand>(newObj, sel);
@@ -571,7 +571,7 @@ void EditorUIManager::DrawHierarchy(SceneWorld& world) {
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
       const char* payloadPath = (const char*)payload->Data;
       std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
-      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+      auto prefabInstance = SceneSerializer::LoadPrefab(fullPath, world.Deps());
       if (prefabInstance) {
         if (commandManager_) {
           commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
@@ -695,7 +695,7 @@ void EditorUIManager::DrawGameObjectNode(std::shared_ptr<GameObject> obj, SceneW
   }
 }
 
-void EditorUIManager::DrawInspector() {
+void EditorUIManager::DrawInspector(SceneWorld& world) {
   ImGui::Begin("Inspector");
 
   // タイムラインイベントが選択されている場合はイベント専用UIを描画して早期リターン（タスク15）
@@ -1000,7 +1000,7 @@ void EditorUIManager::DrawInspector() {
         } else {
           for (const auto& name : names) {
             if (ImGui::Selectable(name.c_str())) {
-              auto comp = ComponentFactory::GetInstance().Create(name);
+              auto comp = ComponentFactory::GetInstance().Create(name, world.Deps());
               if (comp) {
                 obj->AddComponent(std::move(comp));
                 SetSceneModified();
@@ -1164,7 +1164,7 @@ void EditorUIManager::HandleViewportDragDrop(SceneWorld& world, const Matrix4x4&
       if (payload->IsDelivery()) {
         const char* payloadPath = (const char*)payload->Data;
         std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
-        auto prefabInstance = SceneSerializer::LoadPrefab(fullPath);
+        auto prefabInstance = SceneSerializer::LoadPrefab(fullPath, world.Deps());
         if (prefabInstance) {
           prefabInstance->GetTransform().translate = targetPos;
           if (commandManager_) {

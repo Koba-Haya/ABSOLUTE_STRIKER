@@ -59,6 +59,8 @@ public:
   // オブジェクトを出す窓口(ISpawner)を返す。イベントや部品へ、シーン全体ではなく「出す機能」だけを渡すために使う。
   // 保持する場合は、このシーンが生きている間だけ有効
   AbsoluteEngine::ISpawner &GetSpawner() { return world_; }
+  // 部品へ渡す窓口の束を返す。プレハブの読み込みなど、部品を作る場面へ渡すために使う。このシーンが生きている間だけ有効
+  const AbsoluteEngine::ComponentDeps &GetComponentDeps() const { return world_.Deps(); }
   void ClearRootObjects() { world_.Clear(); }
   // 指定したオブジェクトをシーンから取り除く（含まれていなければ何もしない）
   // GetRootObjects() の巡回中は呼ばないこと（巡回中に削除するとイテレータが無効になる）。

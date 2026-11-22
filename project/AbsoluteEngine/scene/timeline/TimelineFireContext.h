@@ -8,7 +8,7 @@
 //       両方が使うので、どちらにも属さない小さな型として切り出し、循環した include を避ける。
 // ============================================================
 #pragma once
-#include "../ISpawner.h"
+#include "../ComponentDeps.h"
 #include "../../camera/ITimelineCamera.h"
 
 namespace AbsoluteEngine {
@@ -21,9 +21,9 @@ struct TimelineFireContext {
     // タイムラインに結びついたレール(カメラ)。無い場合は nullptr
     const ITimelineCamera* camera = nullptr;
 
-    // イベントがオブジェクトを出すときに使う窓口(所有しない)。
+    // イベントがオブジェクトを出したり、プレハブから部品を作ったりするときに使う窓口の束(所有しない)。
     // 「今のシーン」をグローバルに探さず、タイムラインを持つシーンから渡してもらう。無い場合は nullptr
-    ISpawner* spawner = nullptr;
+    const ComponentDeps* deps = nullptr;
 
     // 発火時刻における、レール上の距離 s(弧長、ユニット)を返す。
     // タイムラインの時間とレールの進行度は 1 対 1(進行度 = 時刻 / Duration)なので、s = 進行度 x 全長。

@@ -61,11 +61,11 @@ void SceneWorld::SaveSnapshot() {
 
 bool SceneWorld::RestoreSnapshot() {
   objects_.clear();
-  return SceneSerializer::DeserializeFromString(snapshotJson_, objects_);
+  return SceneSerializer::DeserializeFromString(snapshotJson_, objects_, deps_);
 }
 
 bool SceneWorld::LoadFromFile(const std::string& filePath) {
-  return SceneSerializer::Deserialize(filePath, objects_);
+  return SceneSerializer::Deserialize(filePath, objects_, deps_);
 }
 
 bool SceneWorld::SaveToFile(const std::string& filePath) const {

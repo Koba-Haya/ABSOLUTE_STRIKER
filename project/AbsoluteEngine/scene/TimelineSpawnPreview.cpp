@@ -32,9 +32,11 @@ void TimelineSpawnPreview::SwitchPreview(TimelineManager &manager, ITimelineEven
   if (selectedEvent != nullptr) {
     if (auto *spawnEv = dynamic_cast<SpawnEvent *>(selectedEvent)) {
       const std::string path = PrefabRegistry::GetInstance().ResolveId(spawnEv->prefabId_);
-      if (!path.empty()) {
+      // 窓口の束が無いと、プレハブの部品を作れない(通常は、シーンが設定している)
+      const ComponentDeps *deps = manager.GetDeps();
+      if (!path.empty() && deps) {
         // プレハブをロードして仮オブジェクトとして生成する
-        auto previewObj = SceneSerializer::LoadPrefab(path);
+        auto previewObj = SceneSerializer::LoadPrefab(path, *deps);
         if (previewObj) {
           // プレビューフラグを立ててシリアライズ対象から除外する
           previewObj->SetTimelinePreview(true);

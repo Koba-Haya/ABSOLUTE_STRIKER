@@ -38,7 +38,7 @@ TimelineFireContext TimelineManager::MakeFireContext(float triggerTime) const {
     TimelineFireContext context;
     context.triggerTime = triggerTime;
     context.camera = timelineCamera_;
-    context.spawner = spawner_;
+    context.deps = deps_;
     return context;
 }
 

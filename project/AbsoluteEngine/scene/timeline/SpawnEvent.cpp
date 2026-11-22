@@ -63,6 +63,12 @@ void SpawnEvent::Fire(const TimelineFireContext& context) {
         return;
     }
 
+    // 文脈で渡された窓口の束が無ければ、プレハブを読めない(部品を作れない)し、シーンへも出せない
+    if (!context.deps || !context.deps->spawner) {
+        std::cerr << "[SpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
+        return;
+    }
+
     // PrefabRegistryからIDでファイルパスを解決する
     const std::string path = PrefabRegistry::GetInstance().ResolveId(prefabId_);
     if (path.empty()) {
@@ -71,7 +77,7 @@ void SpawnEvent::Fire(const TimelineFireContext& context) {
     }
 
     // プレハブをロードしてオブジェクトを生成する
-    auto obj = SceneSerializer::LoadPrefab(path);
+    auto obj = SceneSerializer::LoadPrefab(path, *context.deps);
     if (!obj) {
         std::cerr << "[SpawnEvent] プレハブのロードに失敗しました: " << path << std::endl;
         return;
@@ -87,14 +93,8 @@ void SpawnEvent::Fire(const TimelineFireContext& context) {
         NotifySpawnedOnRail(*obj, railFrame);
     }
 
-    // 文脈で渡された窓口から、シーンへ追加する
-    if (!context.spawner) {
-        std::cerr << "[SpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
-        return;
-    }
-
-    // shared_ptr のまま追加し、weak_ptr で参照を保持する
-    context.spawner->Spawn(obj);
+    // 文脈で渡された窓口から、シーンへ追加する。shared_ptr のまま追加し、weak_ptr で参照を保持する
+    context.deps->spawner->Spawn(obj);
     spawnedObject_ = obj;
 
     std::cout << "[SpawnEvent] スポーン完了: \"" << prefabId_ << "\"" << std::endl;

@@ -66,8 +66,8 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
         return;
     }
 
-    // 文脈で渡された窓口から、シーンへ追加する
-    if (!context.spawner) {
+    // 文脈で渡された窓口の束から、シーンへ追加する(プレハブを読むときも、同じ束を使う)
+    if (!context.deps || !context.deps->spawner) {
         std::cerr << "[FormationSpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
         return;
     }
@@ -86,7 +86,7 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
 
     const int count = std::clamp(memberCount_, 3, 5);
     for (int i = 0; i < count; ++i) {
-        auto obj = AbsoluteEngine::SceneSerializer::LoadPrefab(path);
+        auto obj = AbsoluteEngine::SceneSerializer::LoadPrefab(path, *context.deps);
         if (!obj) {
             std::cerr << "[FormationSpawnEvent] プレハブのロードに失敗しました: " << path << std::endl;
             continue;
@@ -112,7 +112,7 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
             AbsoluteEngine::NotifySpawnedOnRail(*obj, railFrame);
         }
 
-        context.spawner->Spawn(obj);
+        context.deps->spawner->Spawn(obj);
         spawnedObjects_.push_back(obj);
     }
 

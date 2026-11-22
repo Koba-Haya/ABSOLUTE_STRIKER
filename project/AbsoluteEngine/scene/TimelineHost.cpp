@@ -17,7 +17,7 @@ TimelineHost::~TimelineHost() = default;
 
 void TimelineHost::SetCamera(ITimelineCamera *camera) { manager_->SetCamera(camera); }
 
-void TimelineHost::SetSpawner(ISpawner *spawner) { manager_->SetSpawner(spawner); }
+void TimelineHost::SetDeps(const ComponentDeps *deps) { manager_->SetDeps(deps); }
 
 void TimelineHost::SetSpawnAheadDistance(float distance) { manager_->SetSpawnAheadDistance(distance); }
 

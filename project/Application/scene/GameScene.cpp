@@ -1522,7 +1522,7 @@ void GameScene::Update() {
 
       // 島のタレット: 自機(カメラ)がタレットの島へ近づいたら、島の上へ出す
       if (const auto *rail = FindRailCamera_()) {
-          islandTurrets_.Update(GetSpawner(), stageIslands_, rail->GetProgress() * rail->GetTotalLength());
+          islandTurrets_.Update(GetComponentDeps(), stageIslands_, rail->GetProgress() * rail->GetTotalLength());
       }
 
       // パーティクルの更新（爆発エフェクト等）

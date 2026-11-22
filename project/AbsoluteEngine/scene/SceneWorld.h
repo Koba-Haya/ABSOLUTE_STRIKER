@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "ComponentDeps.h"
 #include "ISpawner.h"
 
 namespace AbsoluteEngine {
@@ -21,6 +22,11 @@ class GameObject;
 // 単なる Add と違う。通知は、ゲーム固有の追加処理(敵へのコールバック注入など)を、世界の側が知らずに済むための仕組み(Observer)。
 class SceneWorld : public ISpawner {
 public:
+  SceneWorld() = default;
+  // 窓口の束(deps_)が、この世界自身を指すため、コピーとムーブは禁止する(コピー先の束が、コピー元を指してしまうのを防ぐ)
+  SceneWorld(const SceneWorld&) = delete;
+  SceneWorld& operator=(const SceneWorld&) = delete;
+
   using ObjectList = std::vector<std::shared_ptr<GameObject>>;
   // 出されたオブジェクトを受け取る関数の型
   using SpawnedCallback = std::function<void(const std::shared_ptr<GameObject>&)>;
@@ -46,6 +52,10 @@ public:
 
   // 全てのオブジェクトを取り除く
   void Clear();
+
+  // この世界が持つ、部品へ渡す窓口の束を返す(ISpawner はこの世界自身)。
+  // プレハブの読み込みや、部品の生成など、部品を作る場面で、作る側が受け取って使う。この世界が生きている間だけ有効
+  const ComponentDeps& Deps() const { return deps_; }
 
   // 一覧を読み取り専用で返す。保持せず、使うたびに取得すること
   const ObjectList& Objects() const { return objects_; }
@@ -76,6 +86,7 @@ public:
 private:
   ObjectList objects_;
   SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
+  ComponentDeps deps_{this};  // 部品へ渡す窓口の束(今は、出す窓口 = この世界自身)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };
 

@@ -1,5 +1,6 @@
 #include "IslandTurretSpawner.h"
 
+#include "AbsoluteEngine/scene/ComponentDeps.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
@@ -21,7 +22,10 @@ constexpr float kCubeHalfExtent = 0.5f; // プレハブのモデル(cube.obj)の
 constexpr float kSpawnAhead = 300.0f;
 } // namespace
 
-void IslandTurretSpawner::Update(AbsoluteEngine::ISpawner &spawner, const StageIslands &islands, float railDistance) {
+void IslandTurretSpawner::Update(const AbsoluteEngine::ComponentDeps &deps, const StageIslands &islands, float railDistance) {
+  // 出す窓口が無ければ、何も出せない(通常は、シーンが設定している)
+  if (deps.spawner == nullptr) return;
+
   const auto &slots = islands.GetTurretSlots();
   states_.resize(slots.size());
 
@@ -34,18 +38,18 @@ void IslandTurretSpawner::Update(AbsoluteEngine::ISpawner &spawner, const StageI
       continue;
     }
     if (state.spawned || slots[i].island == nullptr) continue;
-    state.spawned = SpawnTurret_(spawner, *slots[i].island);
+    state.spawned = SpawnTurret_(deps, *slots[i].island);
   }
 }
 
-bool IslandTurretSpawner::SpawnTurret_(AbsoluteEngine::ISpawner &spawner, const StageIsland &island) const {
+bool IslandTurretSpawner::SpawnTurret_(const AbsoluteEngine::ComponentDeps &deps, const StageIsland &island) const {
   // タイムラインの SpawnEvent と同じ手順: プレハブ ID をパスへ変えて読み、位置を決めて、シーンへ追加する
   const std::string path = AbsoluteEngine::PrefabRegistry::GetInstance().ResolveId(kTurretPrefabId);
   if (path.empty()) {
     std::cerr << "[IslandTurret] cannot resolve prefab id: " << kTurretPrefabId << std::endl;
     return false;
   }
-  auto turret = AbsoluteEngine::SceneSerializer::LoadPrefab(path);
+  auto turret = AbsoluteEngine::SceneSerializer::LoadPrefab(path, deps);
   if (!turret) {
     std::cerr << "[IslandTurret] failed to load prefab: " << path << std::endl;
     return false;
@@ -62,6 +66,6 @@ bool IslandTurretSpawner::SpawnTurret_(AbsoluteEngine::ISpawner &spawner, const 
     collider->size = {halfSize, halfSize, halfSize};
   }
 
-  spawner.Spawn(turret);
+  deps.spawner->Spawn(turret);
   return true;
 }

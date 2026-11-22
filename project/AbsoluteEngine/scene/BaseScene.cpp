@@ -55,8 +55,8 @@ void BaseScene::Initialize(const SceneServices &services) {
     // タイムライン機能を使うシーンのみ TimelineManager/TimelineEditorWindow を生成する
     if (UsesTimeline()) {
         timeline_ = std::make_unique<AbsoluteEngine::TimelineHost>();
-        // タイムラインのイベントは、世界(SceneWorld)を「オブジェクトを出す窓口」として使う(グローバルな「今のシーン」を探さない)
-        timeline_->SetSpawner(&world_);
+        // タイムラインのイベントは、世界(SceneWorld)が持つ窓口の束(オブジェクトを出す窓口など)を使う(グローバルな「今のシーン」を探さない)
+        timeline_->SetDeps(&world_.Deps());
     }
 
     // プレハブレジストリの初期化スキャン

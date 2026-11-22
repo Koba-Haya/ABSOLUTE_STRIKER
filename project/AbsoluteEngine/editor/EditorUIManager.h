@@ -63,7 +63,7 @@ private:
   void DrawPrefabsBrowser(SceneWorld& world);
   void DrawHierarchy(SceneWorld& world);
   void DrawGameObjectNode(std::shared_ptr<GameObject> obj, SceneWorld& world);
-  void DrawInspector();
+  void DrawInspector(SceneWorld& world);
   void DrawViewport(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void DrawPostProcessSettings();
   void HandleShortcuts(SceneWorld& world, EditorCamera* camera);
