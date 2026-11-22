@@ -1,5 +1,6 @@
 #include "EnemyShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
@@ -104,7 +105,7 @@ void EnemyShootComponent::Update(float deltaTime) {
     BulletSpec spec;
     spec.position = currentPos;
     spec.velocity = { toPlayer.x * kBulletSpeed, toPlayer.y * kBulletSpeed, toPlayer.z * kBulletSpeed };
-    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
+    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
 }
 
 

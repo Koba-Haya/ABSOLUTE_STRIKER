@@ -4,6 +4,10 @@
 #include "../../../AbsoluteEngine/graphics/primitive/RibbonTrail.h"
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+}
+
 /// <summary>
 /// GameObject に付けて、その位置の軌跡(RibbonTrail)を記録・描画するコンポーネント。
 /// 弾の移動処理は知らず、owner の座標を毎フレーム RibbonTrail に渡すだけにしている。
@@ -11,7 +15,8 @@
 /// </summary>
 class RibbonTrailComponent : public AbsoluteEngine::IComponent {
 public:
-    RibbonTrailComponent() = default;
+    // spawner: 尾を別のオブジェクトとして残すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit RibbonTrailComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
     ~RibbonTrailComponent() override = default;
 
     /// <summary>
@@ -26,12 +31,14 @@ public:
     /// <summary>
     /// 尾を、この GameObject から切り離して残す。弾が消えるときに呼ぶ。
     /// 軌跡を確定し、別の GameObject(RibbonTrailFadeComponent)へ引き渡してシーンへ追加する。
-    /// 引き渡したあとは、このコンポーネントは何も描かない。シーンがない場合は何もしない(尾は弾と一緒に消える)。
+    /// 引き渡したあとは、このコンポーネントは何も描かない。点が少なくて帯にならないときは何もしない(尾は弾と一緒に消える)。
     /// </summary>
     void DetachToScene();
 
     std::string GetTypeName() const override { return "RibbonTrailComponent"; }
 
 private:
+    // 弾やオブジェクトを出す窓口(所有しない。実体はシーンが持ち、このコンポーネントより長く生きる)
+    AbsoluteEngine::ISpawner& spawner_;
     RibbonTrail trail_;
 };

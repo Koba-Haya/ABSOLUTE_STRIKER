@@ -1,5 +1,6 @@
 #include "AimedShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
@@ -32,7 +33,7 @@ constexpr float kParallelThreshold = 0.99f;
 unsigned int g_nextSeed = 1;
 } // namespace
 
-AimedShootComponent::AimedShootComponent() : random_(g_nextSeed++) {}
+AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner), random_(g_nextSeed++) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();
@@ -125,7 +126,7 @@ void AimedShootComponent::Update(float deltaTime) {
     spec.velocity = { aimDir.x * bulletSpeed_, aimDir.y * bulletSpeed_, aimDir.z * bulletSpeed_ };
     auto bullet = BulletFactory::CreateEnemy(spec);
     lastBullet_ = bullet;
-    scene->AddRootObject(bullet);
+    spawner_.Spawn(bullet);
 
     if (telegraph) telegraph->End();
     hasShot_ = true;

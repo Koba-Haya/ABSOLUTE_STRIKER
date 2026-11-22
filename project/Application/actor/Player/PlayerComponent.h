@@ -11,13 +11,17 @@
 class Input;
 class GameCamera;
 class BaseScene;
+namespace AbsoluteEngine {
+class ISpawner;
+}
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
 public:
   // 最大 HP の基本の値(強化で増える前)
   static constexpr int kBaseMaxHp = 5;
 
-  PlayerComponent() = default;
+  // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+  explicit PlayerComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
   ~PlayerComponent() override = default;
 
 
@@ -76,6 +80,7 @@ public:
   const Vector3& GetFarReticleWorldPos()  const { return farReticleWorldPos_; }
 
 private:
+  AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
   LockOnSystem lockon_;
   PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 
@@ -90,10 +95,10 @@ private:
   void UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir, const Vector3& muzzlePos);
   // 弾・リボンの尾・ミサイルの発射位置（muzzle ボーンの今のワールド位置。無ければ自機中心）
   Vector3 GetMuzzlePosition_() const;
-  void UpdateFire_(const PlayerInputState& in, BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
+  void UpdateFire_(const PlayerInputState& in, const GameCamera& camera, const Vector3& muzzlePos);
   void EmitMuzzleFlash_(const Vector3& muzzlePos) const;
-  void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
-  void FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos);
+  void FireHomingBullets_(const GameCamera& camera, const Vector3& muzzlePos);
+  void FireNormalBullet_(const Vector3& muzzlePos);
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)

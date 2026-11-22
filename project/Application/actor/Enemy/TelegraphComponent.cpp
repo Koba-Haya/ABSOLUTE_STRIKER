@@ -6,6 +6,7 @@
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
@@ -70,8 +71,6 @@ bool TelegraphComponent::IsAllowedToShow_() const {
 
 void TelegraphComponent::CreateOrb_() {
     if (orb_.lock()) return;
-    BaseScene* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
 
     auto orb = std::make_shared<AbsoluteEngine::GameObject>(kOrbObjectName);
     orb->SetTag(kOrbTag);
@@ -81,7 +80,7 @@ void TelegraphComponent::CreateOrb_() {
     model->LoadTexture(kOrbTexturePath);
     model->SetColor(glowColor_);
     orb->AddComponent(std::move(model));
-    scene->AddRootObject(orb);
+    spawner_.Spawn(orb);
     orb_ = orb;
 }
 

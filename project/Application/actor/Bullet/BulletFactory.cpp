@@ -65,7 +65,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerNormal(const BulletSpec&
   return CreateStraight(spec, "PlayerBullet", "PlayerBullet");
 }
 
-std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec) {
+std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec, AbsoluteEngine::ISpawner& spawner) {
   auto bulletObj = CreateBulletBase("PlayerHomingBullet", "PlayerBullet",
                                     spec.radius, spec.startPos, std::nullopt,
                                     /*withModel=*/false);
@@ -74,7 +74,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulle
   bulletObj->AddComponent(std::move(homingComp));
 
   // 軌跡の記録。弾の移動(HomingBulletComponent)のあとに Update されるよう、後から追加する
-  auto trailComp = std::make_unique<RibbonTrailComponent>();
+  auto trailComp = std::make_unique<RibbonTrailComponent>(spawner);
   trailComp->Initialize(MakeHomingTrailParams());
   bulletObj->AddComponent(std::move(trailComp));
   return bulletObj;

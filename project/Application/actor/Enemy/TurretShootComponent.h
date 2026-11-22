@@ -4,6 +4,10 @@
 #include "EnemyShootUtil.h"
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+}
+
 /// <summary>
 /// 定点タレット型敵の攻撃コンポーネント。
 /// EnemyShootComponentと違い自機は移動しないため、移動量から進行方向を
@@ -22,7 +26,8 @@
 /// </summary>
 class TurretShootComponent : public AbsoluteEngine::IComponent {
 public:
-    TurretShootComponent() = default;
+    // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit TurretShootComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
     ~TurretShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -33,6 +38,8 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+
     bool CanFire(Vector3& outToPlayerDir) const;
     void FireOneBullet(const Vector3& dir);
     // 自機の速度(位置の変化から求める)を、毎フレーム更新する。動く先を読む(leadAim)のに使う

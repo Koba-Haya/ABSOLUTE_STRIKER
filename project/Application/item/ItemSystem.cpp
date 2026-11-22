@@ -1,6 +1,6 @@
 #include "ItemSystem.h"
 
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
 #include "../inheritance/InheritanceState.h"
@@ -43,7 +43,7 @@ void ItemSystem::GrantEarned(ItemEffectKind kind, int count) {
   }
 }
 
-void ItemSystem::OnEnemyDestroyed(BaseScene &scene, const std::string &enemyName, const Vector3 &position) {
+void ItemSystem::OnEnemyDestroyed(AbsoluteEngine::ISpawner &spawner, const std::string &enemyName, const Vector3 &position) {
   const ItemCatalog &catalog = ItemCatalog::GetInstance();
   const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
 
@@ -53,7 +53,7 @@ void ItemSystem::OnEnemyDestroyed(BaseScene &scene, const std::string &enemyName
   });
   if (!item) return;
 
-  ItemSpawner::Spawn(scene, *item, catalog.GetPickupSettings(), position, [this, item]() { OnCollected_(*item); });
+  ItemSpawner::Spawn(spawner, *item, catalog.GetPickupSettings(), position, [this, item]() { OnCollected_(*item); });
 }
 
 void ItemSystem::OnCollected_(const ItemDefinition &item) {

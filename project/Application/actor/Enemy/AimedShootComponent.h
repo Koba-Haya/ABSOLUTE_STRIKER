@@ -26,11 +26,13 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
 }
 
 class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
-    AimedShootComponent();
+    // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit AimedShootComponent(AbsoluteEngine::ISpawner& spawner);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -41,6 +43,8 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+
     // 狙いの向き dir(長さ1)に、最大 aimErrorDegrees_ 度のばらつきを足して返す
     Vector3 ApplyAimError_(const Vector3& dir);
 

@@ -6,6 +6,7 @@
 #include <cmath>
 #include <random>
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/RigidbodyComponent.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
@@ -129,7 +130,7 @@ void PlayerComponent::Update(float deltaTime) {
       shootCooldown_ -= deltaTime;
   }
 
-  UpdateFire_(in, scene, *camera, muzzlePos);
+  UpdateFire_(in, *camera, muzzlePos);
 }
 
 void PlayerComponent::MoveCursor_(const PlayerInputState& in, float deltaTime) {
@@ -280,7 +281,7 @@ Vector3 PlayerComponent::GetMuzzlePosition_() const {
   return muzzlePos;
 }
 
-void PlayerComponent::UpdateFire_(const PlayerInputState& in, BaseScene* scene,
+void PlayerComponent::UpdateFire_(const PlayerInputState& in,
                                   const GameCamera& camera, const Vector3& muzzlePos) {
   if (!in.fireReleased) return;
 
@@ -288,9 +289,9 @@ void PlayerComponent::UpdateFire_(const PlayerInputState& in, BaseScene* scene,
 
   if (lockon_.IsLockingMode()) {
       // ロックオンモード → ホーミング弾（ベジェ曲線）を全ターゲットに発射
-      FireHomingBullets_(scene, camera, muzzlePos);
+      FireHomingBullets_(camera, muzzlePos);
   } else {
-      FireNormalBullet_(scene, muzzlePos);
+      FireNormalBullet_(muzzlePos);
   }
   lockon_.Initialize();
 }
@@ -315,7 +316,7 @@ void PlayerComponent::EmitMuzzleFlash_(const Vector3& muzzlePos) const {
   }
 }
 
-void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos) {
+void PlayerComponent::FireHomingBullets_(const GameCamera& camera, const Vector3& muzzlePos) {
   const auto& targets = lockon_.GetLockedTargets();
   if (targets.empty()) return;
 
@@ -345,14 +346,14 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
       spec.duration = kHomingBulletDuration;
       spec.radius   = kHomingBulletRadius;
       spec.target   = weakTarget;
-      scene->AddRootObject(BulletFactory::CreatePlayerHoming(spec));
+      spawner_.Spawn(BulletFactory::CreatePlayerHoming(spec, spawner_));
   }
 }
 
 // 通常弾：発射基点から「遠レティクル（= 照準点）」へ向けて発射する。
 // 遠レティクルは UpdateReticles_ で発射基点と同じ値から求めているため、
 // 近・中レティクルも必ずこの弾道上に載る。
-void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos) {
+void PlayerComponent::FireNormalBullet_(const Vector3& muzzlePos) {
   if (shootCooldown_ > 0.0f) return;
   shootCooldown_ = kNormalShootInterval * fireIntervalScale_;
 
@@ -377,7 +378,7 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzleP
       aimDir.z * kNormalBulletSpeed
   };
   spec.radius = kNormalBulletRadius;
-  scene->AddRootObject(BulletFactory::CreatePlayerNormal(spec));
+  spawner_.Spawn(BulletFactory::CreatePlayerNormal(spec));
 }
 
 void PlayerComponent::Revive() {

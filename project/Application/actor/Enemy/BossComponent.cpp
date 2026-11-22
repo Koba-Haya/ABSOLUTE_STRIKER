@@ -2,6 +2,7 @@
 #include "BossModelSpec.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "../Bullet/BulletFactory.h"
 #include "../Bullet/HomingBulletComponent.h"
@@ -167,17 +168,14 @@ void BossComponent::UpdateAttack(float deltaTime) {
 }
 
 namespace {
-// 発射位置(spawnPos)から速度(vel)の直進弾を1発生成してアクティブシーンに追加する
-void SpawnBossBullet(const Vector3& spawnPos, const Vector3& vel) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
+// 発射位置(spawnPos)から速度(vel)の直進弾を1発生成して、窓口(spawner)からシーンへ出す
+void SpawnBossBullet(AbsoluteEngine::ISpawner& spawner, const Vector3& spawnPos, const Vector3& vel) {
     BulletSpec spec;
     spec.name     = "BossBullet";
     spec.position = spawnPos;
     spec.velocity = vel;
     spec.color    = Vector4{ 1.0f, 0.2f, 0.6f, 1.0f }; // ボス弾は他の敵弾と区別できるよう色を変える
-    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
+    spawner.Spawn(BulletFactory::CreateEnemy(spec));
 }
 } // namespace
 
@@ -196,7 +194,7 @@ void BossComponent::FireAimedShot(float speed) {
     if (len < 0.001f) return;
     toPlayer.x /= len; toPlayer.y /= len; toPlayer.z /= len;
 
-    SpawnBossBullet(spawnPos, { toPlayer.x * speed, toPlayer.y * speed, toPlayer.z * speed });
+    SpawnBossBullet(spawner_, spawnPos, { toPlayer.x * speed, toPlayer.y * speed, toPlayer.z * speed });
 }
 
 void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed) {
@@ -227,7 +225,7 @@ void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed)
             toPlayer.x * s + toPlayer.y * c,
             toPlayer.z
         };
-        SpawnBossBullet(spawnPos, { dir.x * speed, dir.y * speed, dir.z * speed });
+        SpawnBossBullet(spawner_, spawnPos, { dir.x * speed, dir.y * speed, dir.z * speed });
     }
 }
 

@@ -5,9 +5,14 @@
 #include "EnemyShootUtil.h"
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+}
+
 class EnemyShootComponent : public AbsoluteEngine::IComponent {
 public:
-    EnemyShootComponent() = default;
+    // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit EnemyShootComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
     ~EnemyShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -28,6 +33,7 @@ public:
     void ClearShootFlag() { wantToShoot_ = false; }
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     float shootInterval_ = 2.0f; // デフォルトは2秒に1回
     float shootTimer_ = 0.0f;
     EnemyShootUtil::IslandHideGate islandGate_; // 島に隠れている間は撃たない。出てきてから少し待つ

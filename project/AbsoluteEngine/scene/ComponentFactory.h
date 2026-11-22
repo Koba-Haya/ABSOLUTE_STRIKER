@@ -1,9 +1,11 @@
 #pragma once
 #include "Component.h"
 #include "ComponentDeps.h"
+#include "ISpawner.h"
 #include <string>
 #include <map>
 #include <functional>
+#include <iostream>
 #include <memory>
 
 // 基本コンポーネントのインクルード
@@ -45,6 +47,19 @@ public:
             return it->second(deps);
         }
         return nullptr;
+    }
+
+    // 「オブジェクトを出す窓口(ISpawner&)」だけを要する部品 T を登録する。
+    // T は、ISpawner& を受け取るコンストラクタを持つこと。束に窓口が無いときは、部品を作らず(nullptr)、エラーを出す
+    template <typename T>
+    void RegisterWithSpawner(const std::string& name) {
+        Register(name, DepsCreatorFunc([name](const ComponentDeps& deps) -> std::unique_ptr<IComponent> {
+            if (!deps.spawner) {
+                std::cerr << "[ComponentFactory] オブジェクトを出す窓口が無いため、部品を作れません: " << name << std::endl;
+                return nullptr;
+            }
+            return std::make_unique<T>(*deps.spawner);
+        }));
     }
 
     std::vector<std::string> GetRegisteredComponentNames() const {

@@ -1,7 +1,7 @@
 #include "RibbonTrailComponent.h"
 #include "RibbonTrailFadeComponent.h"
 #include "Renderer.h"
-#include "../../../AbsoluteEngine/scene/BaseScene.h"
+#include "../../../AbsoluteEngine/scene/ISpawner.h"
 #include <memory>
 
 namespace {
@@ -21,9 +21,6 @@ void RibbonTrailComponent::Update(float deltaTime) {
 }
 
 void RibbonTrailComponent::DetachToScene() {
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
     // 先頭位置を最後の点として確定する。以後、この軌跡は新しい点を記録しない
     trail_.Freeze();
     if (!trail_.HasRibbon()) return; // 点が少なくて帯にならないなら、残す意味がない
@@ -33,7 +30,7 @@ void RibbonTrailComponent::DetachToScene() {
     auto fadeComp = std::make_unique<RibbonTrailFadeComponent>();
     fadeComp->Initialize(trail_);
     fadeObj->AddComponent(std::move(fadeComp));
-    scene->AddRootObject(fadeObj);
+    spawner_.Spawn(fadeObj);
 
     trail_.Clear();
 }

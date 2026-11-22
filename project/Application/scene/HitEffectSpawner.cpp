@@ -1,5 +1,5 @@
 #include "HitEffectSpawner.h"
-#include "BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "ParticleManager.h"
 #include "graphics/particle/EffectManager.h"
 #include "graphics/particle/RingEffect.h"
@@ -25,7 +25,7 @@ void HitEffectSpawner::Initialize() {
 
 // DevScene の実装を移植。
 // パーティクル + RingEffect + ExplosionLight の3段構えのエフェクト。
-void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
+void HitEffectSpawner::Spawn(AbsoluteEngine::ISpawner& spawner, const Vector3& pos) {
   // 1. 爆発パーティクル（explosion グループ）を散布
   for (int i = 0; i < 30; ++i) {
       float rX = ((rand() % 200) / 100.0f) - 1.0f;
@@ -52,5 +52,5 @@ void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
   lightNodeComp->decay = 1.0f;
   lightObj->AddComponent(std::move(lightNodeComp));
   lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
-  scene.AddRootObject(lightObj);
+  spawner.Spawn(lightObj);
 }

@@ -5,6 +5,10 @@
 #include <memory>
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+}
+
 // ボスの攻撃パターン。文字列比較ではなくenumで管理する
 // （先輩フィードバックで「AIの攻撃パターン選択を文字列比較で行っている」ことが
 //   ✕評価の実例として挙がっていたため、この作品では避ける）。
@@ -16,7 +20,8 @@ enum class BossPhase {
 
 class BossComponent : public AbsoluteEngine::IComponent {
 public:
-    BossComponent() = default;
+    // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit BossComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
     ~BossComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -36,6 +41,8 @@ public:
     BossPhase GetPhase() const { return phase_; }
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+
     void UpdatePhase();
     void UpdateAttack(float deltaTime);
     // カメラ(=レール)の前方に留まりつつ左右上下にゆっくり揺れる。自機の位置には影響されない。

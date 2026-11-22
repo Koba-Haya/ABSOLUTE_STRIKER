@@ -1,5 +1,6 @@
 #include "TurretShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
@@ -201,13 +202,12 @@ bool TurretShootComponent::CalcLeadDirection(const Vector3& turretPos, const Vec
 }
 
 void TurretShootComponent::FireOneBullet(const Vector3& dir) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene || !owner_) return;
+    if (!owner_) return;
 
     BulletSpec spec;
     spec.position = owner_->GetTransform().translate;
     spec.velocity = { dir.x * bulletSpeed_, dir.y * bulletSpeed_, dir.z * bulletSpeed_ };
-    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
+    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
 }
 
 void TurretShootComponent::Serialize(nlohmann::json& j) const {

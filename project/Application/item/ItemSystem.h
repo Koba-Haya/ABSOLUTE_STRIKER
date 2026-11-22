@@ -5,9 +5,9 @@
 #include <memory>
 #include <string>
 
-class BaseScene;
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
 }
 struct ItemDefinition;
 enum class ItemEffectKind;
@@ -39,7 +39,7 @@ public:
   void GrantEarned(ItemEffectKind kind, int count);
 
   // 敵 enemyName(オブジェクトの名前 = プレハブ名)が position で倒れた。抽選して、当たればアイテムを置く
-  void OnEnemyDestroyed(BaseScene &scene, const std::string &enemyName, const Vector3 &position);
+  void OnEnemyDestroyed(AbsoluteEngine::ISpawner &spawner, const std::string &enemyName, const Vector3 &position);
 
 private:
   // 自機がアイテムを取った瞬間(効果を出す)

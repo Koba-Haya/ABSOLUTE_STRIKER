@@ -28,11 +28,13 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
 }
 
 class TelegraphComponent : public AbsoluteEngine::IComponent {
 public:
-    TelegraphComponent() = default;
+    // spawner: 光る玉を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit TelegraphComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
     ~TelegraphComponent() override;
 
     void Update(float deltaTime) override;
@@ -60,6 +62,8 @@ public:
     bool HoldFire(float secondsUntilFire);
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 光る玉を出す窓口
+
     enum class GlowMode {
         Muzzle, // 弾の出口に光る玉
         Body,   // 体全体の色を替える
