@@ -57,7 +57,7 @@ void TimelineTrack::SortEntries() {
         });
 }
 
-void TimelineTrack::Update(float currentTime, float previousTime, const ITimelineCamera* camera) {
+void TimelineTrack::Update(float currentTime, float previousTime, const TimelineFireContext& baseContext) {
     if (entries_.empty()) return;
 
     const bool isForward = (currentTime >= previousTime); // 前進方向かどうか
@@ -68,9 +68,8 @@ void TimelineTrack::Update(float currentTime, float previousTime, const ITimelin
         for (auto& entry : entries_) {
             if (entry.triggerTime <= currentTime && !entry.isFired) {
                 // 発火時刻は、実際に呼ばれた時刻ではなく、イベントに設定された時刻を渡す(出現位置がぶれないように)
-                TimelineFireContext context;
+                TimelineFireContext context = baseContext;
                 context.triggerTime = entry.triggerTime;
-                context.camera = camera;
                 entry.event->Fire(context);
                 entry.isFired = true;
             }

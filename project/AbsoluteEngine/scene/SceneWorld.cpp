@@ -13,6 +13,15 @@ void SceneWorld::Add(std::shared_ptr<GameObject> obj) {
   objects_.push_back(std::move(obj));
 }
 
+void SceneWorld::Spawn(std::shared_ptr<GameObject> obj) {
+  if (!obj) return;
+  Add(obj);
+  // 追加したあとに通知する(通知を受けた側が、一覧に入ったオブジェクトを前提にできるようにする)
+  if (onSpawned_) {
+    onSpawned_(obj);
+  }
+}
+
 void SceneWorld::Remove(const std::shared_ptr<GameObject>& obj) {
   objects_.erase(std::remove(objects_.begin(), objects_.end(), obj), objects_.end());
 }

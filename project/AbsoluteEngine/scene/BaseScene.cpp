@@ -55,6 +55,8 @@ void BaseScene::Initialize(const SceneServices &services) {
     // タイムライン機能を使うシーンのみ TimelineManager/TimelineEditorWindow を生成する
     if (UsesTimeline()) {
         timeline_ = std::make_unique<AbsoluteEngine::TimelineHost>();
+        // タイムラインのイベントは、世界(SceneWorld)を「オブジェクトを出す窓口」として使う(グローバルな「今のシーン」を探さない)
+        timeline_->SetSpawner(&world_);
     }
 
     // プレハブレジストリの初期化スキャン
@@ -202,7 +204,7 @@ void BaseScene::UpdateWorld() {
     // タイムラインイベント選択に応じたプレビューオブジェクト管理（タスク16）
     // エディットモード中のみ有効（プレイ中に仮オブジェクトが混入しないように）
     if (playMode_ == PlayMode::Edit && editor_ && timeline_) {
-        // 仮のオブジェクトの追加は、派生シーンが上書きした追加処理(AddRootObject)を通す
+        // 仮のオブジェクトの追加は、実行中の追加と同じ経路(AddRootObject)を通す
         editor_->UpdateTimelinePreview(
             *timeline_, [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { AddRootObject(obj); });
     }

@@ -1,6 +1,6 @@
 #include "IslandTurretSpawner.h"
 
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -21,7 +21,7 @@ constexpr float kCubeHalfExtent = 0.5f; // プレハブのモデル(cube.obj)の
 constexpr float kSpawnAhead = 300.0f;
 } // namespace
 
-void IslandTurretSpawner::Update(BaseScene &scene, const StageIslands &islands, float railDistance) {
+void IslandTurretSpawner::Update(AbsoluteEngine::ISpawner &spawner, const StageIslands &islands, float railDistance) {
   const auto &slots = islands.GetTurretSlots();
   states_.resize(slots.size());
 
@@ -34,11 +34,11 @@ void IslandTurretSpawner::Update(BaseScene &scene, const StageIslands &islands, 
       continue;
     }
     if (state.spawned || slots[i].island == nullptr) continue;
-    state.spawned = SpawnTurret_(scene, *slots[i].island);
+    state.spawned = SpawnTurret_(spawner, *slots[i].island);
   }
 }
 
-bool IslandTurretSpawner::SpawnTurret_(BaseScene &scene, const StageIsland &island) const {
+bool IslandTurretSpawner::SpawnTurret_(AbsoluteEngine::ISpawner &spawner, const StageIsland &island) const {
   // タイムラインの SpawnEvent と同じ手順: プレハブ ID をパスへ変えて読み、位置を決めて、シーンへ追加する
   const std::string path = AbsoluteEngine::PrefabRegistry::GetInstance().ResolveId(kTurretPrefabId);
   if (path.empty()) {
@@ -62,6 +62,6 @@ bool IslandTurretSpawner::SpawnTurret_(BaseScene &scene, const StageIsland &isla
     collider->size = {halfSize, halfSize, halfSize};
   }
 
-  scene.AddRootObject(turret);
+  spawner.Spawn(turret);
   return true;
 }

@@ -3,7 +3,7 @@
 #include "FormationMemberComponent.h"
 #include "AbsoluteEngine/scene/timeline/PrefabRegistry.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include <algorithm>
 #include <cstdlib> // rand()
@@ -66,9 +66,9 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
         return;
     }
 
-    BaseScene* activeScene = BaseScene::GetActiveScene();
-    if (!activeScene) {
-        std::cerr << "[FormationSpawnEvent] アクティブシーンが存在しません" << std::endl;
+    // 文脈で渡された窓口から、シーンへ追加する
+    if (!context.spawner) {
+        std::cerr << "[FormationSpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
         return;
     }
 
@@ -112,7 +112,7 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
             AbsoluteEngine::NotifySpawnedOnRail(*obj, railFrame);
         }
 
-        activeScene->AddRootObject(obj);
+        context.spawner->Spawn(obj);
         spawnedObjects_.push_back(obj);
     }
 

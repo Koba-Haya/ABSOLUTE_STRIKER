@@ -278,6 +278,7 @@
     <ClInclude Include="scene\SceneWorld.h" />
     <ClInclude Include="scene\SceneNavigator.h" />
     <ClInclude Include="scene\ISceneChanger.h" />
+    <ClInclude Include="scene\ISpawner.h" />
     <ClInclude Include="scene\TimelineHost.h" />
     <ClInclude Include="scene\EditorSession.h" />
     <ClInclude Include="scene\PlayMode.h" />

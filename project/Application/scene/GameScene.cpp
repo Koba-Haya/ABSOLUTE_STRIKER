@@ -253,6 +253,10 @@ void GameScene::Initialize(const SceneServices &services) {
 
   BaseScene::Initialize(services);
 
+  // 実行中に出てきた敵(タイムライン、編隊、島のタレットなど)へ、撃破時のコールバックを付ける。
+  // 最初のオブジェクトを出す前に登録する
+  SetObjectSpawnedCallback([this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { RegisterEnemyCallbacks(obj); });
+
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
   {
@@ -793,22 +797,9 @@ const Camera* GameScene::GetEditorViewCamera() const {
 }
 
 // -----------------------------------------------------------------------
-// AddRootObject オーバーライド（タスクC: 依存性注入）
-// BaseScene::AddRootObject を呼んだ後、追加オブジェクトが EnemyComponent を持って
-// いれば onDestroyed コールバックを自動注入する。
-// タイムライン経由でスポーンされた敵にもコールバックが登録される。
-// -----------------------------------------------------------------------
-void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
-    // まず基底クラスの処理でリストに追加する
-    BaseScene::AddRootObject(obj);
-
-    RegisterEnemyCallbacks(obj);
-}
-
-// -----------------------------------------------------------------------
 // RegisterEnemyCallbacks
 // EnemyComponent::onDestroyed の登録を1箇所に集約したもの
-// （Initialize でのロード済みオブジェクト・AddRootObject 経由・タイムライン生成の全てで共通）。
+// （Initialize でのロード済みオブジェクト・出す経路(SetObjectSpawnedCallback で登録した通知)・タイムライン生成の全てで共通）。
 // FormationMemberComponent を持つ場合は編隊トラッキングの初期カウントも行う。
 // -----------------------------------------------------------------------
 void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
@@ -1531,7 +1522,7 @@ void GameScene::Update() {
 
       // 島のタレット: 自機(カメラ)がタレットの島へ近づいたら、島の上へ出す
       if (const auto *rail = FindRailCamera_()) {
-          islandTurrets_.Update(*this, stageIslands_, rail->GetProgress() * rail->GetTotalLength());
+          islandTurrets_.Update(GetSpawner(), stageIslands_, rail->GetProgress() * rail->GetTotalLength());
       }
 
       // パーティクルの更新（爆発エフェクト等）

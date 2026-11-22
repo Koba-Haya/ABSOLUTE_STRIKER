@@ -6,6 +6,7 @@
 #pragma once
 #include "TimelineTrack.h"
 #include "ITimelineEvent.h"
+#include "../ISpawner.h"
 #include "../../camera/ITimelineCamera.h"
 #include "../../Type/Transform.h"
 #include "../../../externals/nlohmann/json.hpp"
@@ -52,6 +53,10 @@ public:
     // タイムラインはカメラの進行度をこのポインタ経由で同期する
     void SetCamera(ITimelineCamera* camera) { timelineCamera_ = camera; }
 
+    // イベントがオブジェクトを出すときに使う窓口を設定する(所有しない)。
+    // 発火のたびに、イベントへ渡す文脈(TimelineFireContext)に入れる
+    void SetSpawner(ISpawner* spawner) { spawner_ = spawner; }
+
     // ComputeSpawnAnchorRail()でカメラ前方に自動配置する際の距離（レールに沿ったユニット）を設定する
     // プレイヤーとカメラの位置関係・狙わせたい距離感はゲームごとに異なるため、
     // 既定値（80.0f）はあくまで暫定値。ゲーム側の実際のプレイヤー/照準距離に合わせて呼び出すこと
@@ -66,7 +71,7 @@ public:
     // 世界座標ではなくレール座標なので、発火時刻にも、レールの形にも依存しない
     RailSpawnPoint ComputeSpawnAnchorRail() const;
 
-    // 発火時刻 triggerTime のイベントに渡す文脈(発火時刻と、タイムラインのレール)を作る。
+    // 発火時刻 triggerTime のイベントに渡す文脈(発火時刻と、タイムラインのレール、オブジェクトを出す窓口)を作る。
     // エディタのプレビューが、実際の Fire() と同じ手順で出現位置を求めるために使う
     TimelineFireContext MakeFireContext(float triggerTime) const;
 
@@ -209,6 +214,9 @@ private:
 
     // カメラへの非所有ポインタ（実体の寿命はBaseSceneが管理）
     ITimelineCamera* timelineCamera_ = nullptr;
+
+    // オブジェクトを出す窓口への非所有ポインタ(実体の寿命はBaseSceneが管理)
+    ISpawner* spawner_ = nullptr;
 
     // ComputeSpawnAnchorRail()で使う、カメラ前方への配置距離（SetSpawnAheadDistanceで変更可）
     float spawnAheadDistance_ = 80.0f;

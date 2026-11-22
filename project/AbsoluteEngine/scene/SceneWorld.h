@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "ISpawner.h"
+
 namespace AbsoluteEngine {
 
 class GameObject;
@@ -14,12 +16,25 @@ class GameObject;
 // オブジェクトの管理だけを切り出した(単一責任)。
 // 一覧そのもの(std::vector)は外へ書き換え可能な形では公開しない。追加・削除は必ずこのクラスのメソッドを通す。
 // これにより、エディタやコマンドが一覧を直接いじって、整合性が崩れることを防ぐ。
-class SceneWorld {
+//
+// ISpawner(オブジェクトを出す窓口)も実装する。「出す」は、一覧への追加に加えて、追加後の通知(SetOnSpawned)を行う点が、
+// 単なる Add と違う。通知は、ゲーム固有の追加処理(敵へのコールバック注入など)を、世界の側が知らずに済むための仕組み(Observer)。
+class SceneWorld : public ISpawner {
 public:
   using ObjectList = std::vector<std::shared_ptr<GameObject>>;
+  // 出されたオブジェクトを受け取る関数の型
+  using SpawnedCallback = std::function<void(const std::shared_ptr<GameObject>&)>;
 
-  // オブジェクトを一覧の末尾へ追加する。nullptr は無視する
+  // オブジェクトを一覧の末尾へ追加する。nullptr は無視する。追加の通知(SetOnSpawned)は行わない
   void Add(std::shared_ptr<GameObject> obj);
+
+  // ISpawner の実装。オブジェクトを一覧へ追加し、そのあと、SetOnSpawned で登録された関数を呼ぶ。nullptr は無視する。
+  // 実行中に出てくる弾や敵は、この経路を通る。エディタの追加や、ファイルからの読み込みは通らない(通知されない)
+  void Spawn(std::shared_ptr<GameObject> obj) override;
+
+  // Spawn でオブジェクトが追加された直後に呼ぶ関数を登録する(1つだけ。空の関数で解除)。
+  // 登録した側(シーン)が、この世界より長く生きている間だけ有効な参照を、関数が持つこと
+  void SetOnSpawned(SpawnedCallback callback) { onSpawned_ = std::move(callback); }
 
   // 指定したオブジェクトを一覧から取り除く(含まれていなければ何もしない)。
   // Objects() の巡回中は呼ばないこと(巡回中に削除するとイテレータが無効になる)
@@ -60,6 +75,7 @@ public:
 
 private:
   ObjectList objects_;
+  SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };
 

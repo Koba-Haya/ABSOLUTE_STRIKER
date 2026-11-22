@@ -61,9 +61,9 @@ public:
     // ガードレール: 連続シークでも過剰な発火が起きないよう、
     //              前後の時間の差分のみを評価するスイープ判定方式を採用
     //
-    // camera: タイムラインに結びついたレール(無ければ nullptr)。Fire() に渡す文脈
-    //         (発火時刻と、その時刻のレール上の距離)を作るのに使う
-    void Update(float currentTime, float previousTime, const ITimelineCamera* camera = nullptr);
+    // baseContext: Fire() に渡す文脈の元(レールと、オブジェクトを出す窓口)。
+    //              発火時刻(triggerTime)は、このトラックがイベントごとに設定した時刻で上書きするので、値は何でもよい
+    void Update(float currentTime, float previousTime, const TimelineFireContext& baseContext);
 
     // すべてのイベントを強制的にRewindする（Stop時などに使用）
     void RewindAll();

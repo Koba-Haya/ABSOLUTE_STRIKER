@@ -5,7 +5,7 @@
 #include "SpawnEvent.h"
 #include "PrefabRegistry.h"
 #include "../SceneSerializer.h"
-#include "../BaseScene.h"
+#include "../ISpawner.h"
 #include "../GameObject.h"
 #include <iostream>
 
@@ -87,15 +87,14 @@ void SpawnEvent::Fire(const TimelineFireContext& context) {
         NotifySpawnedOnRail(*obj, railFrame);
     }
 
-    // アクティブシーンのルートオブジェクトに追加する
-    BaseScene* activeScene = BaseScene::GetActiveScene();
-    if (!activeScene) {
-        std::cerr << "[SpawnEvent] アクティブシーンが存在しません" << std::endl;
+    // 文脈で渡された窓口から、シーンへ追加する
+    if (!context.spawner) {
+        std::cerr << "[SpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
         return;
     }
 
-    // shared_ptr のまま rootObjects に追加し、weak_ptr で参照を保持する
-    activeScene->AddRootObject(obj);
+    // shared_ptr のまま追加し、weak_ptr で参照を保持する
+    context.spawner->Spawn(obj);
     spawnedObject_ = obj;
 
     std::cout << "[SpawnEvent] スポーン完了: \"" << prefabId_ << "\"" << std::endl;

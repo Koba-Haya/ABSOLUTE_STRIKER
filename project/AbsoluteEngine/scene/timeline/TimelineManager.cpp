@@ -38,6 +38,7 @@ TimelineFireContext TimelineManager::MakeFireContext(float triggerTime) const {
     TimelineFireContext context;
     context.triggerTime = triggerTime;
     context.camera = timelineCamera_;
+    context.spawner = spawner_;
     return context;
 }
 
@@ -94,7 +95,7 @@ void TimelineManager::Seek(float targetTime) {
 
     // 各トラックにスイープ判定を実行させる（Forward/Rewindを自動判断）
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_, timelineCamera_);
+        track->Update(currentTime_, previousTime_, MakeFireContext(currentTime_));
     }
 
     // カメラの進行度を即時同期する（Lerpによる遅延ワープを防ぐため直接設定）
@@ -119,7 +120,7 @@ void TimelineManager::Update(float deltaTime) {
 
         // 末尾のイベントを発火させてから停止する
         for (auto& track : tracks_) {
-            track->Update(currentTime_, previousTime_, timelineCamera_);
+            track->Update(currentTime_, previousTime_, MakeFireContext(currentTime_));
         }
 
         if (holdAtEnd_) {
@@ -141,7 +142,7 @@ void TimelineManager::Update(float deltaTime) {
 
     // 各トラックを更新してスイープ判定を実行する
     for (auto& track : tracks_) {
-        track->Update(currentTime_, previousTime_, timelineCamera_);
+        track->Update(currentTime_, previousTime_, MakeFireContext(currentTime_));
     }
 
     // カメラの進行度を同期する

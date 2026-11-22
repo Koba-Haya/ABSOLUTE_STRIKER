@@ -65,10 +65,6 @@ public:
   void Draw() override;
   void DrawEditorUI() override;
 
-  // AddRootObject をオーバーライドして EnemyComponent へのコールバックを自動注入する（タスクC）
-  // タイムライン経由でスポーンされた敵にも onDestroyed が登録されるようになる
-  void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) override;
-
 protected:
   // Debug Camera トグルがONの間だけ editorCamera_ の入力操作を許可する（タスクD）
   bool IsEditorCameraOperationEnabled() const override { return isDebugCamera_; }

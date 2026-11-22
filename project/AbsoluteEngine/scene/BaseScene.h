@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "ISpawner.h"
 #include "PlayMode.h"
 #include "SceneNavigator.h"
 #include "SceneServices.h"
@@ -52,9 +53,12 @@ public:
   float GetWorldTimeScale() const { return worldTimeScale_; }
 
   const std::vector<std::shared_ptr<AbsoluteEngine::GameObject>>& GetRootObjects() const { return world_.Objects(); }
-  // タイムラインのSpawnEventなど、あらゆる箇所からのオブジェクト追加を一元管理できるよう virtual 化する
-  // 派生クラスでオーバーライドすることで、Application固有の処理（コールバック注入など）を追加できる（DI）
-  virtual void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { world_.Add(std::move(obj)); }
+  // 実行中のオブジェクト追加(弾、敵など)。SceneWorld::Spawn を通るので、SetObjectSpawnedCallback で登録された通知も働く。
+  // ゲーム固有の追加処理は、派生クラスが上書きするのではなく、通知として登録する
+  void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) { world_.Spawn(std::move(obj)); }
+  // オブジェクトを出す窓口(ISpawner)を返す。イベントや部品へ、シーン全体ではなく「出す機能」だけを渡すために使う。
+  // 保持する場合は、このシーンが生きている間だけ有効
+  AbsoluteEngine::ISpawner &GetSpawner() { return world_; }
   void ClearRootObjects() { world_.Clear(); }
   // 指定したオブジェクトをシーンから取り除く（含まれていなければ何もしない）
   // GetRootObjects() の巡回中は呼ばないこと（巡回中に削除するとイテレータが無効になる）。
@@ -75,6 +79,10 @@ public:
   class Input* GetInput() const { return services_.input; }
 
 protected:
+  // オブジェクトが AddRootObject(ISpawner)で追加された直後に呼ぶ関数を登録する。
+  // 敵へ撃破時のコールバックを付けるなど、シーン固有の追加処理に使う。派生クラスの Initialize で、最初のオブジェクトを出す前に呼ぶ
+  void SetObjectSpawnedCallback(AbsoluteEngine::SceneWorld::SpawnedCallback callback) { world_.SetOnSpawned(std::move(callback)); }
+
   virtual void BackupScene();
   virtual void RestoreScene();
   virtual void SaveEditorScene();

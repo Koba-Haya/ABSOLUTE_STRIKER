@@ -7,6 +7,7 @@
 
 namespace AbsoluteEngine {
 
+class ISpawner;
 class ITimelineCamera;
 class TimelineManager;
 class TimelineEditorWindow;
@@ -26,6 +27,8 @@ public:
   // --- 設定 ---
   // タイムラインが進行度を同期するカメラを設定する(所有しない)
   void SetCamera(ITimelineCamera *camera);
+  // イベントがオブジェクトを出すときに使う窓口を設定する(所有しない)
+  void SetSpawner(ISpawner *spawner);
   // SpawnEvent の自動配置で、カメラ前方へ置く距離を設定する
   void SetSpawnAheadDistance(float distance);
   // 終端に着いたとき、先頭へ戻らず、終端で止めて保つかを設定する
