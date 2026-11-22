@@ -29,8 +29,6 @@ void TimelineHost::Pause() { manager_->Pause(); }
 
 void TimelineHost::Stop() { manager_->Stop(); }
 
-bool TimelineHost::IsPlaying() const { return manager_->GetPlayState() == TimelinePlayState::Playing; }
-
 bool TimelineHost::HasReachedEnd() const { return manager_->HasReachedEnd(); }
 
 void TimelineHost::SeekToEnd() { manager_->Seek(manager_->GetDuration()); }

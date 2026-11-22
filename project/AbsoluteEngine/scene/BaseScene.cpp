@@ -5,6 +5,7 @@
 #include "../base/AssetPath.h"
 // エンジン機能用インクルード
 #include "AbsoluteEngine/editor/EditorUIManager.h"
+#include "EditorSession.h"
 #include "AbsoluteEngine/editor/EditorCamera.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "GameObject.h"
@@ -17,10 +18,6 @@
 #include <algorithm>
 #include <filesystem>
 
-#ifdef USE_IMGUI
-#include <imgui.h>
-#endif
-
 namespace {
 // エディタ用カメラの投影パラメータ（アスペクト比は Renderer の現在値を使う）
 constexpr float kEditorCameraFovY = 0.45f;
@@ -29,6 +26,8 @@ constexpr float kEditorCameraFar = 1000.0f;
 } // namespace
 
 BaseScene* BaseScene::activeScene_ = nullptr;
+
+BaseScene::BaseScene() = default;
 
 BaseScene::~BaseScene() {
     // SceneManagerが破棄後・次シーンのInitialize前の間に誰かがGetActiveScene()を呼んでも
@@ -69,10 +68,10 @@ void BaseScene::Initialize(const SceneServices &services) {
     AbsoluteEngine::PrefabRegistry::GetInstance().ScanDirectory(prefabDir);
 
 #ifdef USE_IMGUI
-    // エディタUIマネージャーの初期化
-    editorUIManager_ = std::make_unique<AbsoluteEngine::EditorUIManager>();
+    // エディタ機能の初期化
+    editor_ = std::make_unique<AbsoluteEngine::EditorSession>();
     // タイムラインマネージャをインスペクタにポイントする（タスク15）。未使用シーンではnullptrのまま
-    editorUIManager_->SetTimelineManager(timeline_ ? timeline_->GetManager() : nullptr);
+    editor_->SetTimelineManager(timeline_ ? timeline_->GetManager() : nullptr);
 #endif
 }
 
@@ -132,18 +131,15 @@ float BaseScene::GetTransitionRevealSeconds() const {
 }
 
 AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
-#ifdef USE_IMGUI
-    if (editorUIManager_) return editorUIManager_->GetCommandManager();
-#endif
-    return nullptr;
+    return editor_ ? editor_->GetCommandManager() : nullptr;
 }
 
 void BaseScene::BackupScene() {
-    backupSceneJson_ = world_.SerializeToString();
+    world_.SaveSnapshot();
 }
 
 void BaseScene::RestoreScene() {
-    world_.RestoreFromString(backupSceneJson_);
+    world_.RestoreSnapshot();
 
     // タスク12: 復元後にタイムラインのカメラポインタを再接続する
     if (timeline_) {
@@ -190,32 +186,25 @@ void BaseScene::SaveEditorScene() {
 #endif
 }
 
-void BaseScene::UpdateEditor() {
+void BaseScene::UpdateWorld() {
 #ifdef USE_IMGUI
-    // ドラッグ＆ドロップ中はカメラの操作をブロックする
-    bool isDragging = ImGui::GetDragDropPayload() != nullptr;
-
     // エディタカメラの更新
+    // ドラッグ＆ドロップ中はカメラの操作をブロックする。
     // Debug Camera トグルがOFFの派生クラスでは非表示のeditorCamera_が入力を奪わないようにする（タスクD）
-    if (editorCamera_ && playMode_ == PlayMode::Edit && !isDragging && IsEditorCameraOperationEnabled()) {
+    if (editorCamera_ && playMode_ == PlayMode::Edit && !AbsoluteEngine::EditorSession::IsDragDropInProgress() &&
+        IsEditorCameraOperationEnabled()) {
         editorCamera_->Update(*services_.input);
     }
 #endif
 
     const float deltaTime = 1.0f / 60.0f; // 固定のdeltaTime
 
-    // エディットモードでもタイムラインだけが再生中の場合は更新する
-    if (playMode_ == PlayMode::Edit && timeline_ && timeline_->IsPlaying()) {
-        UpdateTimeline(deltaTime);
-    }
-
     // タイムラインイベント選択に応じたプレビューオブジェクト管理（タスク16）
     // エディットモード中のみ有効（プレイ中に仮オブジェクトが混入しないように）
-    if (playMode_ == PlayMode::Edit && editorUIManager_ && timeline_) {
-        // 仮のオブジェクトの追加は、派生シーンが上書きした追加処理(AddRootObject)を通す。選択はエディタへ伝える
-        timeline_->UpdatePreview(
-            [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { AddRootObject(obj); },
-            [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { editorUIManager_->SetSelectedObject(obj); });
+    if (playMode_ == PlayMode::Edit && editor_ && timeline_) {
+        // 仮のオブジェクトの追加は、派生シーンが上書きした追加処理(AddRootObject)を通す
+        editor_->UpdateTimelinePreview(
+            *timeline_, [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { AddRootObject(obj); });
     }
 
     // プレイモード中のオブジェクトの更新。世界の時間の速さが 0(ヒットストップ)の間は、世界を更新しない
@@ -238,61 +227,51 @@ void BaseScene::UpdateEditor() {
     world_.CollectGarbage();
 }
 
+void BaseScene::ApplyToolbarAction(AbsoluteEngine::ToolbarAction action) {
+    using AbsoluteEngine::ToolbarAction;
+    switch (action) {
+    case ToolbarAction::Play:
+        BackupScene();
+        playMode_ = PlayMode::Play;
+        // タイムラインもシーンのPlayに合わせて現在位置から再生開始する
+        if (timeline_) timeline_->Play();
+        break;
+    case ToolbarAction::Pause:
+        playMode_ = PlayMode::Pause;
+        // タイムラインも一時停止する
+        if (timeline_) timeline_->Pause();
+        break;
+    case ToolbarAction::Resume:
+        playMode_ = PlayMode::Play;
+        // タイムラインも再生再開する
+        if (timeline_) timeline_->Play();
+        break;
+    case ToolbarAction::Stop:
+        RestoreScene();
+        if (editor_) editor_->ClearSelection();
+        playMode_ = PlayMode::Edit;
+        // タイムラインを停止・先頭にリセットする
+        if (timeline_) timeline_->Stop();
+        break;
+    case ToolbarAction::None:
+        break;
+    }
+}
+
 void BaseScene::DrawEditorUI() {
 #ifdef USE_IMGUI
-    // ツールバー（プレイモード切り替え）
-    ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize);
-    
-    if (playMode_ == PlayMode::Edit) {
-        if (ImGui::Button("Play")) {
-            BackupScene();
-            playMode_ = PlayMode::Play;
-            // タイムラインもシーンのPlayに合わせて現在位置から再生開始する
-            if (timeline_) timeline_->Play();
-        }
-    } else if (playMode_ == PlayMode::Play) {
-        if (ImGui::Button("Pause")) {
-            playMode_ = PlayMode::Pause;
-            // タイムラインも一時停止する
-            if (timeline_) timeline_->Pause();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Stop")) {
-            RestoreScene();
-            if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
-            playMode_ = PlayMode::Edit;
-            // タイムラインを停止・先頭にリセットする
-            if (timeline_) timeline_->Stop();
-        }
-    } else if (playMode_ == PlayMode::Pause) {
-        if (ImGui::Button("▶ Resume")) {
-            playMode_ = PlayMode::Play;
-            // タイムラインも再生再開する
-            if (timeline_) timeline_->Play();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("■ Stop")) {
-            RestoreScene();
-            if (editorUIManager_) editorUIManager_->SetSelectedObject(nullptr);
-            playMode_ = PlayMode::Edit;
-            // タイムラインを停止・先頭にリセットする
-            if (timeline_) timeline_->Stop();
-        }
-    }
-    ImGui::End();
+    if (!editor_) return;
 
-    // エディタUIの描画
-    // 「Viewport##GameView」の描画（ゲーム画面のプレビュー表示）はPlay中も必要なため、
-    // DrawUI()自体は常に呼ぶ（Editモード限定にすると、Playモード中に編集ツール一式ごと
-    // ゲーム画面まで消えてしまう）。
-    if (editorUIManager_ && editorCamera_) {
-        AbsoluteEngine::EditorCamera* edCam = editorCamera_.get();
+    // ツールバー(押されたボタンに応じて、再生状態を切り替える)
+    ApplyToolbarAction(editor_->DrawToolbar(playMode_));
+
+    if (editorCamera_) {
         // ギズモ・マウスピッキングは「実際に画面に描画されているカメラ」の行列を使う
         // （常にeditorCamera_を使うと、Debug Camera OFF時にGameCamera(レールカメラ)で
         //   描画されている絵とギズモ/クリック判定がズレて、意味不明な視点に見える不具合になる）
         const Camera* viewCam = GetEditorViewCamera();
         if (!viewCam) viewCam = editorCamera_.get();
-        editorUIManager_->DrawUI(world_, viewCam->GetViewMatrix(), viewCam->GetProjectionMatrix(), edCam);
+        editor_->DrawPanels(world_, *viewCam, editorCamera_.get());
 
         // オートセーブの実行
         // 【バグ修正】ここにplayMode_のガードが無かったため、GameScene（常にPlayModeで
@@ -300,7 +279,7 @@ void BaseScene::DrawEditorUI() {
         // 「プレイ中に動的生成された敵・弾・ボスを含む今の状態」がそのままシーンJSONへ
         // 上書き保存されてしまっていた（＝二度と正常にロードできない壊れたレベルになる）。
         // 保存はEditモードでの編集結果に対してのみ行う。
-        if (playMode_ == PlayMode::Edit && editorUIManager_->ConsumeSceneModifiedFlag()) {
+        if (playMode_ == PlayMode::Edit && editor_->ConsumeSceneModified()) {
             SaveEditorScene();
         }
     }
@@ -382,9 +361,9 @@ void BaseScene::DrawTimelineEditorUI() {
 
     // トラック/イベントの追加・削除等を既存のオートセーブ経路に接続する(エディタUIが無ければ空)
     std::function<void()> onModified;
-    if (editorUIManager_) {
-        AbsoluteEngine::EditorUIManager* uiManager = editorUIManager_.get();
-        onModified = [uiManager]() { uiManager->SetSceneModified(); };
+    if (editor_) {
+        AbsoluteEngine::EditorSession* editor = editor_.get();
+        onModified = [editor]() { editor->NotifySceneModified(); };
     }
 
     // Debug/Game カメラ切替フラグは、派生クラスがオーバーライドしていればそのポインタを渡す

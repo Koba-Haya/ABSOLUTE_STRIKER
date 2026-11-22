@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "PlayMode.h"
 #include "SceneNavigator.h"
 #include "SceneServices.h"
 #include "SceneWorld.h"
@@ -15,20 +16,17 @@ class Camera;
 class GameCamera;
 namespace AbsoluteEngine {
     class GameObject;
-    class EditorUIManager;
+    class EditorSession;
+    enum class ToolbarAction;
     class EditorCamera;
     class CommandManager;
     class ITimelineCamera;
 }
 
-enum class PlayMode {
-  Edit,
-  Play,
-  Pause
-};
-
 class BaseScene {
 public:
+  // コンストラクタとデストラクタは、不完全な型(EditorSession)の unique_ptr を持つため、定義を .cpp に置く
+  BaseScene();
   virtual ~BaseScene();
 
   // シーン切り替えの窓口(SceneManager)を受け取る。SceneManager が、シーンを作った後に呼ぶ
@@ -149,8 +147,9 @@ protected:
   // 覆いが晴れる区間の長さ（秒）。SceneManager が未設定なら 0
   float GetTransitionRevealSeconds() const;
 
-  // エディタ機能の更新・描画（派生クラスのUpdate/Drawから呼ばれることを想定）
-  virtual void UpdateEditor();
+  // 世界の更新(タイムライン、オブジェクト、衝突判定、不要物の回収)と、エディタ入力の更新。
+  // 派生クラスのUpdateから毎フレーム呼ばれることを想定している
+  virtual void UpdateWorld();
   void ApplyEditorLightsToRenderer(class Renderer* renderer);
 
   // editorCamera_（Debug/Free Camera）による入力操作を有効にするかどうか（タスクD）
@@ -197,13 +196,17 @@ protected:
   void SetEditorCameraShake(const Vector3 &offset);
 
   // メンバ変数は全て private。派生クラスには、上の専用メソッド（GetInput、GetRootObjects など）だけを公開する。
-  // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: world_ の破棄後も editorUIManager_ が残る順序）を
+  // 宣言順は初期化・破棄の順序を決めるため、依存関係（例: editor_ は world_ より先に宣言し、後に破棄する）を
   // 崩さないよう、順序を変えないこと
 private:
+  // ツールバーで押されたボタンに応じて、再生状態・バックアップと復元・タイムラインの再生を切り替える
+  void ApplyToolbarAction(AbsoluteEngine::ToolbarAction action);
+
   SceneServices services_{}; // 派生クラスからは GetInput() 経由で扱う
 
   // エンジン・エディタ機能
-  std::unique_ptr<AbsoluteEngine::EditorUIManager> editorUIManager_;
+  // エディタのときだけ存在する UI と操作。配布ビルド(USE_IMGUI なし)では生成しない(nullptr のまま)
+  std::unique_ptr<AbsoluteEngine::EditorSession> editor_;
   // シーン直下のオブジェクトの管理(追加・削除・更新・回収・保存と復元)。派生クラスからは GetRootObjects()（読み取り）、
   // AddRootObject（追加）、RemoveRootObject / RemoveRootObjectsIf（削除）経由で扱う
   AbsoluteEngine::SceneWorld world_;
@@ -216,7 +219,6 @@ private:
   std::string sceneId_ = "";
   // シーン切り替えの要求と、前のシーンから渡された荷物(派生クラスからは RequestSceneChange / TryGetLaunchPayload 経由で扱う)
   SceneNavigator navigator_;
-  std::string backupSceneJson_ = "";
 
   // タイムライン機能(マネージャ、エディタウィンドウ、プレビュー)のまとまり。
   // UsesTimeline()がfalseのシーンでは生成されない（nullptrのまま）

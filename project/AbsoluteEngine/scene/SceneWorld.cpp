@@ -46,13 +46,13 @@ void SceneWorld::CollectGarbage() {
   });
 }
 
-std::string SceneWorld::SerializeToString() const {
-  return SceneSerializer::SerializeToString(objects_, true);
+void SceneWorld::SaveSnapshot() {
+  snapshotJson_ = SceneSerializer::SerializeToString(objects_, true);
 }
 
-bool SceneWorld::RestoreFromString(const std::string& json) {
+bool SceneWorld::RestoreSnapshot() {
   objects_.clear();
-  return SceneSerializer::DeserializeFromString(json, objects_);
+  return SceneSerializer::DeserializeFromString(snapshotJson_, objects_);
 }
 
 bool SceneWorld::LoadFromFile(const std::string& filePath) {

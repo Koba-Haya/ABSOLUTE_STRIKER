@@ -1497,7 +1497,7 @@ void GameScene::Update() {
   // 通常は 1 回。エディット中は、速くしない
   const int worldSteps = GetPlayMode() == PlayMode::Play ? CalcWorldSteps_() : 1;
   for (int i = 0; i < worldSteps; ++i) {
-      UpdateEditor();
+      UpdateWorld();
   }
 
   UpdateMouseCapture_();

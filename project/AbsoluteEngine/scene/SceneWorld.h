@@ -44,12 +44,13 @@ public:
   // GameObject::Destroy() は無効にするだけで、実際の削除はここで行われる
   void CollectGarbage();
 
-  // 現在の一覧を JSON 文字列にする(再生前のバックアップ用)。フルシリアライズで保存する
-  std::string SerializeToString() const;
+  // 現在の一覧の状態を、内部に預ける(再生前のバックアップ用)。前に預けた状態は上書きされる。
+  // 保存はフルシリアライズで行う(Memento パターン: 状態を丸ごと預けて、あとで戻す)
+  void SaveSnapshot();
 
-  // JSON 文字列から一覧を作り直す(再生を止めたときの復元用)。今の一覧は先に全て捨てる。
-  // 戻り値: 文字列が空、または読み込みに失敗したとき false
-  bool RestoreFromString(const std::string& json);
+  // 預けた状態から一覧を作り直す(再生を止めたときの復元用)。今の一覧は先に全て捨てる。
+  // 戻り値: 預けた状態が空、または読み込みに失敗したとき false
+  bool RestoreSnapshot();
 
   // JSON ファイルから一覧を読み込む。ファイルが開けなかったときは、今の一覧を変えずに false を返す
   bool LoadFromFile(const std::string& filePath);
@@ -59,6 +60,7 @@ public:
 
 private:
   ObjectList objects_;
+  std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };
 
 } // namespace AbsoluteEngine

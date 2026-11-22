@@ -32,7 +32,7 @@ public:
   void SetHoldAtEnd(bool hold);
 
   // --- 再生制御 ---
-  // 時間を進めて、イベントを評価する(プレイモード中や、エディットモードでの再生中に毎フレーム呼ぶ)
+  // 時間を進めて、イベントを評価する(プレイモード中に毎フレーム呼ぶ)
   void Update(float deltaTime);
   // 現在位置から再生を始める
   void Play();
@@ -40,8 +40,6 @@ public:
   void Pause();
   // 停止して、先頭へ戻す
   void Stop();
-  // 再生中か
-  bool IsPlaying() const;
   // 終端に到達して、SetHoldAtEnd(true) の動きで止まったか
   bool HasReachedEnd() const;
   // 終端の時刻へ飛ぶ(デバッグ用)

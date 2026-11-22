@@ -329,7 +329,7 @@ void DevScene::Update() {
   }
 
   // BaseSceneのエディタ機能（カメラ、オブジェクトの更新）
-  UpdateEditor();
+  UpdateWorld();
 
 #ifdef USE_IMGUI
   // --- 左パネル：ライト設定（UIから削除し、インスペクター側で管理） ---
