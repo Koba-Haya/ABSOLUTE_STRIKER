@@ -18,9 +18,9 @@ constexpr const char* kKeyWindupPullSpeed = "windupPullSpeed";
 }
 
 void ChargeOnApproachComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
-    auto& t = owner_->GetTransform();
+    auto& t = GetOwner()->GetTransform();
 
     if (triggered_) {
         // 突進中: 発火瞬間に確定した方向へ直進し続ける（毎フレーム再計算しない）
@@ -48,7 +48,7 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     hasPrevEye_ = true;
 
     // --- 予備動作の最中: 自機と反対へ引く(だんだん遅くなる)。済んだら、次のフレームで突進を始める ---
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (windingUp_) {
         windupTimer_ += deltaTime;
         const float duration = telegraph ? telegraph->GetDuration() : 0.0f;

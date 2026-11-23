@@ -16,10 +16,10 @@ void EnemyShootComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame
 }
 
 void EnemyShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // --- 進行方向の動的追跡（マジックナンバーを使わずに向きを取得する）---
-    Vector3 currentPos = owner_->GetTransform().translate;
+    Vector3 currentPos = GetOwner()->GetTransform().translate;
     if (hasPrevPos_) {
         Vector3 delta = {
             currentPos.x - prevPos_.x,
@@ -41,7 +41,7 @@ void EnemyShootComponent::Update(float deltaTime) {
     // タイマー更新
     shootTimer_ += deltaTime;
     // 予備動作(針の光): 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph && telegraph->HoldFire(shootInterval_ - shootTimer_)) return;
     if (shootTimer_ < shootInterval_) return;
     shootTimer_ -= shootInterval_;

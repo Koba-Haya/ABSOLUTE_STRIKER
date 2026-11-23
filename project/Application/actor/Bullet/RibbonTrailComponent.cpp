@@ -14,10 +14,10 @@ void RibbonTrailComponent::Initialize(const RibbonTrail::Params& params) {
 }
 
 void RibbonTrailComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // owner の現在位置を渡す。点を記録するかどうかは RibbonTrail 側が距離で判断する
-    trail_.Update(deltaTime, owner_->GetTransform().translate);
+    trail_.Update(deltaTime, GetOwner()->GetTransform().translate);
 }
 
 void RibbonTrailComponent::DetachToScene() {

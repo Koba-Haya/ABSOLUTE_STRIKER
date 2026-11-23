@@ -6,14 +6,7 @@
 #include "math/Method.h"
 
 CylinderEffect::CylinderEffect(std::shared_ptr<TextureResource> texture, const Vector3& position)
-    : texture_(std::move(texture)) {
-    transform_.translate = position;
-    transform_.scale = {1.0f, 1.0f, 1.0f};
-    transform_.rotate = {0.0f, 0.0f, 0.0f};
-    
-    lifetime_ = 0.8f;
-    age_ = 0.0f;
-
+    : BaseEffect(kLifetime, position), texture_(std::move(texture)) {
     cylinderParams_.divide = 32;
     cylinderParams_.topRadiusX = 1.0f;
     cylinderParams_.topRadiusZ = 1.0f;
@@ -26,15 +19,7 @@ CylinderEffect::CylinderEffect(std::shared_ptr<TextureResource> texture, const V
     cylinder_.Initialize(Renderer::GetInstance()->GetDX()->GetDevice(), cylinderParams_);
 }
 
-void CylinderEffect::Update(float deltaTime, const Camera* camera) {
-    age_ += deltaTime;
-    if (age_ >= lifetime_) {
-        Kill();
-        return;
-    }
-
-    float t = age_ / lifetime_;
-    
+void CylinderEffect::OnUpdate(float t, float /*deltaTime*/, const Camera* camera) {
     // 時間経過で上に伸び、広がりながら透明になる
     cylinderParams_.height = maxHeight_ * t;
     float currentRadius = 1.0f + t * 0.5f;
@@ -49,7 +34,8 @@ void CylinderEffect::Update(float deltaTime, const Camera* camera) {
 
     cylinder_.Update(Renderer::GetInstance()->GetDX()->GetDevice(), cylinderParams_);
 
-    Matrix4x4 worldMat = MakeAffineMatrix(transform_.scale, transform_.rotate, transform_.translate);
+    const Transform& transform = GetTransform();
+    Matrix4x4 worldMat = MakeAffineMatrix(transform.scale, transform.rotate, transform.translate);
     Matrix4x4 viewMatrix = camera ? camera->GetViewMatrix() : MakeIdentity4x4();
     Matrix4x4 projMatrix = camera ? camera->GetProjectionMatrix() : MakeIdentity4x4();
     

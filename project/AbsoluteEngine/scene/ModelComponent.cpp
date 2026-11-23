@@ -114,7 +114,7 @@ bool ModelComponent::IsAnimationFinished() const {
 }
 
 bool ModelComponent::TryGetBoneWorldPosition(const std::string& boneName, Vector3& out) const {
-    if (!modelInstance_ || !owner_) return false;
+    if (!modelInstance_ || !GetOwner()) return false;
     Matrix4x4 boneModel;
     if (!modelInstance_->TryGetBoneModelMatrix(boneName, boneModel)) return false;
     const Matrix4x4 boneWorld = Multiply(boneModel, ComputeWorldMatrix_());
@@ -123,7 +123,7 @@ bool ModelComponent::TryGetBoneWorldPosition(const std::string& boneName, Vector
 }
 
 Matrix4x4 ModelComponent::ComputeWorldMatrix_() const {
-    const Transform& transform = owner_->GetTransform();
+    const Transform& transform = GetOwner()->GetTransform();
     // 行ベクトル規約なので左から順に適用: 中心を原点へ → 補正の拡大 → Transform(拡大・回転・位置)
     const Matrix4x4 fit = Multiply(MakeTranslateMatrix({-fitCenter_.x, -fitCenter_.y, -fitCenter_.z}),
                                    MakeScaleMatrix({fitScale_, fitScale_, fitScale_}));
@@ -142,10 +142,10 @@ void ModelComponent::Update(float deltaTime) {
 }
 
 void ModelComponent::Draw() {
-    if (modelInstance_ && owner_) {
+    if (modelInstance_ && GetOwner()) {
         modelInstance_->SetWorld(ComputeWorldMatrix_());
 
-        auto dissolve = owner_->GetComponent<DissolveComponent>();
+        auto dissolve = GetOwner()->GetComponent<DissolveComponent>();
         if (dissolve) {
             modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor, dissolve->emberAmount);
             modelInstance_->SetCrackParam(dissolve->crack);

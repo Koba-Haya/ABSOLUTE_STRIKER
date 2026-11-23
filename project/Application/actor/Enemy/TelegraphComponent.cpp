@@ -59,9 +59,9 @@ TelegraphComponent::~TelegraphComponent() {
 }
 
 bool TelegraphComponent::IsAllowedToShow_() const {
-    if (!owner_) return false;
+    if (!GetOwner()) return false;
     // 画面外では出さない(撃っても、見えないため)
-    if (!screen_.IsOnScreen(owner_->GetTransform().translate, screenMargin_)) return false;
+    if (!screen_.IsOnScreen(GetOwner()->GetTransform().translate, screenMargin_)) return false;
     // 島に隠れている間は出さない: 島の遮蔽の判定(EnemyShootUtil::IsHiddenByIsland)が、このブランチに入ったら、
     //   ここへ「if (EnemyShootUtil::IsHiddenByIsland(...)) return false;」を 1 行足す
     return true;
@@ -91,9 +91,9 @@ void TelegraphComponent::DestroyOrb_() {
 
 void TelegraphComponent::UpdateOrb_(float progress) {
     auto orb = orb_.lock();
-    if (!orb || !owner_) return;
+    if (!orb || !GetOwner()) return;
 
-    const auto& ownerTransform = owner_->GetTransform();
+    const auto& ownerTransform = GetOwner()->GetTransform();
     const Vector3& s = ownerTransform.scale;
     // 出口の位置: 敵の位置 + 出口のずれ x 敵の拡大率(敵の回転は見ない。今の敵は、回転せずに出る)
     orb->GetTransform().translate = { ownerTransform.translate.x + muzzleOffset_.x * s.x,
@@ -106,21 +106,21 @@ void TelegraphComponent::UpdateOrb_(float progress) {
 }
 
 void TelegraphComponent::UpdateShake_() {
-    if (!owner_ || shakeAmplitudeDeg_ <= 0.0f) return;
+    if (!GetOwner() || shakeAmplitudeDeg_ <= 0.0f) return;
     const float angle = std::sin(elapsed_ * shakeFrequency_ * kTwoPi) * shakeAmplitudeDeg_ * kPi / kHalfTurnDegrees;
-    owner_->GetTransform().rotate.z = baseRotateZ_ + angle;
+    GetOwner()->GetTransform().rotate.z = baseRotateZ_ + angle;
 }
 
 void TelegraphComponent::Begin(float startElapsed) {
-    if (playing_ || !owner_) return;
+    if (playing_ || !GetOwner()) return;
     playing_ = true;
     elapsed_ = std::max(0.0f, startElapsed);
-    baseRotateZ_ = owner_->GetTransform().rotate.z;
+    baseRotateZ_ = GetOwner()->GetTransform().rotate.z;
 
     if (glowMode_ == GlowMode::Muzzle) {
         CreateOrb_();
         UpdateOrb_(std::clamp(elapsed_ / duration_, 0.0f, 1.0f));
-    } else if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+    } else if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
         model->SetColor(bodyGlowTint_);
     }
 }
@@ -130,20 +130,20 @@ void TelegraphComponent::End() {
     playing_ = false;
 
     DestroyOrb_();
-    if (owner_) {
+    if (GetOwner()) {
         if (glowMode_ == GlowMode::Body) {
-            if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+            if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
                 model->SetColor(baseColor_);
             }
         }
         if (shakeAmplitudeDeg_ > 0.0f) {
-            owner_->GetTransform().rotate.z = baseRotateZ_;
+            GetOwner()->GetTransform().rotate.z = baseRotateZ_;
         }
     }
 }
 
 bool TelegraphComponent::HoldFire(float secondsUntilFire) {
-    if (!owner_) return false;
+    if (!GetOwner()) return false;
 
     if (playing_) {
         // 再生中: 予備動作が済むまで待つ
@@ -161,11 +161,11 @@ bool TelegraphComponent::HoldFire(float secondsUntilFire) {
 }
 
 void TelegraphComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 元の体の色を、最初に覚える(被弾フラッシュの最中に覚えないよう、出現直後の Update で)
     if (!baseColorCaptured_) {
-        if (const auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+        if (const auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
             baseColor_ = model->GetColor();
             baseColorCaptured_ = true;
         }
@@ -173,7 +173,7 @@ void TelegraphComponent::Update(float deltaTime) {
     if (!playing_) return;
 
     // 倒れた敵、見せられない状態(画面外、島の裏)になったら、すぐに終わる
-    const auto* enemy = owner_->GetComponent<EnemyComponent>();
+    const auto* enemy = GetOwner()->GetComponent<EnemyComponent>();
     if ((enemy && enemy->IsDead()) || !IsAllowedToShow_()) {
         End();
         return;

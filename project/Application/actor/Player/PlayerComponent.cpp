@@ -69,10 +69,10 @@ void PlayerComponent::Initialize() {
 }
 
 void PlayerComponent::Update(float deltaTime) {
-  if (!owner_) return;
+  if (!GetOwner()) return;
 
   // 蝶のアニメーションの切り替え(被弾のよろめきと、羽ばたきへの復帰)。入力やカメラの有無に関係なく進める
-  animator_.Update(owner_->GetComponent<AbsoluteEngine::ModelComponent>());
+  animator_.Update(GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>());
 
   // 死亡演出中は、位置と向きを PlayerDeathDirector が決めるので、追従・発射・ロックオンを行わない
   if (dying_) return;
@@ -80,7 +80,7 @@ void PlayerComponent::Update(float deltaTime) {
 
   // 自機の RigidbodyComponent が存在する場合は重力を無効化する
   // （物理演算によって自機が落下するバグの解消）
-  if (auto rb = owner_->GetComponent<AbsoluteEngine::RigidbodyComponent>()) {
+  if (auto rb = GetOwner()->GetComponent<AbsoluteEngine::RigidbodyComponent>()) {
       rb->SetUseGravity(false);
       rb->SetKinematic(true); // 物理演算の一切を無効化して完全手動制御にする
   }
@@ -185,7 +185,7 @@ float PlayerComponent::UpdateDodge_(const PlayerInputState& in, const Vector2& m
       for (int i = 0; i < 10; ++i) {
           Vector3 vel = { dodgeDist(dodgeRng), dodgeDist(dodgeRng), dodgeDist(dodgeRng) };
           ParticleManager::GetInstance()->Emit(
-              "default", owner_->GetTransform().translate, vel,
+              "default", GetOwner()->GetTransform().translate, vel,
               Vector3{ 0.4f, 0.4f, 0.4f }, Vector3{ 0, 0, 0 }, 0.25f,
               Vector4{ 0.4f, 0.8f, 1.0f, 1.0f });
       }
@@ -230,7 +230,7 @@ void PlayerComponent::UpdateBodyTransform_(const Vector3& cursorRayDir,
   localPos_.y += (localTargetY - localPos_.y) * moveSpeed_ * deltaTime;
 
   // ワールド座標: Eye + Forward*Dist + Right*localX + Up*localY
-  auto& t = owner_->GetTransform();
+  auto& t = GetOwner()->GetTransform();
   t.translate = {
       basePos.x + right.x * localPos_.x + up.x * localPos_.y,
       basePos.y + right.y * localPos_.x + up.y * localPos_.y,
@@ -272,8 +272,8 @@ void PlayerComponent::UpdateReticles_(const Vector3& cursorRayDir,
 
 Vector3 PlayerComponent::GetMuzzlePosition_() const {
   // 自機の中心を既定値にして、モデルに muzzle ボーン(頭の先)があれば、その「今の」ワールド位置にする
-  Vector3 muzzlePos = owner_->GetTransform().translate;
-  if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+  Vector3 muzzlePos = GetOwner()->GetTransform().translate;
+  if (auto* modelComp = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
       modelComp->TryGetBoneWorldPosition(PlayerModel::kMuzzleBone, muzzlePos);
   }
   return muzzlePos;
@@ -383,8 +383,8 @@ void PlayerComponent::Revive() {
   dying_ = false;
   dodgeTimer_ = 0.0f;
   animator_.Reset();
-  if (owner_) {
-      if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+  if (GetOwner()) {
+      if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
           model->PlayAnimation(PlayerAnimation::kFlap, true);
       }
   }

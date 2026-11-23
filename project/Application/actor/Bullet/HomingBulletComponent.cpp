@@ -27,7 +27,7 @@ void HomingBulletComponent::Initialize(
 // Update（毎フレーム呼ばれる）
 // -----------------------------------------------------------------------
 void HomingBulletComponent::Update(float deltaTime) {
-    if (!owner_ || !isActive_) return;
+    if (!GetOwner() || !isActive_) return;
 
     // --- ターゲットの生存確認（weak_ptrをlock()して安全にアクセス） ---
     auto targetShared = target_.lock();
@@ -87,7 +87,7 @@ void HomingBulletComponent::Update(float deltaTime) {
     }
 
     // --- 進行方向への回転（前フレーム座標との差分ベクトルで算出） ---
-    auto& trans = owner_->GetTransform();
+    auto& trans = GetOwner()->GetTransform();
     Vector3 diff = {
         newPos.x - prevPos_.x,
         newPos.y - prevPos_.y,
@@ -114,7 +114,7 @@ void HomingBulletComponent::Update(float deltaTime) {
     // --- t = 1.0 に到達したら敵に命中したとみなして消滅 ---
     /*if (progress_ >= 1.0f) {
         isActive_ = false;
-        owner_->Destroy();
+        GetOwner()->Destroy();
     }*/
 }
 
@@ -155,9 +155,9 @@ void HomingBulletComponent::Finish_() {
     isActive_ = false;
 
     // 尾を弾から切り離して残す。弾と一緒に尾が一瞬で消えて、光の帯がぶつ切りに見えるのを防ぐ
-    if (auto* trail = owner_->GetComponent<RibbonTrailComponent>()) {
+    if (auto* trail = GetOwner()->GetComponent<RibbonTrailComponent>()) {
         trail->DetachToScene();
     }
 
-    owner_->Destroy();
+    GetOwner()->Destroy();
 }

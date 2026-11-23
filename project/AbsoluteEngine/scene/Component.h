@@ -40,7 +40,9 @@ public:
     void SetOwner(GameObject* owner) { owner_ = owner; }
     GameObject* GetOwner() const { return owner_; }
 
-protected:
+private:
+    // このコンポーネントを持つオブジェクト。派生クラスからは GetOwner() で読むだけにし、
+    // 書き換えは、オブジェクトへ取り付けるときの SetOwner だけにする
     GameObject* owner_ = nullptr;
 };
 

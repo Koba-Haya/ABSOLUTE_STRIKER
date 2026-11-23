@@ -30,10 +30,10 @@ constexpr float kMinSpeedMargin = 0.0001f;
 } // namespace
 
 void TurretShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 島の陰に隠れているかを毎フレーム追う(島の上のタレットは、島の円柱より上にいるので、隠れない)
-    islandGate_.Update(screen_, owner_->GetTransform().translate, deltaTime);
+    islandGate_.Update(screen_, GetOwner()->GetTransform().translate, deltaTime);
 
     TrackPlayerVelocity(deltaTime);
 
@@ -57,7 +57,7 @@ void TurretShootComponent::Update(float deltaTime) {
     // 予備動作の最中は撃たない。撃てない状態になったら、光を消す
     Vector3 dir;
     const bool canFireNow = CanFire(dir);
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph) {
         if (!canFireNow) {
             telegraph->End();
@@ -79,9 +79,9 @@ void TurretShootComponent::Update(float deltaTime) {
 }
 
 bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
-    if (!owner_) return false;
+    if (!GetOwner()) return false;
 
-    const Vector3 currentPos = owner_->GetTransform().translate;
+    const Vector3 currentPos = GetOwner()->GetTransform().translate;
 
     // --- 画面内チェック（NDC ±1.2 マージン内にいる場合のみ発射を許可）---
     // カメラが無い、カメラの背後にいる、範囲外のときは発射しない
@@ -172,10 +172,10 @@ bool TurretShootComponent::CalcLeadDirection(const Vector3& turretPos, const Vec
 }
 
 void TurretShootComponent::FireOneBullet(const Vector3& dir) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     BulletSpec spec;
-    spec.position = owner_->GetTransform().translate;
+    spec.position = GetOwner()->GetTransform().translate;
     spec.velocity = { dir.x * bulletSpeed_, dir.y * bulletSpeed_, dir.z * bulletSpeed_ };
     spawner_.Spawn(BulletFactory::CreateEnemy(spec));
 }

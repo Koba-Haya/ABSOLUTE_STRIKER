@@ -16,10 +16,10 @@ public:
         : lifeTime_(lifeTime), maxIntensity_(maxIntensity) {}
 
     void Update(float deltaTime) override {
-        if (!owner_) return;
+        if (!GetOwner()) return;
 
         timer_ += deltaTime;
-        auto lightComp = owner_->GetComponent<AbsoluteEngine::LightNodeComponent>();
+        auto lightComp = GetOwner()->GetComponent<AbsoluteEngine::LightNodeComponent>();
         if (lightComp) {
             if (timer_ >= lifeTime_) {
                 isDead_ = true;

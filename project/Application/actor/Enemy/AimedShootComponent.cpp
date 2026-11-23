@@ -64,15 +64,15 @@ Vector3 AimedShootComponent::ApplyAimError_(const Vector3& dir) {
 }
 
 void AimedShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 撃破されて消えていく途中の敵は撃たない(EnemyComponent が死亡状態のとき)
-    if (const auto* enemy = owner_->GetComponent<EnemyComponent>()) {
+    if (const auto* enemy = GetOwner()->GetComponent<EnemyComponent>()) {
         if (enemy->IsDead()) return;
     }
 
     // 画面外にいる間は、タイマーを進めない(入ってから firstShotDelay_ 待つ。出ている間に弾がたまらない)
-    const Vector3 myPos = owner_->GetTransform().translate;
+    const Vector3 myPos = GetOwner()->GetTransform().translate;
     islandGate_.Update(screen_, myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
     if (!screen_.IsOnScreen(myPos, screenMargin_)) return;
 
@@ -91,7 +91,7 @@ void AimedShootComponent::Update(float deltaTime) {
     // ---- 予備動作(体の光) ----
     // 次に撃てるまでの秒数(最初の 1 発は、待ちの残り。以降は、間隔の残りと、弾が消えてからの間の残りの、長いほう)。
     // 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph) {
         float secondsUntilFire = firstShotDelay_ - visibleTime_;
         if (hasShot_) {

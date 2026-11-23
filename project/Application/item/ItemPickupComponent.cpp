@@ -53,7 +53,7 @@ void ItemPickupComponent::MoveToward_(const Vector3 &target, float speed, float 
 }
 
 void ItemPickupComponent::ApplyVisual_(float scale) {
-  auto &transform = owner_->GetTransform();
+  auto &transform = GetOwner()->GetTransform();
   transform.translate = {basePosition_.x, basePosition_.y + std::sin(age_ * settings_.bobSpeed) * settings_.bobAmplitude,
                          basePosition_.z};
   transform.rotate.y = spinAngle_;
@@ -61,11 +61,11 @@ void ItemPickupComponent::ApplyVisual_(float scale) {
 }
 
 void ItemPickupComponent::Update(float deltaTime) {
-  if (!owner_) return;
+  if (!GetOwner()) return;
 
   // ゆれを除いた位置は、最初の Update で、出現した位置から決める
   if (!initialized_) {
-    basePosition_ = owner_->GetTransform().translate;
+    basePosition_ = GetOwner()->GetTransform().translate;
     initialized_ = true;
   }
   age_ += deltaTime;
@@ -78,7 +78,7 @@ void ItemPickupComponent::Update(float deltaTime) {
     collectTimer_ += deltaTime;
     const float t = std::clamp(collectTimer_ / settings_.collectSeconds, 0.0f, 1.0f);
     if (t >= 1.0f) {
-      owner_->Destroy();
+      GetOwner()->Destroy();
       return;
     }
     if (playerObj) {
@@ -93,7 +93,7 @@ void ItemPickupComponent::Update(float deltaTime) {
 
   // 取られなかったら、寿命で消える
   if (age_ >= settings_.lifetimeSeconds) {
-    owner_->Destroy();
+    GetOwner()->Destroy();
     return;
   }
 

@@ -47,7 +47,7 @@ constexpr float kAttackLeadSeconds = 0.6f;
 }
 
 void BossComponent::Update(float deltaTime) {
-    if (!isActive_ || !owner_) return;
+    if (!isActive_ || !GetOwner()) return;
 
     UpdateMovement(deltaTime);
     UpdatePhase();
@@ -56,7 +56,7 @@ void BossComponent::Update(float deltaTime) {
 }
 
 void BossComponent::UpdateAnimation() {
-    auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>();
+    auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
     if (!model) return;
 
     // 被弾: すぐによろめく(攻撃の予告の途中でも割り込む)。連射を受けたときも、毎回頭から再生し直す(restart)
@@ -102,7 +102,7 @@ void BossComponent::UpdateMovement(float deltaTime) {
     const float weaveX = std::sin(weaveTimer_ * kWeaveSpeedX) * kWeaveAmplitudeX;
     const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;
 
-    owner_->GetTransform().translate = {
+    GetOwner()->GetTransform().translate = {
         basePos.x + forward.x * kHoverDistanceFromCamera + right.x * weaveX + up.x * weaveY,
         basePos.y + forward.y * kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
         basePos.z + forward.z * kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
@@ -111,7 +111,7 @@ void BossComponent::UpdateMovement(float deltaTime) {
     // 正面(モデルの +Z)を、カメラの方へ向ける。自機は、モデルの +Z を進行方向へ向けて飛ぶ(PlayerComponent と同じ規約)。
     // ボスは、その自機と向かい合うので、進行方向の逆(カメラの向きの逆)へ向く。左右(Y 軸)の向きだけを合わせる
     // (ボスのモデルは、自機のモデルと、書き出しの前後の向きが逆なので、kModelFrontYawOffset だけ回して合わせる)
-    owner_->GetTransform().rotate = { 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f };
+    GetOwner()->GetTransform().rotate = { 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f };
 }
 
 void BossComponent::UpdatePhase() {
@@ -171,11 +171,11 @@ void SpawnBossBullet(AbsoluteEngine::ISpawner& spawner, const Vector3& spawnPos,
 } // namespace
 
 void BossComponent::FireAimedShot(float speed) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
     auto playerObj = FindPlayer();
     if (!playerObj) return;
 
-    const Vector3 spawnPos = owner_->GetTransform().translate;
+    const Vector3 spawnPos = GetOwner()->GetTransform().translate;
     Vector3 toPlayer = {
         playerObj->GetTransform().translate.x - spawnPos.x,
         playerObj->GetTransform().translate.y - spawnPos.y,
@@ -189,11 +189,11 @@ void BossComponent::FireAimedShot(float speed) {
 }
 
 void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed) {
-    if (!owner_ || count <= 0) return;
+    if (!GetOwner() || count <= 0) return;
     auto playerObj = FindPlayer();
     if (!playerObj) return;
 
-    const Vector3 spawnPos = owner_->GetTransform().translate;
+    const Vector3 spawnPos = GetOwner()->GetTransform().translate;
     Vector3 toPlayer = {
         playerObj->GetTransform().translate.x - spawnPos.x,
         playerObj->GetTransform().translate.y - spawnPos.y,
@@ -240,7 +240,7 @@ void BossComponent::OnCollision(AbsoluteEngine::GameObject* other) {
 
     // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない
     if ((other->GetName().find("PlayerBullet") != std::string::npos || other->GetTag() == "PlayerBullet") &&
-        HomingBulletComponent::CanHit(*other, owner_)) {
+        HomingBulletComponent::CanHit(*other, GetOwner())) {
         TakeDamage(1);
     }
 }

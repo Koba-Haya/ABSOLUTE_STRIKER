@@ -7,10 +7,10 @@ constexpr const char* kJsonKeyAnimation = "animation";
 }
 
 void EnemyModelAnimatorComponent::Update(float /*deltaTime*/) {
-    if (started_ || !owner_) return;
+    if (started_ || !GetOwner()) return;
 
     // モデルが無い(まだ付いていない)場合は、次のフレームでもう一度試す
-    auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>();
+    auto* modelComp = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
     if (!modelComp) return;
 
     modelComp->PlayAnimation(animation_, true);

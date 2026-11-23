@@ -70,7 +70,7 @@ public:
     bool TryGetBoneWorldPosition(const std::string& boneName, Vector3& out) const;
 
     // モデル空間からワールドへの、今の行列(Transform と FitToWingspan の補正を反映する)。CPU でスキニングした頂点を、ワールドへ移すのに使う
-    Matrix4x4 GetWorldMatrix() const { return owner_ ? ComputeWorldMatrix_() : MakeIdentity4x4(); }
+    Matrix4x4 GetWorldMatrix() const { return GetOwner() ? ComputeWorldMatrix_() : MakeIdentity4x4(); }
 
     // 読み込んだモデルの翼幅(x 方向の幅)が wingspan になるよう拡大し、バウンディングボックスの中心を
     // オブジェクトの位置に合わせる。Transform の scale / rotate / translate とは別に、モデルの空間で掛かる補正。
