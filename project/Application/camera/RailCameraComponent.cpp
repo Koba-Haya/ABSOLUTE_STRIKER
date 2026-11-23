@@ -6,6 +6,7 @@
 #include "Spline.h"
 #include <cmath>
 #include "../../AbsoluteEngine/scene/BaseScene.h"
+#include "../../AbsoluteEngine/scene/ICameraRig.h"
 #include "../actor/Player/PlayerComponent.h"
 #include <algorithm>
 #include <string>
@@ -14,6 +15,8 @@ namespace {
     // 注視点までの既定の距離(ユニット)。以前は「全長の 2%」で、今のステージ(全長 約 1250)ではちょうど 25 だった。
     // 距離指定にしたので、全長が変わっても、曲がり角でのカメラの追従は同じになる
     constexpr float kDefaultLookAheadDistance = 25.0f;
+    // カメラの上方向(レールの上を走る間、常に世界の上)
+    constexpr Vector3 kCameraUp = { 0.0f, 1.0f, 0.0f };
 }
 
 #ifdef USE_IMGUI
@@ -24,7 +27,7 @@ namespace {
 #include "../../AbsoluteEngine/editor/Command.h"
 #endif
 
-RailCameraComponent::RailCameraComponent() {
+RailCameraComponent::RailCameraComponent(AbsoluteEngine::ICameraRig& rig) : rig_(rig) {
     waypoints_ = {
         { 0.0f,  5.0f, -50.0f}, // P0: スタート（少し手前から）
         { 0.0f,  3.0f,   0.0f}, // P1: 序盤の直進エリア
@@ -71,10 +74,7 @@ void RailCameraComponent::DrawDebugLine(Renderer* renderer) const {
 
 void RailCameraComponent::Update(float deltaTime) {
     if (waypoints_.size() < 2) return;
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
+    if (!rig_.HasCamera()) return;
 
     // 進捗の更新（弧長ベース：秒速speed_ユニットで進むぶんを全体距離に対する割合に変換する）
     const float totalLength = arcLengthTable_.GetTotalLength();
@@ -204,16 +204,13 @@ void RailCameraComponent::ApplyCameraTransform_() {
     if (waypoints_.size() < 2) return;
     auto* scene = BaseScene::GetActiveScene();
     if (!scene) return;
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
+    if (!rig_.HasCamera()) return;
 
     Vector3 currentPos, targetPos;
     ComputePositionAndTarget_(progress_, currentPos, targetPos);
 
     // カメラの設定
-    camera->SetEye(currentPos);
-    camera->SetTarget(targetPos);
-    camera->SetUp({ 0.0f, 1.0f, 0.0f });
+    rig_.SetPose(currentPos, targetPos, kCameraUp);
 
     // タイムラインシーク時のプレイヤー位置の同期（エディットモードでのシーク時のみ）
     if (scene->GetPlayMode() == PlayMode::Edit) {

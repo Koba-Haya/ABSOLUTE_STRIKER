@@ -7,6 +7,7 @@
 
 namespace AbsoluteEngine {
 class ISpawner;
+class IScreenView;
 }
 
 // ボスの攻撃パターン。文字列比較ではなくenumで管理する
@@ -20,8 +21,9 @@ enum class BossPhase {
 
 class BossComponent : public AbsoluteEngine::IComponent {
 public:
-    // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
-    explicit BossComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
+    // spawner: 弾を出すときに使う、オブジェクトを出す窓口。screen: カメラの位置と向き(ボスの位置の基準)を知る、画面の窓口。
+    // どちらも所有しない。このコンポーネントより長く生きること
+    BossComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
     ~BossComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -42,6 +44,7 @@ public:
 
 private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
 
     void UpdatePhase();
     void UpdateAttack(float deltaTime);

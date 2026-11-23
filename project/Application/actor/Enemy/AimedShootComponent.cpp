@@ -1,5 +1,6 @@
 #include "AimedShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Bullet/BulletFactory.h"
@@ -33,7 +34,8 @@ constexpr float kParallelThreshold = 0.99f;
 unsigned int g_nextSeed = 1;
 } // namespace
 
-AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner), random_(g_nextSeed++) {}
+AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen)
+    : spawner_(spawner), screen_(screen), random_(g_nextSeed++) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();
@@ -73,8 +75,8 @@ void AimedShootComponent::Update(float deltaTime) {
 
     // 画面外にいる間は、タイマーを進めない(入ってから firstShotDelay_ 待つ。出ている間に弾がたまらない)
     const Vector3 myPos = owner_->GetTransform().translate;
-    islandGate_.Update(myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
-    if (!EnemyShootUtil::IsInsideScreen(*scene, myPos, screenMargin_)) return;
+    islandGate_.Update(screen_, myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
+    if (!screen_.IsOnScreen(myPos, screenMargin_)) return;
 
     // 島に隠れている(または、出てきたばかりの)間は撃たない。画面外と同じく、タイマーも進めない
     if (!islandGate_.CanShoot()) return;

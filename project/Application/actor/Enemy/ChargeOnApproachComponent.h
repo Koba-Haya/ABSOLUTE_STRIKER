@@ -3,6 +3,10 @@
 #include "Type/Vector.h"
 #include <string>
 
+namespace AbsoluteEngine {
+class IScreenView;
+}
+
 /// <summary>
 /// ホーミング接近型敵の突進コンポーネント。
 /// トリガー前は何もしない（StraightMoveComponent等、別の移動コンポーネントに
@@ -19,7 +23,8 @@
 /// </summary>
 class ChargeOnApproachComponent : public AbsoluteEngine::IComponent {
 public:
-    ChargeOnApproachComponent() = default;
+    // screen: カメラの位置(移動速度の推定に使う)を知る、画面の窓口(所有しない。このコンポーネントより長く生きること)
+    explicit ChargeOnApproachComponent(AbsoluteEngine::IScreenView& screen) : screen_(screen) {}
     ~ChargeOnApproachComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -30,6 +35,7 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
 private:
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     float triggerRange_ = 15.0f; // この距離以下でプレイヤーへの突進が発火する
     float chargeSpeed_  = 25.0f; // 突進中の移動速度
     float windupPullSpeed_ = 24.0f; // 予備動作で、自機と反対へ引く速さ(最初の速さ。予備動作の終わりに向けて 0 になる)

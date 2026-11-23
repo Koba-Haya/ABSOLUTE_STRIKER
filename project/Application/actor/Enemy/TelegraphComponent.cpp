@@ -4,7 +4,7 @@
 #include <cmath>
 
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -60,10 +60,8 @@ TelegraphComponent::~TelegraphComponent() {
 
 bool TelegraphComponent::IsAllowedToShow_() const {
     if (!owner_) return false;
-    const BaseScene* scene = BaseScene::GetActiveScene();
-    if (!scene) return false;
     // 画面外では出さない(撃っても、見えないため)
-    if (!EnemyShootUtil::IsInsideScreen(*scene, owner_->GetTransform().translate, screenMargin_)) return false;
+    if (!screen_.IsOnScreen(owner_->GetTransform().translate, screenMargin_)) return false;
     // 島に隠れている間は出さない: 島の遮蔽の判定(EnemyShootUtil::IsHiddenByIsland)が、このブランチに入ったら、
     //   ここへ「if (EnemyShootUtil::IsHiddenByIsland(...)) return false;」を 1 行足す
     return true;

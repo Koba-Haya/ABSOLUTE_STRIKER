@@ -27,7 +27,11 @@ constexpr float kEditorCameraFar = 1000.0f;
 
 BaseScene* BaseScene::activeScene_ = nullptr;
 
-BaseScene::BaseScene() = default;
+BaseScene::BaseScene() {
+    // 部品へ渡す窓口の束に、カメラの窓口を入れる(メインカメラの設定前から使えるよう、生成のときに 1 回だけ設定する)
+    world_.SetScreenView(&cameraView_);
+    world_.SetCameraRig(&cameraView_);
+}
 
 BaseScene::~BaseScene() {
     // SceneManagerが破棄後・次シーンのInitialize前の間に誰かがGetActiveScene()を呼んでも

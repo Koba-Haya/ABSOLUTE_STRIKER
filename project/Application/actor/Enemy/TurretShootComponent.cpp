@@ -1,5 +1,6 @@
 #include "TurretShootComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
@@ -31,7 +32,7 @@ void TurretShootComponent::Update(float deltaTime) {
     if (!owner_) return;
 
     // 島の陰に隠れているかを毎フレーム追う(島の上のタレットは、島の円柱より上にいるので、隠れない)
-    islandGate_.Update(owner_->GetTransform().translate, deltaTime);
+    islandGate_.Update(screen_, owner_->GetTransform().translate, deltaTime);
 
     TrackPlayerVelocity(deltaTime);
 
@@ -82,27 +83,12 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return false;
 
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return false;
-
     const Vector3 currentPos = owner_->GetTransform().translate;
 
     // --- 画面内チェック（NDC ±1.2 マージン内にいる場合のみ発射を許可）---
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
-    Matrix4x4 vpMat   = Multiply(viewMat, projMat);
-
-    float w = currentPos.x * vpMat.m[0][3] + currentPos.y * vpMat.m[1][3]
-            + currentPos.z * vpMat.m[2][3] + vpMat.m[3][3];
-    if (w <= 0.01f) return false; // カメラの背後にいる場合は発射しない
-
-    float ndcX = (currentPos.x * vpMat.m[0][0] + currentPos.y * vpMat.m[1][0]
-               + currentPos.z * vpMat.m[2][0] + vpMat.m[3][0]) / w;
-    float ndcY = (currentPos.x * vpMat.m[0][1] + currentPos.y * vpMat.m[1][1]
-               + currentPos.z * vpMat.m[2][1] + vpMat.m[3][1]) / w;
-
+    // カメラが無い、カメラの背後にいる、範囲外のときは発射しない
     constexpr float ndcMargin = 1.2f;
-    if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return false;
+    if (!screen_.IsOnScreen(currentPos, ndcMargin)) return false;
 
     // 島に隠れている(または、出てきたばかりの)敵は撃たない。クールダウンは進んだままなので、待ち時間が過ぎたら撃てる
     if (!islandGate_.CanShoot()) return false;
@@ -137,7 +123,7 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     // 前方向と一致するため、それを基準に「自機への方向が進行方向寄りかどうか」で判定する。
     // 自機が接近中〜横に並ぶ間はtoPlayerが進行方向の逆〜直角寄りになり、
     // 通り過ぎると進行方向寄り（内積が大きく正）に転じる。
-    Vector3 forward = camera->GetForward();
+    Vector3 forward = screen_.GetForward();
     const float towardBehind = outToPlayerDir.x * forward.x + outToPlayerDir.y * forward.y + outToPlayerDir.z * forward.z;
     constexpr float kMaxForwardAlignment = 0.3f;
     if (towardBehind > kMaxForwardAlignment) return false;

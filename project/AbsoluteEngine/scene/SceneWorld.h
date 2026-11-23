@@ -57,6 +57,11 @@ public:
   // プレハブの読み込みや、部品の生成など、部品を作る場面で、作る側が受け取って使う。この世界が生きている間だけ有効
   const ComponentDeps& Deps() const { return deps_; }
 
+  // 束へ、画面の窓口と、カメラを書き換える窓口を設定する(所有しない)。カメラを持つ側(BaseScene)が、生成のときに 1 回呼ぶ。
+  // 設定した窓口は、この世界より長く生きること
+  void SetScreenView(IScreenView* screen) { deps_.screen = screen; }
+  void SetCameraRig(ICameraRig* rig) { deps_.cameraRig = rig; }
+
   // 一覧を読み取り専用で返す。保持せず、使うたびに取得すること
   const ObjectList& Objects() const { return objects_; }
 

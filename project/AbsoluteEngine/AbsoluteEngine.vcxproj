@@ -180,6 +180,7 @@
     <ClCompile Include="scene\BaseScene.cpp" />
     <ClCompile Include="scene\SceneWorld.cpp" />
     <ClCompile Include="scene\SceneNavigator.cpp" />
+    <ClCompile Include="scene\MainCameraView.cpp" />
     <ClCompile Include="scene\TimelineHost.cpp" />
     <ClCompile Include="scene\EditorSession.cpp" />
     <ClCompile Include="scene\TimelineSpawnPreview.cpp" />
@@ -279,6 +280,9 @@
     <ClInclude Include="scene\SceneNavigator.h" />
     <ClInclude Include="scene\ISceneChanger.h" />
     <ClInclude Include="scene\ComponentDeps.h" />
+    <ClInclude Include="scene\ICameraRig.h" />
+    <ClInclude Include="scene\IScreenView.h" />
+    <ClInclude Include="scene\MainCameraView.h" />
     <ClInclude Include="scene\ISpawner.h" />
     <ClInclude Include="scene\TimelineHost.h" />
     <ClInclude Include="scene\EditorSession.h" />

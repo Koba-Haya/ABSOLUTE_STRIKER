@@ -1,7 +1,6 @@
 #pragma once
 #include "Component.h"
 #include "ComponentDeps.h"
-#include "ISpawner.h"
 #include <string>
 #include <map>
 #include <functional>
@@ -49,16 +48,17 @@ public:
         return nullptr;
     }
 
-    // 「オブジェクトを出す窓口(ISpawner&)」だけを要する部品 T を登録する。
-    // T は、ISpawner& を受け取るコンストラクタを持つこと。束に窓口が無いときは、部品を作らず(nullptr)、エラーを出す
-    template <typename T>
-    void RegisterWithSpawner(const std::string& name) {
-        Register(name, DepsCreatorFunc([name](const ComponentDeps& deps) -> std::unique_ptr<IComponent> {
-            if (!deps.spawner) {
-                std::cerr << "[ComponentFactory] オブジェクトを出す窓口が無いため、部品を作れません: " << name << std::endl;
+    // 窓口(ISpawner、IScreenView など)を要する部品を登録する。
+    // maker: 窓口がそろった束を受け取り、部品を作って返す関数(束から、その部品が要る窓口だけを取り出して、コンストラクタへ渡す)。
+    // 束に窓口がそろっていないときは、maker を呼ばず、部品を作らずに(nullptr)、エラーを出す
+    template <typename Maker>
+    void RegisterWithServices(const std::string& name, Maker maker) {
+        Register(name, DepsCreatorFunc([name, maker](const ComponentDeps& deps) -> std::unique_ptr<IComponent> {
+            if (!deps.IsComplete()) {
+                std::cerr << "[ComponentFactory] 窓口がそろっていないため、部品を作れません: " << name << std::endl;
                 return nullptr;
             }
-            return std::make_unique<T>(*deps.spawner);
+            return maker(deps);
         }));
     }
 

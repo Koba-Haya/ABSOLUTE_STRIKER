@@ -6,6 +6,7 @@
 #include <cmath>
 #include <random>
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/RigidbodyComponent.h"
@@ -77,8 +78,7 @@ void PlayerComponent::Update(float deltaTime) {
   auto scene  = BaseScene::GetActiveScene();
   if (!scene) return;
   auto* input  = scene->GetInput();
-  auto* camera = scene->GetMainCamera();
-  if (!input || !camera) return;
+  if (!input || !screen_.HasCamera()) return;
 
   // 自機の RigidbodyComponent が存在する場合は重力を無効化する
   // （物理演算によって自機が落下するバグの解消）
@@ -109,14 +109,14 @@ void PlayerComponent::Update(float deltaTime) {
   const float dodgeRollOffset = UpdateDodge_(in, moveDir, deltaTime, isPlaying);
 
   // カーソル方向の射線を1回だけ求め、自機の追従目標・弾道・レティクルで共用する
-  const Vector3 cursorRayDir = ReticleAim::CursorRayDirection(*camera, cursorPos_);
+  const Vector3 cursorRayDir = ReticleAim::CursorRayDirection(screen_, cursorPos_);
   camDirCached_ = cursorRayDir; // 弾の発射方向に直接使う（t.translateのLerp遅れの影響を受けない）
 
-  UpdateBodyTransform_(*camera, cursorRayDir, dodgeRollOffset, deltaTime);
+  UpdateBodyTransform_(cursorRayDir, dodgeRollOffset, deltaTime);
 
   // 発射基点は1フレーム内で1回だけ求め、レティクル配置と弾の発射で同じ値を使う
   const Vector3 muzzlePos = GetMuzzlePosition_();
-  UpdateReticles_(*camera, cursorRayDir, muzzlePos);
+  UpdateReticles_(cursorRayDir, muzzlePos);
 
   // ロックオン・弾発射はPlayMode::Playのときのみ処理する
   // （タイムラインのエディットモードプレビュー（レールカメラのシーク同期）でも
@@ -124,13 +124,13 @@ void PlayerComponent::Update(float deltaTime) {
   //   Playモードにしていないのにクリック/スペース入力で実弾発射が走ってしまう）
   if (!isPlaying) return;
 
-  lockon_.Update(deltaTime, in.fireHeld, camera, scene, cursorPos_);
+  lockon_.Update(deltaTime, in.fireHeld, screen_, scene, cursorPos_);
 
   if (shootCooldown_ > 0.0f) {
       shootCooldown_ -= deltaTime;
   }
 
-  UpdateFire_(in, *camera, muzzlePos);
+  UpdateFire_(in, muzzlePos);
 }
 
 void PlayerComponent::MoveCursor_(const PlayerInputState& in, float deltaTime) {
@@ -202,12 +202,12 @@ float PlayerComponent::UpdateDodge_(const PlayerInputState& in, const Vector2& m
 // 射影した Right/Up 成分を目標にして、Lerp で滑らかに追従する。
 // これによりカーソルが画面端にあれば自機も画面端まで移動でき、
 // cameraDistance_ を変更しても可動域が自動的に一致し続ける。
-void PlayerComponent::UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir,
+void PlayerComponent::UpdateBodyTransform_(const Vector3& cursorRayDir,
                                            float dodgeRollOffset, float deltaTime) {
-  const Vector3 eye     = camera.GetEye();
-  const Vector3 forward = camera.GetForward();
-  const Vector3 right   = camera.GetRight();
-  const Vector3 up      = camera.GetActualUp();
+  const Vector3 eye     = screen_.GetEye();
+  const Vector3 forward = screen_.GetForward();
+  const Vector3 right   = screen_.GetRight();
+  const Vector3 up      = screen_.GetActualUp();
 
   // 平面の中心（カメラ正面）と、カーソルのレイが指す点
   const Vector3 basePos = {
@@ -252,9 +252,9 @@ void PlayerComponent::UpdateBodyTransform_(const GameCamera& camera, const Vecto
 // 弾も M から A へ飛ぶため、近・中・遠のどのレティクルも弾道上にあり、
 // 自機の追従遅れや画面端でもレティクルと弾の方向が一致する。
 // 画面上の視差（近・中・遠が一列に並ぶ見た目）は HUD 側の WorldToScreen（透視変換）が処理する。
-void PlayerComponent::UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir,
+void PlayerComponent::UpdateReticles_(const Vector3& cursorRayDir,
                                       const Vector3& muzzlePos) {
-  const Vector3 eye = camera.GetEye();
+  const Vector3 eye = screen_.GetEye();
   const Vector3 aimPoint = {
       eye.x + cursorRayDir.x * kAimDistance,
       eye.y + cursorRayDir.y * kAimDistance,
@@ -281,15 +281,14 @@ Vector3 PlayerComponent::GetMuzzlePosition_() const {
   return muzzlePos;
 }
 
-void PlayerComponent::UpdateFire_(const PlayerInputState& in,
-                                  const GameCamera& camera, const Vector3& muzzlePos) {
+void PlayerComponent::UpdateFire_(const PlayerInputState& in, const Vector3& muzzlePos) {
   if (!in.fireReleased) return;
 
   EmitMuzzleFlash_(muzzlePos);
 
   if (lockon_.IsLockingMode()) {
       // ロックオンモード → ホーミング弾（ベジェ曲線）を全ターゲットに発射
-      FireHomingBullets_(camera, muzzlePos);
+      FireHomingBullets_(muzzlePos);
   } else {
       FireNormalBullet_(muzzlePos);
   }
@@ -316,7 +315,7 @@ void PlayerComponent::EmitMuzzleFlash_(const Vector3& muzzlePos) const {
   }
 }
 
-void PlayerComponent::FireHomingBullets_(const GameCamera& camera, const Vector3& muzzlePos) {
+void PlayerComponent::FireHomingBullets_(const Vector3& muzzlePos) {
   const auto& targets = lockon_.GetLockedTargets();
   if (targets.empty()) return;
 
@@ -324,7 +323,7 @@ void PlayerComponent::FireHomingBullets_(const GameCamera& camera, const Vector3
   std::uniform_real_distribution<float> sideDist(-kHomingSideOffsetMax, kHomingSideOffsetMax);
   std::uniform_real_distribution<float> upDist(kHomingUpOffsetMin, kHomingUpOffsetMax);
 
-  const Vector3 right = camera.GetRight();
+  const Vector3 right = screen_.GetRight();
 
   for (const auto& weakTarget : targets) {
       auto target = weakTarget.lock();

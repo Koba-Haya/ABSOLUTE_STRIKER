@@ -300,14 +300,12 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->SetKeyboardRotationEnabled(true);
   debugCamera_->SetMovementSpeeds(0.5f, 0.02f, 0.005f);
 
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
-      auto comp = std::make_unique<RailCameraComponent>();
-      return comp;
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailCameraComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<RailCameraComponent>(*deps.cameraRig);
   });
   // コンポーネントファクトリの登録
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
-      if (!deps.spawner) return nullptr; // 弾を出す窓口が無いと、自機は作れない
-      auto comp = std::make_unique<PlayerComponent>(*deps.spawner);
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen);
       comp->Initialize();
       return comp;
   });
@@ -315,13 +313,25 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyModelAnimatorComponent", []() { return std::make_unique<EnemyModelAnimatorComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithSpawner<TelegraphComponent>("TelegraphComponent");
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithSpawner<EnemyShootComponent>("EnemyShootComponent");
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TelegraphComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<TelegraphComponent>(*deps.spawner, *deps.screen);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("EnemyShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen);
+  });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RailAnchorComponent", []() { return std::make_unique<RailAnchorComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithSpawner<AimedShootComponent>("AimedShootComponent");
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithSpawner<BossComponent>("BossComponent");
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithSpawner<TurretShootComponent>("TurretShootComponent");
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("ChargeOnApproachComponent", []() { return std::make_unique<ChargeOnApproachComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("AimedShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TurretShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("ChargeOnApproachComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<ChargeOnApproachComponent>(*deps.screen);
+  });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RamAttackComponent", []() { return std::make_unique<RamAttackComponent>(); });
 
   // タイムラインイベントファクトリの登録（編隊敵: FormationSpawnEventはApplication層の
@@ -369,7 +379,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
   auto playerComp = playerObj_->GetComponent<PlayerComponent>();
   if (!playerComp) {
-      auto pComp = std::make_unique<PlayerComponent>(GetSpawner());
+      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView());
       pComp->Initialize();
       playerObj_->AddComponent(std::move(pComp));
   } else {
@@ -460,7 +470,7 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   if (!hasRailCamera) {
       auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
-      auto rComp = std::make_unique<RailCameraComponent>();
+      auto rComp = std::make_unique<RailCameraComponent>(GetCameraRig());
       railCamObj->AddComponent(std::move(rComp));
       AddRootObject(railCamObj);
   }
@@ -959,7 +969,7 @@ void GameScene::SpawnBoss_() {
   bossObj->AddComponent(std::move(bossModelComp));
   bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  auto bossComp = std::make_unique<BossComponent>(GetSpawner());
+  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView());
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
 
   bossObj->AddComponent(std::move(bossComp));
@@ -1425,7 +1435,7 @@ void GameScene::UpdateHud_() {
     status.lockRadius = lockOn.GetLockRadius(); // 強化で広がった値
     status.lockingMode = lockOn.IsLockingMode();
     status.cursorPos = pComp->GetCursorPos();
-    status.lockedPositions = lockOn.GetLockedScreenPositions(GetMainCamera());
+    status.lockedPositions = lockOn.GetLockedScreenPositions(GetScreenView());
     status.lockedCount = lockOn.GetLockedCount();
     status.lockMax = lockOn.GetMaxLockTargets();
   }

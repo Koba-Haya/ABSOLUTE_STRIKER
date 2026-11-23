@@ -1,17 +1,17 @@
 #include "ReticleAim.h"
-#include "GameCamera.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "Method.h" // Multiply, Inverse
 #include "Application/ScreenSize.h"
 #include <cmath>
 
 namespace ReticleAim {
 
-Vector3 CursorRayDirection(const GameCamera& camera, const Vector2& cursorPos) {
+Vector3 CursorRayDirection(const AbsoluteEngine::IScreenView& screen, const Vector2& cursorPos) {
   // カーソルのスクリーン座標 → NDC
   const float ndcX = (cursorPos.x / ScreenSize::kWidth)  * 2.0f - 1.0f;
   const float ndcY = 1.0f - (cursorPos.y / ScreenSize::kHeight) * 2.0f;
 
-  const Matrix4x4 invVp = Inverse(Multiply(camera.GetViewMatrix(), camera.GetProjectionMatrix()));
+  const Matrix4x4 invVp = Inverse(Multiply(screen.GetViewMatrix(), screen.GetProjectionMatrix()));
 
   // NDC → ワールド座標
   auto unproject = [&](float z) -> Vector3 {
@@ -29,7 +29,7 @@ Vector3 CursorRayDirection(const GameCamera& camera, const Vector2& cursorPos) {
 
   const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
   if (len <= 0.0001f) {
-    return camera.GetForward();
+    return screen.GetForward();
   }
   return { dir.x / len, dir.y / len, dir.z / len };
 }

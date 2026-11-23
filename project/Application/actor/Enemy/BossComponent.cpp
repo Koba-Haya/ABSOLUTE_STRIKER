@@ -2,6 +2,7 @@
 #include "BossModelSpec.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "../Bullet/BulletFactory.h"
@@ -95,18 +96,15 @@ std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {
 }
 
 void BossComponent::UpdateMovement(float deltaTime) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
+    if (!screen_.HasCamera()) return;
 
     weaveTimer_ += deltaTime;
 
     // 位置の基準はカメラの目の位置。カメラはレールに沿って動くので、ボスもレールに追従する
-    const Vector3 basePos = camera->GetEye();
-    const Vector3 forward = camera->GetForward();
-    const Vector3 right    = camera->GetRight();
-    const Vector3 up       = camera->GetActualUp();
+    const Vector3 basePos = screen_.GetEye();
+    const Vector3 forward = screen_.GetForward();
+    const Vector3 right    = screen_.GetRight();
+    const Vector3 up       = screen_.GetActualUp();
 
     const float weaveX = std::sin(weaveTimer_ * kWeaveSpeedX) * kWeaveAmplitudeX;
     const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;

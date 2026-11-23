@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "ISpawner.h"
+#include "MainCameraView.h"
 #include "PlayMode.h"
 #include "SceneNavigator.h"
 #include "SceneServices.h"
@@ -61,6 +62,11 @@ public:
   AbsoluteEngine::ISpawner &GetSpawner() { return world_; }
   // 部品へ渡す窓口の束を返す。プレハブの読み込みなど、部品を作る場面へ渡すために使う。このシーンが生きている間だけ有効
   const AbsoluteEngine::ComponentDeps &GetComponentDeps() const { return world_.Deps(); }
+  // 画面(メインカメラ)の見え方を知る窓口(読み取り専用)を返す。部品や補助クラスへ、カメラの型を見せずに渡すために使う。
+  // メインカメラの設定や差し替えに追従する。このシーンが生きている間だけ有効
+  AbsoluteEngine::IScreenView &GetScreenView() { return cameraView_; }
+  // メインカメラの位置と向きを書き換える窓口を返す。レールカメラの部品へ渡すために使う。このシーンが生きている間だけ有効
+  AbsoluteEngine::ICameraRig &GetCameraRig() { return cameraView_; }
   void ClearRootObjects() { world_.Clear(); }
   // 指定したオブジェクトをシーンから取り除く（含まれていなければ何もしない）
   // GetRootObjects() の巡回中は呼ばないこと（巡回中に削除するとイテレータが無効になる）。
@@ -223,6 +229,8 @@ private:
   // エディタ用カメラ（常に EditorCamera として生成する）。派生クラスからは GetEditorCamera() などの専用メソッド経由で扱う
   std::unique_ptr<AbsoluteEngine::EditorCamera> editorCamera_;
   std::shared_ptr<GameCamera> mainCamera_; // ゲーム全体で共有するメインカメラ
+  // メインカメラを、IScreenView / ICameraRig の窓口として見せる。mainCamera_ への参照を持つため、mainCamera_ より後に宣言する
+  AbsoluteEngine::MainCameraView cameraView_{mainCamera_};
 
   PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
   float worldTimeScale_ = 1.0f;        // 世界の時間の速さ(SetWorldTimeScale)

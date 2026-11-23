@@ -9,10 +9,10 @@
 #include <memory>
 
 class Input;
-class GameCamera;
 class BaseScene;
 namespace AbsoluteEngine {
 class ISpawner;
+class IScreenView;
 }
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
@@ -20,8 +20,9 @@ public:
   // 最大 HP の基本の値(強化で増える前)
   static constexpr int kBaseMaxHp = 5;
 
-  // spawner: 弾を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
-  explicit PlayerComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
+  // spawner: 弾を出すときに使う、オブジェクトを出す窓口。screen: 照準や追従に使う、カメラの位置・向き・行列を知る、画面の窓口。
+  // どちらも所有しない。このコンポーネントより長く生きること
+  PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
   ~PlayerComponent() override = default;
 
 
@@ -81,6 +82,7 @@ public:
 
 private:
   AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+  AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置・向き・行列)を知る窓口
   LockOnSystem lockon_;
   PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 
@@ -90,14 +92,14 @@ private:
   // 回避の発動判定と進行。戻り値は今フレームのロール角オフセット（ラジアン）
   float UpdateDodge_(const PlayerInputState& in, const Vector2& moveDir, float deltaTime, bool isPlaying);
   // カーソルに追従して自機位置・姿勢を更新する
-  void UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
+  void UpdateBodyTransform_(const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
   // 照準点（カーソルレイ上）と発射基点から、3重レティクルのワールド座標を求める
-  void UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir, const Vector3& muzzlePos);
+  void UpdateReticles_(const Vector3& cursorRayDir, const Vector3& muzzlePos);
   // 弾・リボンの尾・ミサイルの発射位置（muzzle ボーンの今のワールド位置。無ければ自機中心）
   Vector3 GetMuzzlePosition_() const;
-  void UpdateFire_(const PlayerInputState& in, const GameCamera& camera, const Vector3& muzzlePos);
+  void UpdateFire_(const PlayerInputState& in, const Vector3& muzzlePos);
   void EmitMuzzleFlash_(const Vector3& muzzlePos) const;
-  void FireHomingBullets_(const GameCamera& camera, const Vector3& muzzlePos);
+  void FireHomingBullets_(const Vector3& muzzlePos);
   void FireNormalBullet_(const Vector3& muzzlePos);
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)

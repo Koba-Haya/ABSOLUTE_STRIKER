@@ -9,12 +9,16 @@
 
 class GameCamera;
 class Renderer;
+namespace AbsoluteEngine {
+class ICameraRig;
+}
 
 // AbsoluteEngine::ITimelineCameraを実装することで、エンジンのTimelineManager/BaseSceneが
 // このApplication固有のクラスを直接知らなくても（インターフェース越しに）レール進行を制御できる
 class RailCameraComponent : public AbsoluteEngine::IComponent, public AbsoluteEngine::ITimelineCamera {
 public:
-    RailCameraComponent();
+    // rig: メインカメラの位置と向きを書き換える窓口(所有しない。このコンポーネントより長く生きること)
+    explicit RailCameraComponent(AbsoluteEngine::ICameraRig& rig);
     ~RailCameraComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -97,6 +101,8 @@ public:
     void SetModifiedFlag() { isModified_ = true; }
 
 private:
+    AbsoluteEngine::ICameraRig& rig_; // メインカメラを動かす窓口
+
     // 指定progressにおける位置・注視点（look-ahead込み）を計算する共通ヘルパー
     // ApplyCameraTransform_とGetPointAndForwardの両方から呼ばれる
     void ComputePositionAndTarget_(float progress, Vector3& outPos, Vector3& outTarget) const;

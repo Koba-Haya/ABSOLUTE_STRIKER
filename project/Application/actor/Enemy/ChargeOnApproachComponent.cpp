@@ -1,5 +1,6 @@
 #include "ChargeOnApproachComponent.h"
 #include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "GameCamera.h"
@@ -30,13 +31,12 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
 
     auto scene = BaseScene::GetActiveScene();
     if (!scene) return;
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
+    if (!screen_.HasCamera()) return;
 
     // カメラの移動速度を推定する（前フレームとのeye差分）。
     // プレイヤーはeye基準で毎フレーム位置決めされるため、操作していなくても
     // カメラのレール前進と同じ速度でワールド座標が流れ続ける。
-    const Vector3 eye = camera->GetEye();
+    const Vector3 eye = screen_.GetEye();
     Vector3 cameraVelocity = { 0, 0, 0 };
     if (hasPrevEye_ && deltaTime > 0.0f) {
         cameraVelocity = {

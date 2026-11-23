@@ -29,12 +29,14 @@
 namespace AbsoluteEngine {
 class GameObject;
 class ISpawner;
+class IScreenView;
 }
 
 class TelegraphComponent : public AbsoluteEngine::IComponent {
 public:
-    // spawner: 光る玉を出すときに使う、オブジェクトを出す窓口(所有しない。このコンポーネントより長く生きること)
-    explicit TelegraphComponent(AbsoluteEngine::ISpawner& spawner) : spawner_(spawner) {}
+    // spawner: 光る玉を出すときに使う、オブジェクトを出す窓口。screen: 画面内かの判定に使う、画面の窓口。
+    // どちらも所有しない。このコンポーネントより長く生きること
+    TelegraphComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
     ~TelegraphComponent() override;
 
     void Update(float deltaTime) override;
@@ -63,6 +65,7 @@ public:
 
 private:
     AbsoluteEngine::ISpawner& spawner_; // 光る玉を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
 
     enum class GlowMode {
         Muzzle, // 弾の出口に光る玉

@@ -243,6 +243,9 @@
     <ClCompile Include="scene\SceneNavigator.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\MainCameraView.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\TimelineHost.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -496,6 +499,15 @@
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\ComponentDeps.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ICameraRig.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\IScreenView.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\MainCameraView.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\ISpawner.h">
