@@ -176,13 +176,9 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
 
     if (aMove && bMove) {
         // 両方動く場合は質量に応じて押し出し量を分配するのが理想だが、今回は簡易的に半分ずつ
-        a->GetOwner()->GetTransform().translate.x += result.normal.x * result.depth * 0.5f;
-        a->GetOwner()->GetTransform().translate.y += result.normal.y * result.depth * 0.5f;
-        a->GetOwner()->GetTransform().translate.z += result.normal.z * result.depth * 0.5f;
-
-        b->GetOwner()->GetTransform().translate.x -= result.normal.x * result.depth * 0.5f;
-        b->GetOwner()->GetTransform().translate.y -= result.normal.y * result.depth * 0.5f;
-        b->GetOwner()->GetTransform().translate.z -= result.normal.z * result.depth * 0.5f;
+        const float halfDepth = result.depth * 0.5f;
+        a->GetOwner()->Translate({result.normal.x * halfDepth, result.normal.y * halfDepth, result.normal.z * halfDepth});
+        b->GetOwner()->Translate({-result.normal.x * halfDepth, -result.normal.y * halfDepth, -result.normal.z * halfDepth});
 
         // 反発処理 (簡易的: 速度をゼロまたは反転)
         Vector3 vA = rbA->GetVelocity();
@@ -190,9 +186,7 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
         rbA->SetVelocity({vA.x * 0.5f, vA.y * 0.5f, vA.z * 0.5f});
         rbB->SetVelocity({vB.x * 0.5f, vB.y * 0.5f, vB.z * 0.5f});
     } else if (aMove) {
-        a->GetOwner()->GetTransform().translate.x += result.normal.x * result.depth;
-        a->GetOwner()->GetTransform().translate.y += result.normal.y * result.depth;
-        a->GetOwner()->GetTransform().translate.z += result.normal.z * result.depth;
+        a->GetOwner()->Translate({result.normal.x * result.depth, result.normal.y * result.depth, result.normal.z * result.depth});
         
         // Bは動かない壁のようなものなので、Aの速度を減衰させる (跳ね返りは未実装、または簡易的に)
         Vector3 vA = rbA->GetVelocity();
@@ -205,9 +199,7 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
             rbA->SetVelocity(vA);
         }
     } else if (bMove) {
-        b->GetOwner()->GetTransform().translate.x -= result.normal.x * result.depth;
-        b->GetOwner()->GetTransform().translate.y -= result.normal.y * result.depth;
-        b->GetOwner()->GetTransform().translate.z -= result.normal.z * result.depth;
+        b->GetOwner()->Translate({-result.normal.x * result.depth, -result.normal.y * result.depth, -result.normal.z * result.depth});
 
         Vector3 vB = rbB->GetVelocity();
         float dot = vB.x * -result.normal.x + vB.y * -result.normal.y + vB.z * -result.normal.z;

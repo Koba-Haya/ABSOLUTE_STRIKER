@@ -53,11 +53,13 @@ void ItemPickupComponent::MoveToward_(const Vector3 &target, float speed, float 
 }
 
 void ItemPickupComponent::ApplyVisual_(float scale) {
-  auto &transform = GetOwner()->GetTransform();
-  transform.translate = {basePosition_.x, basePosition_.y + std::sin(age_ * settings_.bobSpeed) * settings_.bobAmplitude,
-                         basePosition_.z};
-  transform.rotate.y = spinAngle_;
-  transform.scale = {scale, scale, scale};
+  GetOwner()->SetPosition({basePosition_.x, basePosition_.y + std::sin(age_ * settings_.bobSpeed) * settings_.bobAmplitude,
+                           basePosition_.z});
+  // 回転は Y 成分(自転)だけを変えたい。現在の値をコピーして Y だけ差し替え、SetRotation で戻す
+  Vector3 rotation = GetOwner()->GetTransform().rotate;
+  rotation.y = spinAngle_;
+  GetOwner()->SetRotation(rotation);
+  GetOwner()->SetScale({scale, scale, scale});
 }
 
 void ItemPickupComponent::Update(float deltaTime) {

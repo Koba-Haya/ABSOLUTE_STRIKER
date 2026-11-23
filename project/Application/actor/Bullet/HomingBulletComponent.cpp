@@ -87,7 +87,6 @@ void HomingBulletComponent::Update(float deltaTime) {
     }
 
     // --- 進行方向への回転（前フレーム座標との差分ベクトルで算出） ---
-    auto& trans = GetOwner()->GetTransform();
     Vector3 diff = {
         newPos.x - prevPos_.x,
         newPos.y - prevPos_.y,
@@ -102,11 +101,11 @@ void HomingBulletComponent::Update(float deltaTime) {
         float vxzLen = std::sqrt(diff.x * diff.x + diff.z * diff.z);
         float pitch  = std::atan2(-diff.y, vxzLen);
 
-        trans.rotate = { pitch, yaw, 0.0f };
+        GetOwner()->SetRotation({ pitch, yaw, 0.0f });
     }
 
-    // --- 座標をTransformに直接適用 ---
-    trans.translate = newPos;
+    // --- 座標を適用 ---
+    GetOwner()->SetPosition(newPos);
 
     // 次フレームの差分計算のために現在座標を保存
     prevPos_ = newPos;

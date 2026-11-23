@@ -87,7 +87,7 @@ void SpawnEvent::Fire(const TimelineFireContext& context) {
     RailFrame railFrame{};
     Transform placed{};
     const bool placedOnRail = ResolveSpawnTransform(context, placed, railFrame);
-    obj->GetTransform() = placed;
+    obj->SetTransform(placed);
     // レール上に出したことを、コンポーネントへ知らせる(進行方向に依存する動きが、向きを決める)
     if (placedOnRail) {
         NotifySpawnedOnRail(*obj, railFrame);

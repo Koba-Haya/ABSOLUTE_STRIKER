@@ -230,18 +230,17 @@ void PlayerComponent::UpdateBodyTransform_(const Vector3& cursorRayDir,
   localPos_.y += (localTargetY - localPos_.y) * moveSpeed_ * deltaTime;
 
   // ワールド座標: Eye + Forward*Dist + Right*localX + Up*localY
-  auto& t = GetOwner()->GetTransform();
-  t.translate = {
+  GetOwner()->SetPosition({
       basePos.x + right.x * localPos_.x + up.x * localPos_.y,
       basePos.y + right.y * localPos_.x + up.y * localPos_.y,
       basePos.z + right.z * localPos_.x + up.z * localPos_.y
-  };
+  });
 
   // 回転：カメラ向き（ヨー・ピッチ）＋バンク角（ロール・ピッチ追加）
   const float yaw   = std::atan2(forward.x, forward.z);
   const float xzLen = std::sqrt(forward.x * forward.x + forward.z * forward.z);
   const float pitch = std::atan2(-forward.y, xzLen);
-  t.rotate = { pitch + bankPitch_, yaw, bankRoll_ + dodgeRollOffset };
+  GetOwner()->SetRotation({ pitch + bankPitch_, yaw, bankRoll_ + dodgeRollOffset });
 }
 
 // 「照準点」を1つだけ決め、レティクルと弾の両方をそこから派生させる。

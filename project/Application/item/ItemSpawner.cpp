@@ -19,8 +19,8 @@ void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::IScen
                         std::function<void()> onCollected) {
   auto obj = std::make_shared<AbsoluteEngine::GameObject>(kItemObjectName);
   obj->SetTag(kItemTag);
-  obj->GetTransform().translate = position;
-  obj->GetTransform().scale = {item.scale, item.scale, item.scale};
+  obj->SetPosition(position);
+  obj->SetScale({item.scale, item.scale, item.scale});
 
   // 見た目: 照明なし(パレットの色をそのまま出す)。落ちている強化が、背景の中で光って見えるようにする
   auto model = std::make_unique<AbsoluteEngine::ModelComponent>();

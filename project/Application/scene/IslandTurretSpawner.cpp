@@ -58,8 +58,8 @@ bool IslandTurretSpawner::SpawnTurret_(const AbsoluteEngine::ComponentDeps &deps
   // 島の上面の頂点(原点から、rock の丘の高さ x 倍率)に、立方体の底が乗る高さへ置く。島は傾けていないので、真上に置ける
   const float halfSize = kCubeHalfExtent * kTurretScale;
   const float topY = island.GetPosition().y + StageIslandDefaults::kRockTopHeight * island.GetScale();
-  turret->GetTransform().translate = {island.GetPosition().x, topY + halfSize, island.GetPosition().z};
-  turret->GetTransform().scale = {kTurretScale, kTurretScale, kTurretScale};
+  turret->SetPosition({island.GetPosition().x, topY + halfSize, island.GetPosition().z});
+  turret->SetScale({kTurretScale, kTurretScale, kTurretScale});
 
   // 当たり判定は、倍率を見ない(AABB の半幅をそのまま使う)ので、見た目の大きさに合わせる
   if (auto *collider = turret->GetComponent<AbsoluteEngine::ColliderComponent>()) {

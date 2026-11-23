@@ -55,10 +55,7 @@ void RigidbodyComponent::Update(float deltaTime) {
     acceleration_ = {0.0f, 0.0f, 0.0f};
 
     // Transform に反映
-    auto& transform = GetOwner()->GetTransform();
-    transform.translate.x += velocity_.x * deltaTime;
-    transform.translate.y += velocity_.y * deltaTime;
-    transform.translate.z += velocity_.z * deltaTime;
+    GetOwner()->Translate({velocity_.x * deltaTime, velocity_.y * deltaTime, velocity_.z * deltaTime});
 }
 
 void RigidbodyComponent::DrawInspectorUI() {

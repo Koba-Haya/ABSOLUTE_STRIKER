@@ -44,7 +44,7 @@ void HitEffectSpawner::Spawn(AbsoluteEngine::ISpawner& spawner, const Vector3& p
 
   // 3. 爆発のポイントライト（寿命付き）を生成
   auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
-  lightObj->GetTransform().translate = pos;
+  lightObj->SetPosition(pos);
   auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
   lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
   lightNodeComp->color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光

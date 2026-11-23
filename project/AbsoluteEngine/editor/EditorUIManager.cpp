@@ -304,7 +304,7 @@ void EditorUIManager::DrawViewport(SceneWorld& world, const Matrix4x4& viewMatri
   ImGuizmo::SetDrawlist();
   ImGuizmo::SetRect(windowPos.x, windowPos.y, windowSize.x, windowSize.y);
 
-  Transform& t = obj->GetTransform();
+  const Transform& t = obj->GetTransform();
 
   // ImGuizmo用の変換（Translate, Rotate(度数法), Scale）
   float translation[3] = { t.translate.x, t.translate.y, t.translate.z };
@@ -330,9 +330,9 @@ void EditorUIManager::DrawViewport(SceneWorld& world, const Matrix4x4& viewMatri
 
   if (isGizmoUsing_) {
     ImGuizmo::DecomposeMatrixToComponents(objectMatrix, translation, rotation, scale);
-    t.translate = { translation[0], translation[1], translation[2] };
-    t.rotate = { rotation[0] * 3.14159265f / 180.0f, rotation[1] * 3.14159265f / 180.0f, rotation[2] * 3.14159265f / 180.0f };
-    t.scale = { scale[0], scale[1], scale[2] };
+    obj->SetPosition({ translation[0], translation[1], translation[2] });
+    obj->SetRotation({ rotation[0] * 3.14159265f / 180.0f, rotation[1] * 3.14159265f / 180.0f, rotation[2] * 3.14159265f / 180.0f });
+    obj->SetScale({ scale[0], scale[1], scale[2] });
   }
 
   if (wasGizmoUsing && !isGizmoUsing_) {
@@ -614,7 +614,7 @@ void EditorUIManager::DrawHierarchy(SceneWorld& world) {
       auto modelComp = std::make_unique<ModelComponent>();
       modelComp->LoadModel(payloadPath);
       newObj->AddComponent(std::move(modelComp));
-      newObj->GetTransform().translate = {0, 0, 0};
+      newObj->SetPosition({0, 0, 0});
       
       if (commandManager_) {
         commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world));
@@ -650,7 +650,7 @@ void EditorUIManager::DrawHierarchy(SceneWorld& world) {
               auto lightComp = std::make_unique<LightNodeComponent>();
               lightComp->type = LightNodeComponent::Type::Directional;
               newObj->AddComponent(std::move(lightComp));
-              newObj->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
+              newObj->SetRotation({ 0.5f, 0.5f, 0.0f });
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
@@ -788,7 +788,8 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
 
     // Transformの編集
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-      Transform& transform = obj->GetTransform();
+      // コピーを編集し、スライダーの処理のあとで SetTransform で戻す
+      Transform transform = obj->GetTransform();
 
       // Vector3の配列としてImGuiに渡すためのテンポラリ変数
       float t[3] = { transform.translate.x, transform.translate.y, transform.translate.z };
@@ -815,6 +816,9 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
       }
       activated |= ImGui::IsItemActivated();
       deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
+
+      // 編集したコピーを、オブジェクトへ反映する
+      obj->SetTransform(transform);
 
       if (activated) {
           // 入力開始時のTransformを保存（DragFloat開始前）
@@ -1190,7 +1194,7 @@ void EditorUIManager::HandleViewportDragDrop(SceneWorld& world, const Matrix4x4&
         std::string fullPath = AbsoluteEngine::EnginePath::Resolve(std::string(payloadPath));
         auto prefabInstance = SceneSerializer::LoadPrefab(fullPath, world.Deps());
         if (prefabInstance) {
-          prefabInstance->GetTransform().translate = targetPos;
+          prefabInstance->SetPosition(targetPos);
           if (commandManager_) {
             commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(prefabInstance, &world));
           } else {
@@ -1211,7 +1215,7 @@ void EditorUIManager::HandleViewportDragDrop(SceneWorld& world, const Matrix4x4&
         auto modelComp = std::make_unique<ModelComponent>();
         modelComp->LoadModel(payloadPath);
         newObj->AddComponent(std::move(modelComp));
-        newObj->GetTransform().translate = targetPos;
+        newObj->SetPosition(targetPos);
         
         if (commandManager_) {
           commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world));

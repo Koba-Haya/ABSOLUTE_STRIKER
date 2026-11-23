@@ -102,16 +102,16 @@ void BossComponent::UpdateMovement(float deltaTime) {
     const float weaveX = std::sin(weaveTimer_ * kWeaveSpeedX) * kWeaveAmplitudeX;
     const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;
 
-    GetOwner()->GetTransform().translate = {
+    GetOwner()->SetPosition({
         basePos.x + forward.x * kHoverDistanceFromCamera + right.x * weaveX + up.x * weaveY,
         basePos.y + forward.y * kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
         basePos.z + forward.z * kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
-    };
+    });
 
     // 正面(モデルの +Z)を、カメラの方へ向ける。自機は、モデルの +Z を進行方向へ向けて飛ぶ(PlayerComponent と同じ規約)。
     // ボスは、その自機と向かい合うので、進行方向の逆(カメラの向きの逆)へ向く。左右(Y 軸)の向きだけを合わせる
     // (ボスのモデルは、自機のモデルと、書き出しの前後の向きが逆なので、kModelFrontYawOffset だけ回して合わせる)
-    GetOwner()->GetTransform().rotate = { 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f };
+    GetOwner()->SetRotation({ 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f });
 }
 
 void BossComponent::UpdatePhase() {

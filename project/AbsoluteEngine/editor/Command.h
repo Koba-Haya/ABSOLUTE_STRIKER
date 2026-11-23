@@ -24,13 +24,13 @@ public:
 
     void Execute() override {
         if (auto t = target_.lock()) {
-            t->GetTransform() = after_;
+            t->SetTransform(after_);
         }
     }
 
     void Undo() override {
         if (auto t = target_.lock()) {
-            t->GetTransform() = before_;
+            t->SetTransform(before_);
         }
     }
 

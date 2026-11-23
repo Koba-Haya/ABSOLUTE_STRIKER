@@ -67,7 +67,7 @@ void DevScene::Initialize(const SceneServices &services) {
       auto modelComp1 = std::make_unique<AbsoluteEngine::ModelComponent>();
       modelComp1->LoadModel("resources/app/cube/cube.obj");
       obj1->AddComponent(std::move(modelComp1));
-      obj1->GetTransform().translate = { 0.0f, -1.1f, -15.0f };
+      obj1->SetPosition({ 0.0f, -1.1f, -15.0f });
       AddRootObject(obj1);
       
       // 初期状態を保存しておく
@@ -142,7 +142,7 @@ void DevScene::Update() {
               float rX = ((rand() % 300) / 10.0f) - 15.0f;
               float rY = ((rand() % 100) / 10.0f) - 5.0f;
               float rZ = ((rand() % 200) / 10.0f) + 5.0f;
-              newEnemy->GetTransform().translate = { rX, rY, rZ };
+              newEnemy->SetPosition({ rX, rY, rZ });
               newEnemy->SetTag("Enemy");
                 
               auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
@@ -308,8 +308,8 @@ void DevScene::Update() {
               auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
               modelComp->LoadModel("resources/app/sphere/sphere.obj");
               bullet->AddComponent(std::move(modelComp));
-              bullet->GetTransform().translate = spawnPos;
-              bullet->GetTransform().scale = {0.2f, 0.2f, 0.2f};
+              bullet->SetPosition(spawnPos);
+              bullet->SetScale({0.2f, 0.2f, 0.2f});
 
               // 速度計算
               Vector3 diff = { targetPos.x - spawnPos.x, targetPos.y - spawnPos.y, targetPos.z - spawnPos.z };
@@ -478,7 +478,7 @@ void DevScene::Update() {
 
                       // 爆発の光（ポイントライト）の生成
                       auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
-                      lightObj->GetTransform().translate = targetEnemyPos;
+                      lightObj->SetPosition(targetEnemyPos);
                       auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
                       lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
                       lightNodeComp->color = { 1.0f, 0.5f, 0.1f };
@@ -703,7 +703,7 @@ void DevScene::InitResources_() {
   // --- ライトの初期設定 ---
   // 最初からシーンに配置しておくライトを rootObjects_ に追加する
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
-  initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f }; // 適当な方向
+  initialDirLight->SetRotation({ 0.5f, 0.5f, 0.0f }); // 適当な方向
   auto dirLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
   dirLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
   dirLightComp->color = { 1.0f, 1.0f, 1.0f };
@@ -712,7 +712,7 @@ void DevScene::InitResources_() {
   AddRootObject(initialDirLight);
 
   auto initialPointLight = std::make_shared<AbsoluteEngine::GameObject>("Point Light");
-  initialPointLight->GetTransform().translate = { 0.0f, 2.0f, -2.0f };
+  initialPointLight->SetPosition({ 0.0f, 2.0f, -2.0f });
   auto pointLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
   pointLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
   pointLightComp->color = { 1.0f, 1.0f, 1.0f };

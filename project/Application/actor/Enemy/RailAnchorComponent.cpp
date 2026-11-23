@@ -81,11 +81,10 @@ void RailAnchorComponent::Update(float deltaTime) {
 
     // レール座標から世界座標へ。カメラの距離 + ahead の地点の座標系を取り、右・上へずらす(曲がったレールでも道に沿う)
     const AbsoluteEngine::RailFrame frame = railCamera_->GetRailFrame(cameraDistance + aheadOffset_);
-    auto& t = GetOwner()->GetTransform();
-    t.translate = {
+    GetOwner()->SetPosition({
         frame.position.x + frame.right.x * lateral_ + frame.up.x * vertical_,
         frame.position.y + frame.right.y * lateral_ + frame.up.y * vertical_,
-        frame.position.z + frame.right.z * lateral_ + frame.up.z * vertical_ };
+        frame.position.z + frame.right.z * lateral_ + frame.up.z * vertical_ });
 }
 
 void RailAnchorComponent::Serialize(nlohmann::json& j) const {

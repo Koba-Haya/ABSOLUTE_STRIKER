@@ -82,6 +82,8 @@ private:
     void UpdateOrb_(float progress);
     // 体の震えを、いまの経過時間に合わせる
     void UpdateShake_();
+    // 持ち主の回転のうち、Z 成分だけを書き換える(X と Y は、そのまま残す)
+    void SetOwnerRotateZ_(float rotateZ);
 
     // ---- 設定(プレハブの JSON で調整できる) ----
     GlowMode glowMode_ = GlowMode::Muzzle;

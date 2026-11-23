@@ -20,13 +20,10 @@ constexpr const char* kKeyWindupPullSpeed = "windupPullSpeed";
 void ChargeOnApproachComponent::Update(float deltaTime) {
     if (!GetOwner()) return;
 
-    auto& t = GetOwner()->GetTransform();
-
     if (triggered_) {
         // 突進中: 発火瞬間に確定した方向へ直進し続ける（毎フレーム再計算しない）
-        t.translate.x += chargeDir_.x * chargeSpeed_ * deltaTime;
-        t.translate.y += chargeDir_.y * chargeSpeed_ * deltaTime;
-        t.translate.z += chargeDir_.z * chargeSpeed_ * deltaTime;
+        GetOwner()->Translate({chargeDir_.x * chargeSpeed_ * deltaTime, chargeDir_.y * chargeSpeed_ * deltaTime,
+                               chargeDir_.z * chargeSpeed_ * deltaTime});
         return;
     }
 
@@ -54,9 +51,7 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
         const float duration = telegraph ? telegraph->GetDuration() : 0.0f;
         const float progress = (duration > 0.0f) ? std::min(windupTimer_ / duration, 1.0f) : 1.0f;
         const float pull = windupPullSpeed_ * (1.0f - progress) * deltaTime;
-        t.translate.x += windupAwayDir_.x * pull;
-        t.translate.y += windupAwayDir_.y * pull;
-        t.translate.z += windupAwayDir_.z * pull;
+        GetOwner()->Translate({windupAwayDir_.x * pull, windupAwayDir_.y * pull, windupAwayDir_.z * pull});
         if (progress >= 1.0f) {
             windingUp_ = false;
             windupDone_ = true;
@@ -69,7 +64,7 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
-    const Vector3 currentPos = t.translate;
+    const Vector3 currentPos = GetOwner()->GetTransform().translate;
     const Vector3 playerPos = playerObj->GetTransform().translate;
     Vector3 toPlayer = {
         playerPos.x - currentPos.x,

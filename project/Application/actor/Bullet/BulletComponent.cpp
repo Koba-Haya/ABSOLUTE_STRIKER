@@ -22,16 +22,13 @@ void BulletComponent::Update(float deltaTime) {
     return;
   }
 
-  auto& t = GetOwner()->GetTransform();
-  const Vector3 previousPos = t.translate;
-  t.translate.x += velocity_.x * deltaTime;
-  t.translate.y += velocity_.y * deltaTime;
-  t.translate.z += velocity_.z * deltaTime;
+  const Vector3 previousPos = GetOwner()->GetTransform().translate;
+  GetOwner()->Translate({velocity_.x * deltaTime, velocity_.y * deltaTime, velocity_.z * deltaTime});
 
   // 今フレームの移動の線分が、島に遮られたら消える(自機の弾も敵弾も、島を貫通しない)。
   // 点ではなく線分で調べるので、速い弾が 1 フレームで島を飛び越えることもない。
   // 雲は含めない(雲の裏へは、通常弾は届く)。移動のあとで調べるので、島の内側で終わった弾も、ここで消える
-  if (OcclusionWorld::GetInstance().IsSegmentBlocked(previousPos, t.translate, OccluderKind::kIsland)) {
+  if (OcclusionWorld::GetInstance().IsSegmentBlocked(previousPos, GetOwner()->GetTransform().translate,OccluderKind::kIsland)) {
     isActive_ = false;
     GetOwner()->Destroy();
   }

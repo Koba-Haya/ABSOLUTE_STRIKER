@@ -89,10 +89,9 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j, const Co
     if (obj) {
       if (j.contains("transform")) {
         const auto& tJson = j["transform"];
-        Transform& t = obj->GetTransform();
-        t.translate = JsonToVector3(tJson["translate"]);
-        t.rotate = JsonToVector3(tJson["rotate"]);
-        t.scale = JsonToVector3(tJson["scale"]);
+        obj->SetPosition(JsonToVector3(tJson["translate"]));
+        obj->SetRotation(JsonToVector3(tJson["rotate"]));
+        obj->SetScale(JsonToVector3(tJson["scale"]));
       }
       
       // シーンファイル側のコンポーネント（オーバーライド）で上書きまたは追加
@@ -134,10 +133,9 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j, const Co
 
   if (j.contains("transform")) {
     const auto& tJson = j["transform"];
-    Transform& t = obj->GetTransform();
-    t.translate = JsonToVector3(tJson["translate"]);
-    t.rotate = JsonToVector3(tJson["rotate"]);
-    t.scale = JsonToVector3(tJson["scale"]);
+    obj->SetPosition(JsonToVector3(tJson["translate"]));
+    obj->SetRotation(JsonToVector3(tJson["rotate"]));
+    obj->SetScale(JsonToVector3(tJson["scale"]));
   }
 
   if (j.contains("components") && j["components"].is_array()) {

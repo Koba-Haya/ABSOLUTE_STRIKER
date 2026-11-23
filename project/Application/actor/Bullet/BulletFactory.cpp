@@ -43,7 +43,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateBulletBase(
   colliderComp->radius = radius;
   bulletObj->AddComponent(std::move(colliderComp));
 
-  bulletObj->GetTransform().translate = position;
+  bulletObj->SetPosition(position);
   return bulletObj;
 }
 
@@ -87,7 +87,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateEnemy(const BulletSpec& spec) 
   enemySpec.radius = spec.radius * kEnemyBulletScale;
 
   auto bulletObj = CreateStraight(enemySpec, "EnemyBullet", "EnemyBullet");
-  bulletObj->GetTransform().scale = { kEnemyBulletScale, kEnemyBulletScale, kEnemyBulletScale };
+  bulletObj->SetScale({ kEnemyBulletScale, kEnemyBulletScale, kEnemyBulletScale });
   return bulletObj;
 }
 

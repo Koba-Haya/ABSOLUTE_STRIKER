@@ -96,19 +96,27 @@ void TelegraphComponent::UpdateOrb_(float progress) {
     const auto& ownerTransform = GetOwner()->GetTransform();
     const Vector3& s = ownerTransform.scale;
     // 出口の位置: 敵の位置 + 出口のずれ x 敵の拡大率(敵の回転は見ない。今の敵は、回転せずに出る)
-    orb->GetTransform().translate = { ownerTransform.translate.x + muzzleOffset_.x * s.x,
-                                      ownerTransform.translate.y + muzzleOffset_.y * s.y,
-                                      ownerTransform.translate.z + muzzleOffset_.z * s.z };
+    orb->SetPosition({ ownerTransform.translate.x + muzzleOffset_.x * s.x,
+                       ownerTransform.translate.y + muzzleOffset_.y * s.y,
+                       ownerTransform.translate.z + muzzleOffset_.z * s.z });
     // 大きさ: 始めから終わりへ、なめらかに(終わりに近づくほど速く膨らむ)。敵の拡大率の平均を掛ける
     const float eased = progress * progress;
     const float orbScale = (orbScaleStart_ + (orbScaleEnd_ - orbScaleStart_) * eased) * ((s.x + s.y + s.z) / 3.0f);
-    orb->GetTransform().scale = { orbScale, orbScale, orbScale };
+    orb->SetScale({ orbScale, orbScale, orbScale });
 }
 
 void TelegraphComponent::UpdateShake_() {
     if (!GetOwner() || shakeAmplitudeDeg_ <= 0.0f) return;
     const float angle = std::sin(elapsed_ * shakeFrequency_ * kTwoPi) * shakeAmplitudeDeg_ * kPi / kHalfTurnDegrees;
-    GetOwner()->GetTransform().rotate.z = baseRotateZ_ + angle;
+    SetOwnerRotateZ_(baseRotateZ_ + angle);
+}
+
+void TelegraphComponent::SetOwnerRotateZ_(float rotateZ) {
+    if (!GetOwner()) return;
+    // 回転は Z 成分だけを変えたい。現在の値をコピーして Z だけ差し替え、SetRotation で戻す
+    Vector3 rotation = GetOwner()->GetTransform().rotate;
+    rotation.z = rotateZ;
+    GetOwner()->SetRotation(rotation);
 }
 
 void TelegraphComponent::Begin(float startElapsed) {
@@ -137,7 +145,7 @@ void TelegraphComponent::End() {
             }
         }
         if (shakeAmplitudeDeg_ > 0.0f) {
-            GetOwner()->GetTransform().rotate.z = baseRotateZ_;
+            SetOwnerRotateZ_(baseRotateZ_);
         }
     }
 }

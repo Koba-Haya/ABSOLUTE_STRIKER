@@ -99,7 +99,7 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
         t.translate.x += spreadAxisX.x * offsetX + spreadAxisY.x * offsetY;
         t.translate.y += spreadAxisX.y * offsetX + spreadAxisY.y * offsetY;
         t.translate.z += spreadAxisX.z * offsetX + spreadAxisY.z * offsetY;
-        obj->GetTransform() = t;
+        obj->SetTransform(t);
 
         // 移動（既存Enemy.jsonにはStraightMoveComponentが含まれないため明示的に付与する）
         obj->AddComponent(std::make_unique<StraightMoveComponent>());

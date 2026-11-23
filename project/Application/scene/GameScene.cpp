@@ -428,7 +428,7 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   if (!hasLight) {
       auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
-      initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
+      initialDirLight->SetRotation({ 0.5f, 0.5f, 0.0f });
       auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
       lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
       lightComp->color = { 1.0f, 1.0f, 1.0f };
@@ -588,12 +588,12 @@ void GameScene::UpdateIntro_(float deltaTime) {
   camera->SetPerspective(kGameCameraFovY * pose.fovScale, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
 
   if (playerObj_) {
-    playerObj_->GetTransform().translate = {introBasePlayerPosition_.x + shift.x, introBasePlayerPosition_.y + shift.y,
-                                           introBasePlayerPosition_.z + shift.z};
+    playerObj_->SetPosition({introBasePlayerPosition_.x + shift.x, introBasePlayerPosition_.y + shift.y,
+                             introBasePlayerPosition_.z + shift.z});
     // 昇りの機首上げ(X まわりの負の回転で、機首が上を向く)
     Vector3 rotation = introBasePlayerRotation_;
     rotation.x -= pose.pitchUp;
-    playerObj_->GetTransform().rotate = rotation;
+    playerObj_->SetRotation(rotation);
   }
   UpdatePlayerModelOnly_(deltaTime);
 }
@@ -754,8 +754,8 @@ void GameScene::FinishIntro_() {
     camera->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
   }
   if (playerObj_) {
-    playerObj_->GetTransform().translate = introBasePlayerPosition_;
-    playerObj_->GetTransform().rotate = introBasePlayerRotation_;
+    playerObj_->SetPosition(introBasePlayerPosition_);
+    playerObj_->SetRotation(introBasePlayerRotation_);
   }
 
   // イントロが終わったら、ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)へ続ける。基準の位置は、いま戻したスタート位置
@@ -974,14 +974,14 @@ void GameScene::SpawnBoss_() {
   // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromCameraと合わせておく）。
   constexpr float kBossInitialDistanceFromCamera = 36.0f;
   const Vector3 cameraEye = GetMainCamera()->GetEye();
-  bossObj->GetTransform().translate = {
+  bossObj->SetPosition({
       cameraEye.x + forward.x * kBossInitialDistanceFromCamera,
       cameraEye.y + forward.y * kBossInitialDistanceFromCamera,
       cameraEye.z + forward.z * kBossInitialDistanceFromCamera
-  };
+  });
   // このステージのボスの種類(stages.json の "boss")から、モデル・大きさ・当たり判定の半径を決める
   const BossModelSpec &bossSpec = GetBossModelSpec(ResolveStage_().boss);
-  bossObj->GetTransform().scale = {bossSpec.scale, bossSpec.scale, bossSpec.scale};
+  bossObj->SetScale({bossSpec.scale, bossSpec.scale, bossSpec.scale});
   auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
   bossModelComp->LoadModel(bossSpec.modelPath);
   bossModelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
@@ -1245,8 +1245,8 @@ void GameScene::CheckDebugReviveShortcut_() {
 void GameScene::ApplyDeathPose_() {
   if (!playerObj_ || !deathDirector_.IsActive()) return;
   const PlayerDeathPose pose = deathDirector_.GetPlayerPose();
-  playerObj_->GetTransform().translate = pose.position;
-  playerObj_->GetTransform().rotate = pose.rotate;
+  playerObj_->SetPosition(pose.position);
+  playerObj_->SetRotation(pose.rotate);
 
   // 蝶の朽ち方(ディゾルブ)。ModelComponent が、毎フレームこの値を描画に渡す
   if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
@@ -1389,7 +1389,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> GameScene::CreateBossShards_(const s
   // 欠片のモデルは、ボスの外殻と同じ位置・向き・大きさで置く(割る前と、組み立てた欠片が、同じ見た目になるように)。
   // 動き(骨の書き換え)は BossShatter が行うので、ここでは、置くだけ。アニメーションは再生しない
   auto shardsObj = std::make_shared<AbsoluteEngine::GameObject>("BossShards");
-  shardsObj->GetTransform() = boss->GetTransform();
+  shardsObj->SetTransform(boss->GetTransform());
   auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
   modelComp->LoadModel(bossSpec.shardsModelPath);
   modelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
@@ -1752,9 +1752,9 @@ void GameScene::Draw() {
           continue;
       }
       const Vector3 originalScale = obj->GetTransform().scale;
-      obj->GetTransform().scale = {originalScale.x * deathScale, originalScale.y * deathScale, originalScale.z * deathScale};
+      obj->SetScale({originalScale.x * deathScale, originalScale.y * deathScale, originalScale.z * deathScale});
       obj->Draw();
-      obj->GetTransform().scale = originalScale;
+      obj->SetScale(originalScale);
   }
 
   // ボス撃破の光線(ひびの線から放射状に伸びる光の帯)。物体を描いたあとに描く

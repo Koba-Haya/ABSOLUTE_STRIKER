@@ -41,7 +41,7 @@ void TimelineSpawnPreview::SwitchPreview(TimelineManager &manager, ITimelineEven
           // プレビューフラグを立ててシリアライズ対象から除外する
           previewObj->SetTimelinePreview(true);
           // スポーン位置に配置する(レール座標の指定なら、実際の出現と同じ手順で世界座標へ変換した位置)
-          previewObj->GetTransform() = ResolvePlacement(manager, *spawnEv);
+          previewObj->SetTransform(ResolvePlacement(manager, *spawnEv));
           // シーンに追加してギズモ操作対象に登録する
           addObject(previewObj);
           selectObject(previewObj);
@@ -67,7 +67,7 @@ void TimelineSpawnPreview::WriteBackToEvent(const TimelineManager &manager, ITim
     // 回転とスケールだけを書き戻す。プレビューの位置は、毎フレーム、レール座標から求め直す
     spawnEv->spawnTransform_.rotate = previewObj->GetTransform().rotate;
     spawnEv->spawnTransform_.scale = previewObj->GetTransform().scale;
-    previewObj->GetTransform().translate = ResolvePlacement(manager, *spawnEv).translate;
+    previewObj->SetPosition(ResolvePlacement(manager, *spawnEv).translate);
   } else {
     spawnEv->spawnTransform_ = previewObj->GetTransform();
   }
