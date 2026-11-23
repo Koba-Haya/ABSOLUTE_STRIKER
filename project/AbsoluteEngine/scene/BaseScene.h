@@ -7,6 +7,7 @@
 
 #include "ISpawner.h"
 #include "MainCameraView.h"
+#include "PlayModeState.h"
 #include "PlayMode.h"
 #include "SceneNavigator.h"
 #include "SceneServices.h"
@@ -44,8 +45,8 @@ public:
   virtual void Draw() = 0;
   virtual void DrawEditorUI();
 
-  PlayMode GetPlayMode() const { return playMode_; }
-  void SetPlayMode(PlayMode mode) { playMode_ = mode; }
+  PlayMode GetPlayMode() const { return playState_.GetPlayMode(); }
+  void SetPlayMode(PlayMode mode) { playState_.SetPlayMode(mode); }
 
   // 世界(タイムライン、オブジェクトの更新、衝突判定)の時間の速さ。1 で通常、0 で停止(その間、世界の更新は行わない)、
   // 0 より大きく 1 より小さいとスローモーション。死亡演出のヒットストップとスローモーションに使う。
@@ -65,6 +66,10 @@ public:
   // 画面(メインカメラ)の見え方を知る窓口(読み取り専用)を返す。部品や補助クラスへ、カメラの型を見せずに渡すために使う。
   // メインカメラの設定や差し替えに追従する。このシーンが生きている間だけ有効
   AbsoluteEngine::IScreenView &GetScreenView() { return cameraView_; }
+  // シーンのオブジェクトの一覧を、読み取り専用で調べる窓口を返す。部品や補助クラスへ、シーンを見せずに渡すために使う。このシーンが生きている間だけ有効
+  AbsoluteEngine::ISceneQuery &GetSceneQuery() { return world_; }
+  // 再生状態(エディットか、プレイか)を、読み取り専用で知る窓口を返す。このシーンが生きている間だけ有効
+  AbsoluteEngine::IPlayState &GetPlayState() { return playState_; }
   // メインカメラの位置と向きを書き換える窓口を返す。レールカメラの部品へ渡すために使う。このシーンが生きている間だけ有効
   AbsoluteEngine::ICameraRig &GetCameraRig() { return cameraView_; }
   void ClearRootObjects() { world_.Clear(); }
@@ -75,11 +80,6 @@ public:
   // 条件に合うオブジェクトをまとめて取り除く。shouldRemove は各オブジェクトに対して1回ずつ呼ばれる
   // 条件の中でシーンのオブジェクト一覧を変更しないこと
   void RemoveRootObjectsIf(const std::function<bool(const std::shared_ptr<AbsoluteEngine::GameObject>&)>& shouldRemove);
-
-  // アクティブシーンへのグローバルアクセス
-  static BaseScene* GetActiveScene() { return activeScene_; }
-
-  AbsoluteEngine::CommandManager* GetCommandManager() const;
 
   // エンジンインフラ機能のグローバルアクセス
   GameCamera* GetMainCamera() const { return mainCamera_.get(); }
@@ -232,7 +232,7 @@ private:
   // メインカメラを、IScreenView / ICameraRig の窓口として見せる。mainCamera_ への参照を持つため、mainCamera_ より後に宣言する
   AbsoluteEngine::MainCameraView cameraView_{mainCamera_};
 
-  PlayMode playMode_ = PlayMode::Edit; // 派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
+  AbsoluteEngine::PlayModeState playState_; // 再生状態。派生クラスからは GetPlayMode/SetPlayMode 経由で扱う
   float worldTimeScale_ = 1.0f;        // 世界の時間の速さ(SetWorldTimeScale)
   std::string sceneId_ = "";
   // シーン切り替えの要求と、前のシーンから渡された荷物(派生クラスからは RequestSceneChange / TryGetLaunchPayload 経由で扱う)
@@ -242,6 +242,4 @@ private:
   // UsesTimeline()がfalseのシーンでは生成されない（nullptrのまま）
   // 派生クラスからは SetTimelineCamera/UpdateTimeline/PlayTimeline など専用メソッド経由で扱う
   std::unique_ptr<AbsoluteEngine::TimelineHost> timeline_;
-
-  static BaseScene* activeScene_;
 };

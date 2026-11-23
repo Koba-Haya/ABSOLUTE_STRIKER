@@ -5,7 +5,8 @@
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IPlayState.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -75,10 +76,7 @@ void PlayerComponent::Update(float deltaTime) {
 
   // 死亡演出中は、位置と向きを PlayerDeathDirector が決めるので、追従・発射・ロックオンを行わない
   if (dying_) return;
-  auto scene  = BaseScene::GetActiveScene();
-  if (!scene) return;
-  auto* input  = scene->GetInput();
-  if (!input || !screen_.HasCamera()) return;
+  if (!screen_.HasCamera()) return;
 
   // 自機の RigidbodyComponent が存在する場合は重力を無効化する
   // （物理演算によって自機が落下するバグの解消）
@@ -87,12 +85,12 @@ void PlayerComponent::Update(float deltaTime) {
       rb->SetKinematic(true); // 物理演算の一切を無効化して完全手動制御にする
   }
 
-  const bool isPlaying = scene->GetPlayMode() == PlayMode::Play;
+  const bool isPlaying = playState_.GetPlayMode() == PlayMode::Play;
 
   // マウスはPlayモードでカーソルを閉じ込めている間だけ照準に使う
   // 展示中と、操作のロック中(ステージ開始演出)は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
   const bool ignoreInput = ExhibitionMode::IsEnabled() || inputLocked_;
-  const PlayerInputState in = ignoreInput ? PlayerInputState{} : PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
+  const PlayerInputState in = ignoreInput ? PlayerInputState{} : PlayerInput::Poll(input_, isPlaying && MouseCapture::IsActive());
 
   MoveCursor_(in, deltaTime);
 
@@ -124,7 +122,7 @@ void PlayerComponent::Update(float deltaTime) {
   //   Playモードにしていないのにクリック/スペース入力で実弾発射が走ってしまう）
   if (!isPlaying) return;
 
-  lockon_.Update(deltaTime, in.fireHeld, screen_, scene, cursorPos_);
+  lockon_.Update(deltaTime, in.fireHeld, screen_, query_, cursorPos_);
 
   if (shootCooldown_ > 0.0f) {
       shootCooldown_ -= deltaTime;

@@ -28,13 +28,14 @@ namespace AbsoluteEngine {
 class GameObject;
 class ISpawner;
 class IScreenView;
+class ISceneQuery;
 }
 
 class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
-    // spawner: 弾を出すときに使う、オブジェクトを出す窓口。screen: 画面内か、島に隠れているかの判定に使う、画面の窓口。
-    // どちらも所有しない。このコンポーネントより長く生きること
-    AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen);
+    // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
+    // いずれも所有しない。このコンポーネントより長く生きること
+    AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -47,6 +48,7 @@ public:
 private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+    AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
 
     // 狙いの向き dir(長さ1)に、最大 aimErrorDegrees_ 度のばらつきを足して返す
     Vector3 ApplyAimError_(const Vector3& dir);

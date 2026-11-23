@@ -9,10 +9,11 @@
 #include <memory>
 
 class Input;
-class BaseScene;
 namespace AbsoluteEngine {
 class ISpawner;
 class IScreenView;
+class ISceneQuery;
+class IPlayState;
 }
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
@@ -20,9 +21,11 @@ public:
   // 最大 HP の基本の値(強化で増える前)
   static constexpr int kBaseMaxHp = 5;
 
-  // spawner: 弾を出すときに使う、オブジェクトを出す窓口。screen: 照準や追従に使う、カメラの位置・向き・行列を知る、画面の窓口。
-  // どちらも所有しない。このコンポーネントより長く生きること
-  PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
+  // spawner: 弾を出す窓口。screen: 照準や追従に使う、カメラの位置・向き・行列を知る窓口。query: 敵を探す窓口(ロックオン用)。
+  // playState: 再生状態を知る窓口。input: 入力。いずれも所有しない。このコンポーネントより長く生きること
+  PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                  AbsoluteEngine::IPlayState& playState, Input& input)
+      : spawner_(spawner), screen_(screen), query_(query), playState_(playState), input_(input) {}
   ~PlayerComponent() override = default;
 
 
@@ -83,6 +86,9 @@ public:
 private:
   AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
   AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置・向き・行列)を知る窓口
+  AbsoluteEngine::ISceneQuery& query_;  // 敵を探すために、シーンのオブジェクト一覧を調べる窓口(ロックオン用)
+  AbsoluteEngine::IPlayState& playState_; // 再生状態(エディットか、プレイか)を知る窓口
+  Input& input_;                        // 入力(キーボード、マウス、パッド)
   LockOnSystem lockon_;
   PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 

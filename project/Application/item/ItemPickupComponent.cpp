@@ -6,9 +6,10 @@
 #include <algorithm>
 #include <cmath>
 
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
+#include "../actor/Player/PlayerFinder.h"
 
 namespace {
 // 取得の演出のうち、「膨らむ」段階の割合(残りは、縮みながら吸い込まれる)
@@ -35,15 +36,9 @@ void ItemPickupComponent::Configure(const ItemPickupSettings &settings, float ba
 std::shared_ptr<AbsoluteEngine::GameObject> ItemPickupComponent::FindPlayer_() {
   if (auto cached = player_.lock()) return cached;
 
-  BaseScene *scene = BaseScene::GetActiveScene();
-  if (!scene) return nullptr;
-  for (const auto &obj : scene->GetRootObjects()) {
-    if (obj && obj->GetComponent<PlayerComponent>()) {
-      player_ = obj;
-      return obj;
-    }
-  }
-  return nullptr;
+  auto found = PlayerFinder::FindPlayer(query_);
+  if (found) player_ = found;
+  return found;
 }
 
 void ItemPickupComponent::MoveToward_(const Vector3 &target, float speed, float deltaTime) {

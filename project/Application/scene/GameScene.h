@@ -75,6 +75,10 @@ protected:
   // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
   const Camera* GetEditorViewCamera() const override;
 
+  // エディタの Stop で、全オブジェクトが作り直されたあとに、自機へ実行時の設定をやり直す(基底の復元のあとに呼ばれる)。
+  // 作り直された自機は、JSON から作られるので、Initialize で行った見た目の設定(翼幅、照明、羽ばたきなど)や、強化の反映が失われているため
+  void RestoreScene() override;
+
   // シーンJSON とタイムラインJSON のファイル名の元になる名前。遊ぶステージの定義(StageDefinition::dataName)から決める。
   // 荷物なしで入ったときは、先頭のステージ(従来どおり "Game")になる
   std::string GetDataName() const override;
@@ -95,6 +99,9 @@ private:
   // --- Update の各段階 ---
   // プレイヤーの GameObject を探す（ロード時などでポインタが切り替わった場合に対応）
   std::shared_ptr<AbsoluteEngine::GameObject> FindPlayerObject_() const;
+  // 自機のオブジェクトへ、実行時の見た目の設定(蝶のモデル、翼幅、ディゾルブ、照明モード、羽ばたき)を行う。
+  // 自機が作り直されるたび(Initialize と、エディタの Stop による復元)に必要なので、1 か所にまとめている
+  void SetupPlayerVisuals_();
   // ゲームプレイ中の描画カメラ（デバッグカメラ or レールカメラ）
   Camera* GetGameplayCamera_() const;
   // ワールド座標をスクリーン座標(UV 0〜1)に変換する

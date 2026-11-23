@@ -1,10 +1,11 @@
 #include "TurretShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"
 #include "TelegraphComponent.h"
 #include "externals/nlohmann/json.hpp"
@@ -80,9 +81,6 @@ void TurretShootComponent::Update(float deltaTime) {
 bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     if (!owner_) return false;
 
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return false;
-
     const Vector3 currentPos = owner_->GetTransform().translate;
 
     // --- 画面内チェック（NDC ±1.2 マージン内にいる場合のみ発射を許可）---
@@ -94,13 +92,7 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     if (!islandGate_.CanShoot()) return false;
 
     // --- プレイヤーを探す ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return false;
 
     // --- プレイヤー方向（タレットは非移動のため、進行方向ではなく毎回直接この方向を狙う）---
@@ -140,15 +132,7 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
 }
 
 void TurretShootComponent::TrackPlayerVelocity(float deltaTime) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
     const Vector3 pos = playerObj->GetTransform().translate;

@@ -5,8 +5,10 @@
 #include "Renderer.h"
 #include "Spline.h"
 #include <cmath>
-#include "../../AbsoluteEngine/scene/BaseScene.h"
 #include "../../AbsoluteEngine/scene/ICameraRig.h"
+#include "../../AbsoluteEngine/scene/IEditRecorder.h"
+#include "../../AbsoluteEngine/scene/IPlayState.h"
+#include "../../AbsoluteEngine/scene/ISceneQuery.h"
 #include "../actor/Player/PlayerComponent.h"
 #include <algorithm>
 #include <string>
@@ -22,12 +24,10 @@ namespace {
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
-#include "../../AbsoluteEngine/scene/BaseScene.h"
-#include "../../AbsoluteEngine/editor/CommandManager.h"
-#include "../../AbsoluteEngine/editor/Command.h"
 #endif
 
-RailCameraComponent::RailCameraComponent(AbsoluteEngine::ICameraRig& rig) : rig_(rig) {
+RailCameraComponent::RailCameraComponent(AbsoluteEngine::ICameraRig& rig, AbsoluteEngine::IPlayState& playState, AbsoluteEngine::ISceneQuery& query)
+    : rig_(rig), playState_(playState), query_(query) {
     waypoints_ = {
         { 0.0f,  5.0f, -50.0f}, // P0: スタート（少し手前から）
         { 0.0f,  3.0f,   0.0f}, // P1: 序盤の直進エリア
@@ -202,8 +202,6 @@ AbsoluteEngine::RailFrame RailCameraComponent::GetRailFrame(float distance) cons
 
 void RailCameraComponent::ApplyCameraTransform_() {
     if (waypoints_.size() < 2) return;
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
     if (!rig_.HasCamera()) return;
 
     Vector3 currentPos, targetPos;
@@ -213,8 +211,8 @@ void RailCameraComponent::ApplyCameraTransform_() {
     rig_.SetPose(currentPos, targetPos, kCameraUp);
 
     // タイムラインシーク時のプレイヤー位置の同期（エディットモードでのシーク時のみ）
-    if (scene->GetPlayMode() == PlayMode::Edit) {
-        const auto& rootObjs = scene->GetRootObjects();
+    if (playState_.GetPlayMode() == PlayMode::Edit) {
+        const auto& rootObjs = query_.Objects();
         for (size_t i = 0; i < rootObjs.size(); ++i) {
             auto obj = rootObjs[i];
             if (!obj) continue;
@@ -272,76 +270,58 @@ void RailCameraComponent::Deserialize(const nlohmann::json& j) {
 }
 
 void RailCameraComponent::AddWaypoint(const Vector3& pos) {
-    nlohmann::json beforeState;
-    Serialize(beforeState);
-
     waypoints_.push_back(pos);
     isModified_ = true;
     RebuildArcLengthTable_();
-
-    nlohmann::json afterState;
-    Serialize(afterState);
-
-#ifdef USE_IMGUI
-    if (owner_) {
-        if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
-            cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
-                owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
-        }
-    }
-#endif
 }
 
 void RailCameraComponent::InsertWaypoint(size_t index, const Vector3& pos) {
     if (index <= waypoints_.size()) {
-        nlohmann::json beforeState;
-        Serialize(beforeState);
-
         waypoints_.insert(waypoints_.begin() + index, pos);
         isModified_ = true;
         RebuildArcLengthTable_();
-
-        nlohmann::json afterState;
-        Serialize(afterState);
-
-#ifdef USE_IMGUI
-        if (owner_) {
-            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
-                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
-                    owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
-            }
-        }
-#endif
     }
 }
 
 void RailCameraComponent::RemoveWaypoint(size_t index) {
     if (index < waypoints_.size() && waypoints_.size() > 3) {
-        nlohmann::json beforeState;
-        Serialize(beforeState);
-
         waypoints_.erase(waypoints_.begin() + index);
         if (selectedPointIndex_ >= static_cast<int>(waypoints_.size())) {
             selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
         }
         isModified_ = true;
         RebuildArcLengthTable_();
-
-        nlohmann::json afterState;
-        Serialize(afterState);
-
-#ifdef USE_IMGUI
-        if (owner_) {
-            if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
-                cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
-                    owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
-            }
-        }
-#endif
     }
 }
 
-void RailCameraComponent::DrawInspectorUI() {
+void RailCameraComponent::EditAndRecord_(AbsoluteEngine::IEditRecorder& recorder, const std::function<void()>& edit) {
+    nlohmann::json beforeState;
+    Serialize(beforeState);
+
+    edit();
+
+    nlohmann::json afterState;
+    Serialize(afterState);
+
+    // 何も変わらなかった操作(消せない点を消そうとした、など)は、履歴に残さない
+    if (beforeState != afterState) {
+        recorder.RecordEdit(beforeState, afterState);
+    }
+}
+
+void RailCameraComponent::RecordEditFromBackup_(AbsoluteEngine::IEditRecorder& recorder) {
+    nlohmann::json beforeState, afterState;
+    const auto current = waypoints_;
+    waypoints_ = waypointsBeforeEdit_;
+    Serialize(beforeState);
+    waypoints_ = current;
+    Serialize(afterState);
+
+    recorder.RecordEdit(beforeState, afterState);
+}
+
+void RailCameraComponent::DrawInspectorUI(AbsoluteEngine::IEditRecorder& recorder) {
+    (void)recorder; // エディタ無しのビルドでは使わない
 #ifdef USE_IMGUI
     ImGui::Text("Waypoints: %d", static_cast<int>(waypoints_.size()));
 
@@ -355,7 +335,7 @@ void RailCameraComponent::DrawInspectorUI() {
     if (ImGui::Button("Add Point")) {
         Vector3 newPos = waypoints_.empty() ? Vector3(0,0,0) : waypoints_.back();
         newPos.x += 10.0f;
-        AddWaypoint(newPos);
+        EditAndRecord_(recorder, [&]() { AddWaypoint(newPos); });
         selectedPointIndex_ = static_cast<int>(waypoints_.size()) - 1;
     }
 
@@ -372,10 +352,10 @@ void RailCameraComponent::DrawInspectorUI() {
             if (ImGui::MenuItem("Insert After")) {
                 Vector3 newPos = waypoints_[i];
                 newPos.z += 5.0f;
-                InsertWaypoint(i + 1, newPos);
+                EditAndRecord_(recorder, [&]() { InsertWaypoint(i + 1, newPos); });
             }
             if (ImGui::MenuItem("Delete")) {
-                RemoveWaypoint(i);
+                EditAndRecord_(recorder, [&]() { RemoveWaypoint(i); });
             }
             ImGui::EndPopup();
         }
@@ -396,19 +376,7 @@ void RailCameraComponent::DrawInspectorUI() {
             waypointsBeforeEdit_ = waypoints_;
         }
         if (ImGui::IsItemDeactivatedAfterEdit()) {
-            if (owner_) {
-                if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
-                    nlohmann::json beforeState, afterState;
-                    auto tmp = waypoints_;
-                    waypoints_ = waypointsBeforeEdit_;
-                    Serialize(beforeState);
-                    waypoints_ = tmp;
-                    Serialize(afterState);
-
-                    cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
-                        owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
-                }
-            }
+            RecordEditFromBackup_(recorder);
         }
     }
 
@@ -416,7 +384,8 @@ void RailCameraComponent::DrawInspectorUI() {
 #endif
 }
 
-void RailCameraComponent::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY) {
+void RailCameraComponent::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY, AbsoluteEngine::IEditRecorder& recorder) {
+    (void)recorder; // エディタ無しのビルドでは使わない
 #ifdef USE_IMGUI
     if (selectedPointIndex_ >= 0 && selectedPointIndex_ < static_cast<int>(waypoints_.size())) {
         ImGuizmo::SetOrthographic(false);
@@ -455,19 +424,7 @@ void RailCameraComponent::DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4
 
         if (wasGizmoUsing && !isGizmoUsing_) {
             isModified_ = true;
-            if (owner_) {
-                if (auto* cmdMgr = BaseScene::GetActiveScene()->GetCommandManager()) {
-                    nlohmann::json beforeState, afterState;
-                    auto tmp = waypoints_;
-                    waypoints_ = waypointsBeforeEdit_;
-                    Serialize(beforeState);
-                    waypoints_ = tmp;
-                    Serialize(afterState);
-
-                    cmdMgr->AddCommand(std::make_shared<AbsoluteEngine::ComponentStateCommand>(
-                        owner_->shared_from_this(), GetTypeName(), beforeState, afterState));
-                }
-            }
+            RecordEditFromBackup_(recorder);
         }
     }
 #endif

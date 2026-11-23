@@ -57,7 +57,6 @@ bool WingShatter::Initialize(AbsoluteEngine::ModelComponent* playerModel, const 
   releasesThisFrame_.clear();
   clusters_.clear();
   settings_ = settings;
-  playerModel_ = playerModel;
   modelResourceRaw_ = nullptr;
   modelData_ = nullptr;
   if (!playerModel || !atlasTexture) return false;
@@ -276,11 +275,11 @@ void WingShatter::Reset() {
   }
 }
 
-void WingShatter::SkinVertex_(uint32_t vertex, Vector3& position, Vector3& normal) const {
+void WingShatter::SkinVertex_(const AbsoluteEngine::ModelComponent& playerModel, uint32_t vertex, Vector3& position, Vector3& normal) const {
   const MeshData& wing = modelData_->meshes[wingMeshIndex_];
   const VertexData& vd = wing.vertices[vertex];
   const VertexBoneData& bone = wing.skinningData[vertex];
-  const Skeleton* skeleton = playerModel_->GetModelInstance()->GetSkeleton();
+  const Skeleton* skeleton = playerModel.GetModelInstance()->GetSkeleton();
 
   // GPU のスキニング(Skinning.CS.hlsl)と同じ式: ボーンごとの行列(逆バインド × スケルトン空間)の、重み付き和
   Matrix4x4 skin{};
@@ -292,12 +291,12 @@ void WingShatter::SkinVertex_(uint32_t vertex, Vector3& position, Vector3& norma
       for (int c = 0; c < 4; ++c) skin.m[r][c] += bone.weights[k] * palette.m[r][c];
     }
   }
-  const Matrix4x4 toWorld = Multiply(skin, playerModel_->GetWorldMatrix());
+  const Matrix4x4 toWorld = Multiply(skin, playerModel.GetWorldMatrix());
   position = TransformPoint(PositionOf(vd), toWorld);
   normal = Normalized(TransformNormal(vd.normal, toWorld), {0.0f, 1.0f, 0.0f});
 }
 
-void WingShatter::Release_(Cluster& cluster, const Vector3& bodyVelocity) {
+void WingShatter::Release_(Cluster& cluster, const Vector3& bodyVelocity, const AbsoluteEngine::ModelComponent& playerModel) {
   const MeshData& wing = modelData_->meshes[wingMeshIndex_];
 
   // いまのポーズのワールド座標と法線を求め、中心を決める
@@ -306,7 +305,7 @@ void WingShatter::Release_(Cluster& cluster, const Vector3& bodyVelocity) {
   Vector3 sum{0.0f, 0.0f, 0.0f};
   for (size_t j = 0; j < cluster.triangles.size(); ++j) {
     for (int k = 0; k < 3; ++k) {
-      SkinVertex_(wing.indices[cluster.triangles[j] * 3 + k], positions[j * 3 + k], normals[j * 3 + k]);
+      SkinVertex_(playerModel, wing.indices[cluster.triangles[j] * 3 + k], positions[j * 3 + k], normals[j * 3 + k]);
       sum.x += positions[j * 3 + k].x; sum.y += positions[j * 3 + k].y; sum.z += positions[j * 3 + k].z;
     }
   }
@@ -328,7 +327,7 @@ void WingShatter::Release_(Cluster& cluster, const Vector3& bodyVelocity) {
   // 初速: 蝶の速度 + 蝶の中心から外へ + 上へ。大きさと回転は、かたまりごとにばらつかせる
   std::mt19937 random(settings_.randomSeed ^ (cluster.firstVertex * 2654435761u));
   std::uniform_real_distribution<float> signed01(-1.0f, 1.0f);
-  const Matrix4x4 world = playerModel_->GetWorldMatrix();
+  const Matrix4x4 world = playerModel.GetWorldMatrix();
   const Vector3 bodyCenter{world.m[3][0], world.m[3][1], world.m[3][2]};
   const Vector3 outward = Normalized(Sub(cluster.position, bodyCenter), {1.0f, 0.0f, 0.0f});
   const float jitter = 1.0f + settings_.speedJitter * signed01(random);
@@ -355,15 +354,19 @@ void WingShatter::Release_(Cluster& cluster, const Vector3& bodyVelocity) {
   releasesThisFrame_.push_back(release);
 }
 
-void WingShatter::Update(float deltaTime, float crumbleProgress, const Vector3& bodyVelocity) {
+void WingShatter::Update(float deltaTime, float crumbleProgress, const Vector3& bodyVelocity, const AbsoluteEngine::ModelComponent* playerModel) {
   releasesThisFrame_.clear();
   if (!built_) return;
 
+  // 解放には、いまの蝶のポーズ(スケルトン)が要る。モデルが無い、スケルトンが無いときは、新しい破片を解放しない
+  const ModelInstance* instance = playerModel ? playerModel->GetModelInstance() : nullptr;
+  const bool canRelease = instance != nullptr && instance->GetSkeleton() != nullptr;
+
   // 崩壊の進み具合に達したかたまりを、解放する
-  if (crumbleProgress > 0.0f) {
+  if (canRelease && crumbleProgress > 0.0f) {
     for (Cluster& cluster : clusters_) {
       if (!cluster.released && crumbleProgress >= cluster.releaseProgress) {
-        Release_(cluster, bodyVelocity);
+        Release_(cluster, bodyVelocity, *playerModel);
       }
     }
   }

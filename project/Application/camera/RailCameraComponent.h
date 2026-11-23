@@ -4,6 +4,7 @@
 #include "../../AbsoluteEngine/Type/Vector.h"
 #include "../../AbsoluteEngine/math/Spline.h"
 #include "../../AbsoluteEngine/camera/ITimelineCamera.h"
+#include <functional>
 #include <vector>
 #include <string>
 
@@ -11,14 +12,18 @@ class GameCamera;
 class Renderer;
 namespace AbsoluteEngine {
 class ICameraRig;
+class IEditRecorder;
+class IPlayState;
+class ISceneQuery;
 }
 
 // AbsoluteEngine::ITimelineCameraを実装することで、エンジンのTimelineManager/BaseSceneが
 // このApplication固有のクラスを直接知らなくても（インターフェース越しに）レール進行を制御できる
 class RailCameraComponent : public AbsoluteEngine::IComponent, public AbsoluteEngine::ITimelineCamera {
 public:
-    // rig: メインカメラの位置と向きを書き換える窓口(所有しない。このコンポーネントより長く生きること)
-    explicit RailCameraComponent(AbsoluteEngine::ICameraRig& rig);
+    // rig: メインカメラの位置と向きを書き換える窓口。playState: 再生状態を知る窓口。query: シーンのオブジェクトを調べる窓口。
+    // いずれも所有しない。このコンポーネントより長く生きること
+    RailCameraComponent(AbsoluteEngine::ICameraRig& rig, AbsoluteEngine::IPlayState& playState, AbsoluteEngine::ISceneQuery& query);
     ~RailCameraComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -33,14 +38,16 @@ public:
     const std::vector<Vector3>& GetWaypoints() const { return waypoints_; }
 
 
-    // ウェイポイントの編集機能
+    // ウェイポイントの編集機能(データを変えるだけ。取り消し履歴への記録は、これを呼ぶエディタ UI の側が行う)
     void AddWaypoint(const Vector3& pos);
     void InsertWaypoint(size_t index, const Vector3& pos);
     void RemoveWaypoint(size_t index);
 
-    // エディタUI描画
-    void DrawInspectorUI() override;
-    void DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY);
+    // エディタUI描画。編集は、recorder を通して、エディタの取り消し履歴へ記録される(部品は、履歴の作り方を知らない)
+    void DrawInspectorUI(AbsoluteEngine::IEditRecorder& recorder) override;
+    using AbsoluteEngine::IComponent::DrawInspectorUI; // 引数なしの版も、隠さずに使えるようにする
+    void DrawGizmo(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY,
+                   AbsoluteEngine::IEditRecorder& recorder);
     void HandleMousePicking(const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, float windowPosX, float windowPosY, float windowSizeX, float windowSizeY);
 
     // パラメータ調整用
@@ -101,7 +108,14 @@ public:
     void SetModifiedFlag() { isModified_ = true; }
 
 private:
-    AbsoluteEngine::ICameraRig& rig_; // メインカメラを動かす窓口
+    AbsoluteEngine::ICameraRig& rig_;       // メインカメラを動かす窓口
+    AbsoluteEngine::IPlayState& playState_; // 再生状態を知る窓口
+    AbsoluteEngine::ISceneQuery& query_;    // シーンのオブジェクト一覧を調べる窓口(シークのとき、自機の位置を合わせるため)
+
+    // edit を実行し、その前後の状態を recorder へ記録する(状態が変わらなければ記録しない)
+    void EditAndRecord_(AbsoluteEngine::IEditRecorder& recorder, const std::function<void()>& edit);
+    // 編集の前(waypointsBeforeEdit_)と、いまの状態を、recorder へ記録する(ドラッグ編集の終わりに使う)
+    void RecordEditFromBackup_(AbsoluteEngine::IEditRecorder& recorder);
 
     // 指定progressにおける位置・注視点（look-ahead込み）を計算する共通ヘルパー
     // ApplyCameraTransform_とGetPointAndForwardの両方から呼ばれる

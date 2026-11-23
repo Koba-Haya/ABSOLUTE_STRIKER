@@ -1,10 +1,11 @@
 #include "EnemyShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
 #include "TelegraphComponent.h"
 #include <cmath>
@@ -46,9 +47,6 @@ void EnemyShootComponent::Update(float deltaTime) {
     shootTimer_ -= shootInterval_;
     if (telegraph) telegraph->End();
         
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
     // --- 画面内チェック（NDC ±1.2 マージン内にいる敵のみ発射を許可）---
     // カメラが無い、カメラの背後にいる、範囲外のときは発射しない（画面外ギリギリの敵も少し猶予を持たせる）
     constexpr float ndcMargin = 1.2f;
@@ -58,13 +56,7 @@ void EnemyShootComponent::Update(float deltaTime) {
     if (!islandGate_.CanShoot()) return;
 
     // --- プレイヤーを探す ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
     // --- 視野角チェック（正面約30度以内のみ発射を許可）---

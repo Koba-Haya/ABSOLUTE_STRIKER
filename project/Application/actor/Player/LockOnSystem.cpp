@@ -1,7 +1,7 @@
 #include "LockOnSystem.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "Application/ScreenSize.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
@@ -28,8 +28,8 @@ void LockOnSystem::Initialize() {
     isLockingMode_ = false;
 }
 
-void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::IScreenView& screen, BaseScene* scene, const Vector2& cursorPos) {
-    if (!screen.HasCamera() || !scene) return;
+void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos) {
+    if (!screen.HasCamera()) return;
 
     // 既に死んでいる・または破棄されている・島や雲に隠れた敵をロックオン対象から外す
     const Vector3 eye = screen.GetEye();
@@ -56,7 +56,7 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::
         if (holdTimer_ >= lockOnThreshold_) {
             isLockingMode_ = true;
             // 敵を検索してロックオン
-            SearchAndLockTargets(screen, scene, cursorPos);
+            SearchAndLockTargets(screen, query, cursorPos);
         }
     } else {
         // ボタンを離した瞬間はPlayerComponent側で発射の判定に使われるため
@@ -65,14 +65,14 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::
     }
 }
 
-void LockOnSystem::SearchAndLockTargets(const AbsoluteEngine::IScreenView& screen, BaseScene* scene, const Vector2& cursorPos) {
+void LockOnSystem::SearchAndLockTargets(const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos) {
     if (GetLockedCount() >= maxLockTargets_) return; // 既に上限
 
     Matrix4x4 viewMat = screen.GetViewMatrix();
     Matrix4x4 projMat = screen.GetProjectionMatrix();
     Matrix4x4 vpMat = Multiply(viewMat, projMat);
 
-    const auto& objects = scene->GetRootObjects();
+    const auto& objects = query.Objects();
 
     // すでにロックオン弾(ホーミング弾)が飛んでいる敵は、対象にしない(1体の敵にロックオンは1回だけ)。
     // 撃ったあとは lockedTargets_ が空になるため、これがないと、弾の飛行中に同じ敵をもう一度ロックできてしまう

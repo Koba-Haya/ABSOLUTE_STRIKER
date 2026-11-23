@@ -7,8 +7,8 @@
 namespace AbsoluteEngine {
     class GameObject;
     class IScreenView;
+    class ISceneQuery;
 }
-class BaseScene;
 
 class LockOnSystem {
 public:
@@ -24,7 +24,7 @@ public:
     void Initialize();
     
     // 長押し時間のカウントや敵の検索を行う。fireHeld は発射/ロックボタンを押している間 true
-    void Update(float deltaTime, bool fireHeld, const AbsoluteEngine::IScreenView& screen, BaseScene* scene, const Vector2& cursorPos);
+    void Update(float deltaTime, bool fireHeld, const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos);
 
     bool IsLockingMode() const { return isLockingMode_; }
     // weak_ptrのリストを返す（呼び出し側でlock()して生存確認してから使うこと）
@@ -56,6 +56,6 @@ private:
     bool isLockingMode_ = false;
 
     // 敵をスクリーン上に収めているか判定し、ロックする処理
-    void SearchAndLockTargets(const AbsoluteEngine::IScreenView& screen, BaseScene* scene, const Vector2& cursorPos);
+    void SearchAndLockTargets(const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos);
 };
 

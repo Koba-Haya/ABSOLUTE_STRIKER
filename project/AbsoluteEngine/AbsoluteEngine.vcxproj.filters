@@ -510,6 +510,18 @@
     <ClInclude Include="scene\MainCameraView.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
+    <ClInclude Include="scene\IEditRecorder.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\IPlayState.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ISceneQuery.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\PlayModeState.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
     <ClInclude Include="scene\ISpawner.h">
       <Filter>engine\scene</Filter>
     </ClInclude>

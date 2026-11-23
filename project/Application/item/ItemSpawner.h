@@ -4,6 +4,7 @@
 #include <functional>
 
 namespace AbsoluteEngine {
+class ISceneQuery;
 class ISpawner;
 }
 
@@ -13,6 +14,7 @@ class ISpawner;
 class ItemSpawner {
 public:
   // position に、定義 item のアイテムを 1 個置く。onCollected は、自機が取った瞬間に 1 回呼ばれる
-  static void Spawn(AbsoluteEngine::ISpawner &spawner, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
+  // spawner: アイテムを置く窓口。query: 出したアイテムが、自機を探すために持つ窓口
+  static void Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
                     std::function<void()> onCollected);
 };

@@ -10,8 +10,6 @@
 #include "Type/Vector.h"
 #include <memory>
 
-class BaseScene;
-
 namespace AbsoluteEngine {
 class GameObject;
 class IScreenView;
@@ -41,8 +39,5 @@ public:
 private:
     float visibleTime_ = kRevealShotDelay; // 見えている時間。初期値は待ち済みの状態
 };
-
-// シーンの直下から、自機(PlayerComponent を持つオブジェクト)を探して返す。見つからなければ nullptr
-std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer(const BaseScene& scene);
 
 } // namespace EnemyShootUtil

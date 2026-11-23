@@ -1,11 +1,12 @@
 #include "AimedShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
+#include "../Player/PlayerFinder.h"
 #include "TelegraphComponent.h"
 #include "Method.h"
 #include <algorithm>
@@ -34,8 +35,8 @@ constexpr float kParallelThreshold = 0.99f;
 unsigned int g_nextSeed = 1;
 } // namespace
 
-AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen)
-    : spawner_(spawner), screen_(screen), random_(g_nextSeed++) {}
+AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
+    : spawner_(spawner), screen_(screen), query_(query), random_(g_nextSeed++) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();
@@ -69,9 +70,6 @@ void AimedShootComponent::Update(float deltaTime) {
     if (const auto* enemy = owner_->GetComponent<EnemyComponent>()) {
         if (enemy->IsDead()) return;
     }
-
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
 
     // 画面外にいる間は、タイマーを進めない(入ってから firstShotDelay_ 待つ。出ている間に弾がたまらない)
     const Vector3 myPos = owner_->GetTransform().translate;
@@ -115,7 +113,7 @@ void AimedShootComponent::Update(float deltaTime) {
     }
 
     // ---- 自機を狙う ----
-    const auto player = EnemyShootUtil::FindPlayer(*scene);
+    const auto player = PlayerFinder::FindPlayer(query_);
     if (!player) return;
     const Vector3 playerPos = player->GetTransform().translate;
     const Vector3 toPlayer = { playerPos.x - myPos.x, playerPos.y - myPos.y, playerPos.z - myPos.z };

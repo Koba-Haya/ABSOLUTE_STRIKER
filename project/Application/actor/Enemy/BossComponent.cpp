@@ -1,11 +1,12 @@
 #include "BossComponent.h"
 #include "BossModelSpec.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "../Bullet/BulletFactory.h"
+#include "../Player/PlayerFinder.h"
 #include "../Bullet/HomingBulletComponent.h"
 #include "../Player/PlayerComponent.h"
 #include "GameCamera.h"
@@ -84,15 +85,7 @@ void BossComponent::UpdateAnimation() {
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return nullptr;
-
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            return obj;
-        }
-    }
-    return nullptr;
+    return PlayerFinder::FindPlayer(query_);
 }
 
 void BossComponent::UpdateMovement(float deltaTime) {

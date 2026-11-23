@@ -7,6 +7,7 @@
 namespace AbsoluteEngine {
 class ISpawner;
 class IScreenView;
+class ISceneQuery;
 }
 
 /// <summary>
@@ -27,9 +28,10 @@ class IScreenView;
 /// </summary>
 class TurretShootComponent : public AbsoluteEngine::IComponent {
 public:
-    // spawner: 弾を出すときに使う、オブジェクトを出す窓口。screen: 画面内か、島に隠れているか、カメラの前方向を知る、画面の窓口。
-    // どちらも所有しない。このコンポーネントより長く生きること
-    TurretShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
+    // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているか、カメラの前方向を知る窓口。query: 自機を探す窓口。
+    // いずれも所有しない。このコンポーネントより長く生きること
+    TurretShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
+        : spawner_(spawner), screen_(screen), query_(query) {}
     ~TurretShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -42,6 +44,7 @@ public:
 private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+    AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
 
     bool CanFire(Vector3& outToPlayerDir) const;
     void FireOneBullet(const Vector3& dir);

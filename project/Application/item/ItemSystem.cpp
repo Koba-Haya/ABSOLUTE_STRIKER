@@ -1,5 +1,6 @@
 #include "ItemSystem.h"
 
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
@@ -24,10 +25,14 @@ void ItemSystem::BeginStage(const std::shared_ptr<AbsoluteEngine::GameObject> &p
     const ItemEffectKind kind = static_cast<ItemEffectKind>(i);
     state.SetInherited(kind, InheritanceState::GetInstance().GetInheritedStacks(kind));
   }
-  if (player) {
-    if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
-      ItemEffectApplier::SyncToPlayer(state, settings, *playerComp);
-    }
+  RebindPlayer(player);
+}
+
+void ItemSystem::RebindPlayer(const std::shared_ptr<AbsoluteEngine::GameObject> &player) {
+  player_ = player;
+  if (!player) return;
+  if (auto *playerComp = player->GetComponent<PlayerComponent>()) {
+    ItemEffectApplier::SyncToPlayer(PlayerUpgradeState::Persistent(), ItemCatalog::GetInstance().GetUpgradeSettings(), *playerComp);
   }
 }
 
@@ -43,7 +48,7 @@ void ItemSystem::GrantEarned(ItemEffectKind kind, int count) {
   }
 }
 
-void ItemSystem::OnEnemyDestroyed(AbsoluteEngine::ISpawner &spawner, const std::string &enemyName, const Vector3 &position) {
+void ItemSystem::OnEnemyDestroyed(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const std::string &enemyName, const Vector3 &position) {
   const ItemCatalog &catalog = ItemCatalog::GetInstance();
   const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
 
@@ -53,7 +58,7 @@ void ItemSystem::OnEnemyDestroyed(AbsoluteEngine::ISpawner &spawner, const std::
   });
   if (!item) return;
 
-  ItemSpawner::Spawn(spawner, *item, catalog.GetPickupSettings(), position, [this, item]() { OnCollected_(*item); });
+  ItemSpawner::Spawn(spawner, query, *item, catalog.GetPickupSettings(), position, [this, item]() { OnCollected_(*item); });
 }
 
 void ItemSystem::OnCollected_(const ItemDefinition &item) {

@@ -283,6 +283,10 @@
     <ClInclude Include="scene\ICameraRig.h" />
     <ClInclude Include="scene\IScreenView.h" />
     <ClInclude Include="scene\MainCameraView.h" />
+    <ClInclude Include="scene\IEditRecorder.h" />
+    <ClInclude Include="scene\IPlayState.h" />
+    <ClInclude Include="scene\ISceneQuery.h" />
+    <ClInclude Include="scene\PlayModeState.h" />
     <ClInclude Include="scene\ISpawner.h" />
     <ClInclude Include="scene\TimelineHost.h" />
     <ClInclude Include="scene\EditorSession.h" />

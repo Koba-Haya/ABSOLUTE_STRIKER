@@ -105,6 +105,7 @@
     <ClCompile Include="actor\Player\PlayerAnimator.cpp" />
     <ClCompile Include="actor\Player\WingShatter.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
+    <ClCompile Include="actor\Player\PlayerFinder.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
     <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
     <ClCompile Include="scene\GameIntroDirector.cpp" />
@@ -235,6 +236,7 @@
     <ClInclude Include="actor\Player\WingShatter.h" />
     <ClInclude Include="actor\Player\PlayerModelDefs.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
+    <ClInclude Include="actor\Player\PlayerFinder.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
     <ClInclude Include="scene\VolumeCloudDebugUi.h" />
     <ClInclude Include="scene\GameIntroDirector.h" />

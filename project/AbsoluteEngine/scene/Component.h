@@ -6,6 +6,7 @@
 namespace AbsoluteEngine {
 
 class GameObject;
+class IEditRecorder;
 struct RailFrame; // レール上の座標系(ITimelineCamera.h で定義)
 
 class IComponent {
@@ -27,6 +28,10 @@ public:
 
     // エディタ（インスペクタ）用UI描画
     virtual void DrawInspectorUI() {}
+    // エディタ（インスペクタ）用UI描画(編集を取り消し履歴へ記録したい部品用)。
+    // エディタは、こちらを呼ぶ。recorder へ「編集した」と伝えると、エディタが履歴を作る。
+    // 既定では、記録せず、引数なしの版を呼ぶだけ(記録の要らない部品は、引数なしの版だけを実装すればよい)
+    virtual void DrawInspectorUI(IEditRecorder& recorder) { DrawInspectorUI(); }
 
     // シリアライズ（保存・復元）用インターフェース
     virtual void Serialize(nlohmann::json& j) const {}

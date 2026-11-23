@@ -25,25 +25,19 @@ constexpr float kEditorCameraNear = 0.1f;
 constexpr float kEditorCameraFar = 1000.0f;
 } // namespace
 
-BaseScene* BaseScene::activeScene_ = nullptr;
-
 BaseScene::BaseScene() {
     // 部品へ渡す窓口の束に、カメラの窓口を入れる(メインカメラの設定前から使えるよう、生成のときに 1 回だけ設定する)
     world_.SetScreenView(&cameraView_);
     world_.SetCameraRig(&cameraView_);
+    world_.SetPlayState(&playState_);
 }
 
-BaseScene::~BaseScene() {
-    // SceneManagerが破棄後・次シーンのInitialize前の間に誰かがGetActiveScene()を呼んでも
-    // 解放済みインスタンスへのダングリングポインタを返さないよう、破棄時に必ずクリアする
-    if (activeScene_ == this) {
-        activeScene_ = nullptr;
-    }
-}
+BaseScene::~BaseScene() = default;
 
 void BaseScene::Initialize(const SceneServices &services) {
     services_ = services;
-    activeScene_ = this;
+    // 入力は、シーンの開始時に渡される。部品を作る前(読み込みの前)に、束へ設定する
+    world_.SetInput(services.input);
 
     // シーンの開始時の、SRV デスクリプタの使用量(シーンを何周も作り直しても、頭打ちになるかを確かめるため)
     if (auto* dx = Renderer::GetInstance()->GetDX()) {
@@ -136,10 +130,6 @@ float BaseScene::GetTransitionRevealSeconds() const {
   return navigator_.GetRevealSeconds();
 }
 
-AbsoluteEngine::CommandManager* BaseScene::GetCommandManager() const {
-    return editor_ ? editor_->GetCommandManager() : nullptr;
-}
-
 void BaseScene::BackupScene() {
     world_.SaveSnapshot();
 }
@@ -197,7 +187,7 @@ void BaseScene::UpdateWorld() {
     // エディタカメラの更新
     // ドラッグ＆ドロップ中はカメラの操作をブロックする。
     // Debug Camera トグルがOFFの派生クラスでは非表示のeditorCamera_が入力を奪わないようにする（タスクD）
-    if (editorCamera_ && playMode_ == PlayMode::Edit && !AbsoluteEngine::EditorSession::IsDragDropInProgress() &&
+    if (editorCamera_ && GetPlayMode() == PlayMode::Edit && !AbsoluteEngine::EditorSession::IsDragDropInProgress() &&
         IsEditorCameraOperationEnabled()) {
         editorCamera_->Update(*services_.input);
     }
@@ -207,14 +197,14 @@ void BaseScene::UpdateWorld() {
 
     // タイムラインイベント選択に応じたプレビューオブジェクト管理（タスク16）
     // エディットモード中のみ有効（プレイ中に仮オブジェクトが混入しないように）
-    if (playMode_ == PlayMode::Edit && editor_ && timeline_) {
+    if (GetPlayMode() == PlayMode::Edit && editor_ && timeline_) {
         // 仮のオブジェクトの追加は、実行中の追加と同じ経路(AddRootObject)を通す
         editor_->UpdateTimelinePreview(
             *timeline_, [this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { AddRootObject(obj); });
     }
 
     // プレイモード中のオブジェクトの更新。世界の時間の速さが 0(ヒットストップ)の間は、世界を更新しない
-    if (playMode_ == PlayMode::Play && worldTimeScale_ > 0.0f) {
+    if (GetPlayMode() == PlayMode::Play && worldTimeScale_ > 0.0f) {
         const float worldDeltaTime = deltaTime * worldTimeScale_; // スローモーションのとき、世界だけが遅くなる
         // タイムラインをオブジェクトより先に更新する
         UpdateTimeline(worldDeltaTime);
@@ -238,24 +228,24 @@ void BaseScene::ApplyToolbarAction(AbsoluteEngine::ToolbarAction action) {
     switch (action) {
     case ToolbarAction::Play:
         BackupScene();
-        playMode_ = PlayMode::Play;
+        SetPlayMode(PlayMode::Play);
         // タイムラインもシーンのPlayに合わせて現在位置から再生開始する
         if (timeline_) timeline_->Play();
         break;
     case ToolbarAction::Pause:
-        playMode_ = PlayMode::Pause;
+        SetPlayMode(PlayMode::Pause);
         // タイムラインも一時停止する
         if (timeline_) timeline_->Pause();
         break;
     case ToolbarAction::Resume:
-        playMode_ = PlayMode::Play;
+        SetPlayMode(PlayMode::Play);
         // タイムラインも再生再開する
         if (timeline_) timeline_->Play();
         break;
     case ToolbarAction::Stop:
         RestoreScene();
         if (editor_) editor_->ClearSelection();
-        playMode_ = PlayMode::Edit;
+        SetPlayMode(PlayMode::Edit);
         // タイムラインを停止・先頭にリセットする
         if (timeline_) timeline_->Stop();
         break;
@@ -269,7 +259,7 @@ void BaseScene::DrawEditorUI() {
     if (!editor_) return;
 
     // ツールバー(押されたボタンに応じて、再生状態を切り替える)
-    ApplyToolbarAction(editor_->DrawToolbar(playMode_));
+    ApplyToolbarAction(editor_->DrawToolbar(GetPlayMode()));
 
     if (editorCamera_) {
         // ギズモ・マウスピッキングは「実際に画面に描画されているカメラ」の行列を使う
@@ -285,7 +275,7 @@ void BaseScene::DrawEditorUI() {
         // 「プレイ中に動的生成された敵・弾・ボスを含む今の状態」がそのままシーンJSONへ
         // 上書き保存されてしまっていた（＝二度と正常にロードできない壊れたレベルになる）。
         // 保存はEditモードでの編集結果に対してのみ行う。
-        if (playMode_ == PlayMode::Edit && editor_->ConsumeSceneModified()) {
+        if (GetPlayMode() == PlayMode::Edit && editor_->ConsumeSceneModified()) {
             SaveEditorScene();
         }
     }

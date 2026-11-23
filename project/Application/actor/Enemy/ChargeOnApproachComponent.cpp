@@ -1,8 +1,9 @@
 #include "ChargeOnApproachComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"
 #include "TelegraphComponent.h"
 #include "externals/nlohmann/json.hpp"
@@ -29,8 +30,6 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
         return;
     }
 
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
     if (!screen_.HasCamera()) return;
 
     // カメラの移動速度を推定する（前フレームとのeye差分）。
@@ -67,13 +66,7 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     }
 
     // --- プレイヤーを探し、距離判定 ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
     const Vector3 currentPos = t.translate;

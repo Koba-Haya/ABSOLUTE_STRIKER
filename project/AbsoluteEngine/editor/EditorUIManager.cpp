@@ -14,12 +14,34 @@
 // タイムラインイベントインスペクタ用（タスク15）
 #include "../scene/timeline/ITimelineEvent.h"
 #include "../scene/timeline/PrefabRegistry.h"
+#include "../scene/IEditRecorder.h"
+#include "Command.h"
 #ifdef USE_IMGUI
 #include <imgui.h>
 #include "../../externals/ImGuizmo/ImGuizmo.h"
 #endif
 
 namespace AbsoluteEngine {
+
+namespace {
+// インスペクタで部品が「編集した」と伝えたとき、その編集を、取り消し履歴(CommandManager)へ記録する。
+// どのオブジェクトの、どの部品の変更かは、エディタが知っているので、ここで ComponentStateCommand を作る(部品は履歴の作り方を知らない)
+class ComponentEditRecorder final : public IEditRecorder {
+public:
+  ComponentEditRecorder(CommandManager* commandManager, std::shared_ptr<GameObject> target, std::string componentType)
+      : commandManager_(commandManager), target_(std::move(target)), componentType_(std::move(componentType)) {}
+
+  void RecordEdit(const nlohmann::json& before, const nlohmann::json& after) override {
+    if (!commandManager_) return;
+    commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(target_, componentType_, before, after));
+  }
+
+private:
+  CommandManager* commandManager_; // 所有しない(エディタが持つ)
+  std::shared_ptr<GameObject> target_;
+  std::string componentType_;
+};
+} // namespace
 
 EditorUIManager::EditorUIManager() {
     if (commandManager_) {
@@ -971,7 +993,9 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
         ImGui::Text("- %s", comp->GetTypeName().c_str());
         
         // 追加：各コンポーネントのインスペクタ用UIを描画
-        comp->DrawInspectorUI();
+        // 取り消し履歴への記録は、エディタが受け持つ。部品には、記録先(recorder)だけを渡す
+        ComponentEditRecorder recorder(commandManager_.get(), obj, comp->GetTypeName());
+        comp->DrawInspectorUI(recorder);
 
         ImGui::SameLine();
         

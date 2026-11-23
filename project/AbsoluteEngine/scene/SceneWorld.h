@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ComponentDeps.h"
+#include "ISceneQuery.h"
 #include "ISpawner.h"
 
 namespace AbsoluteEngine {
@@ -20,9 +21,10 @@ class GameObject;
 //
 // ISpawner(オブジェクトを出す窓口)も実装する。「出す」は、一覧への追加に加えて、追加後の通知(SetOnSpawned)を行う点が、
 // 単なる Add と違う。通知は、ゲーム固有の追加処理(敵へのコールバック注入など)を、世界の側が知らずに済むための仕組み(Observer)。
-class SceneWorld : public ISpawner {
+class SceneWorld : public ISpawner, public ISceneQuery {
 public:
-  SceneWorld() = default;
+  // 束(deps_)の、出す窓口と、調べる窓口は、この世界自身
+  SceneWorld() { deps_.sceneQuery = this; }
   // 窓口の束(deps_)が、この世界自身を指すため、コピーとムーブは禁止する(コピー先の束が、コピー元を指してしまうのを防ぐ)
   SceneWorld(const SceneWorld&) = delete;
   SceneWorld& operator=(const SceneWorld&) = delete;
@@ -61,9 +63,12 @@ public:
   // 設定した窓口は、この世界より長く生きること
   void SetScreenView(IScreenView* screen) { deps_.screen = screen; }
   void SetCameraRig(ICameraRig* rig) { deps_.cameraRig = rig; }
+  // 束へ、再生状態の窓口と、入力を設定する(所有しない)。再生状態は BaseScene の生成のとき、入力は Initialize のときに設定する
+  void SetPlayState(IPlayState* playState) { deps_.playState = playState; }
+  void SetInput(Input* input) { deps_.input = input; }
 
   // 一覧を読み取り専用で返す。保持せず、使うたびに取得すること
-  const ObjectList& Objects() const { return objects_; }
+  const ObjectList& Objects() const override { return objects_; }
 
   // 世界を1回更新する。有効なオブジェクトの Update を呼んだあと、衝突判定を行う。
   // 更新中に追加されたオブジェクトでループが壊れないよう、先に個数を固定して添字で回す(追加分は次の更新から動く)
@@ -91,7 +96,7 @@ public:
 private:
   ObjectList objects_;
   SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
-  ComponentDeps deps_{this};  // 部品へ渡す窓口の束(今は、出す窓口 = この世界自身)
+  ComponentDeps deps_{this};  // 部品へ渡す窓口の束(出す窓口と、調べる窓口は、この世界自身。ほかは、持ち主が設定する)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };
 

@@ -301,11 +301,11 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->SetMovementSpeeds(0.5f, 0.02f, 0.005f);
 
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailCameraComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<RailCameraComponent>(*deps.cameraRig);
+      return std::make_unique<RailCameraComponent>(*deps.cameraRig, *deps.playState, *deps.sceneQuery);
   });
   // コンポーネントファクトリの登録
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen);
+      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.playState, *deps.input);
       comp->Initialize();
       return comp;
   });
@@ -317,20 +317,22 @@ void GameScene::Initialize(const SceneServices &services) {
       return std::make_unique<TelegraphComponent>(*deps.spawner, *deps.screen);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("EnemyShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen);
+      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
   });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailAnchorComponent", []() { return std::make_unique<RailAnchorComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailAnchorComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<RailAnchorComponent>(*deps.sceneQuery);
+  });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("AimedShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen);
+      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen);
+      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TurretShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen);
+      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("ChargeOnApproachComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<ChargeOnApproachComponent>(*deps.screen);
+      return std::make_unique<ChargeOnApproachComponent>(*deps.screen, *deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RamAttackComponent", []() { return std::make_unique<RamAttackComponent>(); });
 
@@ -379,7 +381,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
   auto playerComp = playerObj_->GetComponent<PlayerComponent>();
   if (!playerComp) {
-      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView());
+      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView(), GetSceneQuery(), GetPlayState(), *GetInput());
       pComp->Initialize();
       playerObj_->AddComponent(std::move(pComp));
   } else {
@@ -399,39 +401,14 @@ void GameScene::Initialize(const SceneServices &services) {
       }
   }
 
-  // -----------------------------------------------------------------------
-  // 自機のモデルを、蝶に差し替える。
-  // resources/editor/scenes/Game.json 上が別のモデルを指していても、実行時に必ず蝶にする。
-  // 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)
-  // -----------------------------------------------------------------------
+  // 自機のモデルを、蝶に差し替え、見た目を設定する(Stop による復元のあとにも、同じ設定をやり直す)
+  SetupPlayerVisuals_();
+  // 崩壊で翅が裂けて飛び散る破片。分け方と描画用のモデルは重いので、シーンの開始時に作る(翅の描画から消した三角形も、ここで元に戻る)。
+  // 自機のモデルは、データを読むためだけに渡す(保存されない。解放のたびに、そのときの自機のモデルが渡される)
   {
-      auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
-      if (!playerModelComp) {
-          auto newModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-          playerObj_->AddComponent(std::move(newModelComp));
-          playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
-      }
-      // JSON がすでに同じモデルを指しているときは、読み込み直さない。
-      // 読み込み直すと、直前のインスタンスを同じフレームの更新で破棄してしまい、アップロード中のテクスチャが先に消える
-      if (playerModelComp->GetModelPath() != kPlayerModelPath) {
-          playerModelComp->LoadModel(kPlayerModelPath);
-      }
-      playerModelComp->FitToWingspan(kPlayerWingspan);
-      // 死亡の崩壊(ディゾルブ)に使う、蝶専用のマスクと、ディゾルブの制御用のコンポーネント(普通は無効。死亡演出が制御する)
-      playerModelComp->LoadDissolveMask(GameAssetPaths::kPlayerDissolveMask);
-      // 崩壊で翅が裂けて飛び散る破片。分け方と描画用のモデルは重いので、シーンの開始時に作る(翅の描画から消した三角形も、ここで元に戻る)
-      {
-          auto* assets = AbsoluteEngine::AssetManager::GetInstance();
-          wingShatter_.Initialize(playerModelComp, assets->Load<TextureResource>(GameAssetPaths::kPlayerAtlas),
-                                  assets->Load<TextureResource>(GameAssetPaths::kPlayerDissolveMask));
-      }
-      // 蝶の翅は薄く、両面が見える。Lambert のままだと、光の当たらない側(裏面、影の側)が真っ黒になるので、環境光つきの薄い面にする
-      playerModelComp->SetLightingMode(ModelLightingMode::kThinSurface);
-      if (!playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-          playerObj_->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
-      }
-      // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
-      playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
+      auto* assets = AbsoluteEngine::AssetManager::GetInstance();
+      wingShatter_.Initialize(playerObj_->GetComponent<AbsoluteEngine::ModelComponent>(), assets->Load<TextureResource>(GameAssetPaths::kPlayerAtlas),
+                              assets->Load<TextureResource>(GameAssetPaths::kPlayerDissolveMask));
   }
 
   playerScope.reset(); // プレイヤー周りの区間の終わり
@@ -470,7 +447,7 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   if (!hasRailCamera) {
       auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
-      auto rComp = std::make_unique<RailCameraComponent>(GetCameraRig());
+      auto rComp = std::make_unique<RailCameraComponent>(GetCameraRig(), GetPlayState(), GetSceneQuery());
       railCamObj->AddComponent(std::move(rComp));
       AddRootObject(railCamObj);
   }
@@ -849,7 +826,7 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         }
 
         // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
-        itemSystem_.OnEnemyDestroyed(GetSpawner(), enemyName, hitPos);
+        itemSystem_.OnEnemyDestroyed(GetSpawner(), GetSceneQuery(), enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();
@@ -862,6 +839,52 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
             }
         }
     };
+}
+
+// 自機のオブジェクトへ、実行時の見た目の設定を行う。
+// resources/editor/scenes/Game.json 上が別のモデルを指していても、実行時に必ず蝶にする。
+// 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)。
+// Initialize と、エディタの Stop による復元(RestoreScene)の両方から呼ぶ。復元で作り直された自機は、JSON から作られ、
+// JSON には、モデルのパスなどしか保存されないので、ここでの設定をやり直さないと、翼幅や照明、羽ばたきが失われる
+void GameScene::SetupPlayerVisuals_() {
+  if (!playerObj_) return;
+
+  auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+  if (!playerModelComp) {
+      auto newModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      playerObj_->AddComponent(std::move(newModelComp));
+      playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+  }
+  // JSON がすでに同じモデルを指しているときは、読み込み直さない。
+  // 読み込み直すと、直前のインスタンスを同じフレームの更新で破棄してしまい、アップロード中のテクスチャが先に消える
+  if (playerModelComp->GetModelPath() != kPlayerModelPath) {
+      playerModelComp->LoadModel(kPlayerModelPath);
+  }
+  playerModelComp->FitToWingspan(kPlayerWingspan);
+  // 死亡の崩壊(ディゾルブ)に使う、蝶専用のマスクと、ディゾルブの制御用のコンポーネント(普通は無効。死亡演出が制御する)
+  playerModelComp->LoadDissolveMask(GameAssetPaths::kPlayerDissolveMask);
+  // 蝶の翅は薄く、両面が見える。Lambert のままだと、光の当たらない側(裏面、影の側)が真っ黒になるので、環境光つきの薄い面にする
+  playerModelComp->SetLightingMode(ModelLightingMode::kThinSurface);
+  if (!playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+      playerObj_->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
+  }
+  // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
+  playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
+}
+
+// エディタの Stop で、全オブジェクトが JSON から作り直されたあと、自機へ、実行時の設定をやり直す。
+// 作り直す前の自機は解放されているので、保存していた参照(強化の反映先)も覚え直す
+void GameScene::RestoreScene() {
+  BaseScene::RestoreScene();
+
+  playerObj_ = FindPlayerObject_();
+  if (!playerObj_) return;
+
+  SetupPlayerVisuals_();
+  // 死亡演出で消した翅の三角形(共有のモデルに残っている)を元に戻す
+  wingShatter_.Reset();
+  // 強化の状態(PlayerUpgradeState)は、シーンの JSON には保存されない。新しい自機へ、いまの強化を反映し直す
+  itemSystem_.RebindPlayer(playerObj_);
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> GameScene::FindPlayerObject_() const {
@@ -969,7 +992,7 @@ void GameScene::SpawnBoss_() {
   bossObj->AddComponent(std::move(bossModelComp));
   bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView());
+  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView(), GetSceneQuery());
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
 
   bossObj->AddComponent(std::move(bossComp));
@@ -1577,7 +1600,8 @@ void GameScene::Update() {
       ApplyDeathPose_();
       // 崩壊の破片(解放、移動)。蝶の今のポーズ・位置を使うので、位置を決めたあとに進める
       if (deathDirector_.IsActive()) {
-          wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity());
+          const AbsoluteEngine::ModelComponent* playerModel = playerObj_ ? playerObj_->GetComponent<AbsoluteEngine::ModelComponent>() : nullptr;
+          wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity(), playerModel);
           // 死亡カメラ(蝶の位置を追う)と、弾の停止(世界の更新で出た弾は、描かれる前にここで消す)
           if (playerObj_) {
               // 注視点は、本体と、解放された破片の重心との中間(破片が散っても、主役を見失わない)。

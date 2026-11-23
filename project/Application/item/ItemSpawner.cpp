@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -14,7 +15,7 @@ constexpr const char *kItemObjectName = "Item";
 constexpr const char *kItemTag = "Item";
 } // namespace
 
-void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
+void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
                         std::function<void()> onCollected) {
   auto obj = std::make_shared<AbsoluteEngine::GameObject>(kItemObjectName);
   obj->SetTag(kItemTag);
@@ -30,7 +31,7 @@ void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, const ItemDefinition 
   obj->AddComponent(std::move(model));
 
   // 動きと取得
-  auto pickup = std::make_unique<ItemPickupComponent>();
+  auto pickup = std::make_unique<ItemPickupComponent>(query);
   pickup->Configure(settings, item.scale, std::move(onCollected));
   obj->AddComponent(std::move(pickup));
 

@@ -1,5 +1,5 @@
 #include "RailAnchorComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../camera/RailCameraComponent.h"
 #include "Method.h"
@@ -14,9 +14,7 @@ constexpr const char* kKeyLifetime = "lifetime";
 } // namespace
 
 RailCameraComponent* RailAnchorComponent::FindRailCamera_() const {
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
+    for (const auto& obj : query_.Objects()) {
         if (!obj) continue;
         if (auto* camera = obj->GetComponent<RailCameraComponent>()) {
             return camera;
