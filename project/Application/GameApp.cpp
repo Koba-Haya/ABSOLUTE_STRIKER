@@ -5,7 +5,6 @@
 #include "Logger.h"
 #include "exhibition/ExhibitionController.h"
 #include "exhibition/ExhibitionHint.h"
-#include "scene/GameAssetPreloader.h"
 #include "Renderer.h"
 #include "SceneFactory.h"
 #include "SceneIds.h"
@@ -47,7 +46,7 @@ void GameApp::Initialize() {
 
   Renderer::GetInstance()->Initialize(&GetDX());
   sceneManager_->Initialize(services);
-  sceneManager_->SetFactory(std::make_unique<SceneFactory>());
+  sceneManager_->SetFactory(std::make_unique<SceneFactory>(appServices_));
   // シーンの組み合わせごとの画面遷移の表(アプリ側が持つ)
   sceneManager_->SetTransitionResolver(&SceneTransitionTable::Resolve);
   // 展示モードの切り替えの案内(全シーン共通)。文字の資源を、ここで 1 回だけ読む
@@ -64,7 +63,7 @@ void GameApp::Finalize() {
   }
 
   // 先読みして保持している資産を、DirectX の破棄より前に手放す
-  GameAssetPreloader::Release();
+  appServices_.GetAssetPreloader().Release();
 }
 
 void GameApp::Update() {
@@ -237,7 +236,8 @@ void GameApp::Update() {
   }
   // 水滴を縁へ寄せる設定の調整。有効にすると、すべての遷移の設定を、この値で上書きする(気に入った値は SceneTransitionTable へ写す)
   ImGui::SeparatorText("Lens Drops Edge");
-  LensEdgeDebugOverride &edgeOverride = GetLensEdgeDebugOverride();
+  // 設定のコピーを編集し、スライダーの処理のあとで Set で戻す(Renderer の値を、直接つかまない)
+  LensEdgeDebugOverride edgeOverride = Renderer::GetInstance()->GetLensEdgeOverride();
   ImGui::Checkbox("Override all transitions##LensEdge", &edgeOverride.enabled);
   ImGui::Checkbox("Edge enabled (off = whole screen)##LensEdge", &edgeOverride.style.enabled);
   ImGui::SliderFloat("Inner edge", &edgeOverride.style.innerEdge, 0.0f, 1.5f);
@@ -254,6 +254,7 @@ void GameApp::Update() {
   ImGui::SliderFloat("Body brightness", &edgeOverride.style.bodyDarken, 0.6f, 1.1f);
   ImGui::SliderFloat("Shadow rim darken", &edgeOverride.style.rimDarken, 0.0f, 1.0f);
   ImGui::SliderFloat("Shadow blue tint", &edgeOverride.style.shadowTint, 0.0f, 1.0f);
+  Renderer::GetInstance()->SetLensEdgeOverride(edgeOverride);
   ImGui::Text("Transition: %s", sceneManager_->IsTransitioning() ? "active" : "idle");
   ImGui::End();
 
@@ -263,7 +264,7 @@ void GameApp::Update() {
 #endif
 
   // 展示モードの切り替え(TAB)。シーンの更新より前に見る(切り替えの遷移の要求を、そのフレームから有効にするため)
-  ExhibitionController::Update(GetInput(), *sceneManager_);
+  ExhibitionController::Update(appServices_.GetExhibition(), GetInput(), *sceneManager_);
 
   sceneManager_->Update();
   sceneManager_->ApplySceneChangeIfNeeded();

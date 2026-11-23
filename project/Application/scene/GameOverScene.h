@@ -7,9 +7,12 @@
 #include "ResultBanner.h"
 #include "ui/ResultMenu.h"
 
+class ExhibitionSession;
+
 class GameOverScene final : public BaseScene {
 public:
-  GameOverScene() = default;
+  // exhibition: 展示モードの状態(読むだけ。所有しない。シーンより長く生きること)
+  explicit GameOverScene(const ExhibitionSession &exhibition) : exhibition_(exhibition) {}
   ~GameOverScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -22,6 +25,7 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
+  const ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
   // 展示: 操作を受け付けず、覆いが晴れてから一定時間たったらゲームへ戻る
   void UpdateExhibition_();
   // 通常: メニューの入力(もう一度、ステージ選択へ、タイトルへ)を受け付ける。遷移の覆いが晴れきるまで、復活の演出中は受け付けない

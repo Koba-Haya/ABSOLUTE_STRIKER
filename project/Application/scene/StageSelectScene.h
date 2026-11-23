@@ -14,9 +14,12 @@ struct StageDefinition;
 // 責務は「カーソルの移動、表示の切り替え、決定、ゲームへの引き渡し」。ステージの内容は StageDefinition、
 // 一覧の読み込みは StageCatalog が持つ(このシーンは、それを読むだけ)。
 // 操作の受け付けと画面の表示は ImGui に依存しない(配布ビルドでも動く)。ImGui の一覧は、開発ビルドの補助の表示(画面の左上に出す)。
+class ExhibitionSession;
+
 class StageSelectScene final : public BaseScene {
 public:
-  StageSelectScene() = default;
+  // exhibition: 展示モードの状態(読むだけ。所有しない。シーンより長く生きること)
+  explicit StageSelectScene(const ExhibitionSession &exhibition) : exhibition_(exhibition) {}
   ~StageSelectScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -29,6 +32,7 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
+  const ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
   // 展示: 操作を受け付けず、覆いが晴れてから一定時間たったら、カーソルのステージ(先頭)を自動で決定する
   void UpdateExhibition_();
   // 鍵が外れる演出が終わったら、見せたことを保存して、一覧の項目のロックを外す(演出の最中は、入力を受け付けない)

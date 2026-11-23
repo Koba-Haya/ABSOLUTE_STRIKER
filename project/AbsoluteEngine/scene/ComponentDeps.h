@@ -9,6 +9,7 @@ class IPlayState;
 class ISceneQuery;
 class IScreenView;
 class ISpawner;
+class SerialNumberIssuer;
 
 // 部品(IComponent)を作るときに、部品へ渡せる「窓口の束」。
 //
@@ -32,10 +33,13 @@ struct ComponentDeps {
   IPlayState* playState = nullptr;
   // 入力(キーボード、マウス、パッド)。自機が使う
   Input* input = nullptr;
+  // 通し番号の発行役。編隊を見分ける番号や、敵ごとに変える乱数の種など、重ならない値が要る部品や、イベントが使う
+  SerialNumberIssuer* serialNumbers = nullptr;
 
   // 窓口がすべてそろっているか。窓口を要する部品を作る前に確かめる(そろっていなければ、作らない)
   bool IsComplete() const {
-    return spawner != nullptr && screen != nullptr && cameraRig != nullptr && sceneQuery != nullptr && playState != nullptr && input != nullptr;
+    return spawner != nullptr && screen != nullptr && cameraRig != nullptr && sceneQuery != nullptr && playState != nullptr && input != nullptr &&
+           serialNumbers != nullptr;
   }
 };
 

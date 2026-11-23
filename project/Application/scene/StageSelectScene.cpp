@@ -3,6 +3,7 @@
 #include "SceneIds.h"
 #include "../ScreenSize.h"
 #include "../exhibition/ExhibitionHint.h"
+#include "../exhibition/ExhibitionSession.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageLaunchParams.h"
 #include "../stage/StageProgress.h"
@@ -151,7 +152,7 @@ void StageSelectScene::ApplyBackdrop_(const StageDefinition &stage) {
 
 void StageSelectScene::Update() {
   backdrop_.Update(kFrameDeltaSeconds);
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
     UpdateExhibition_();
   } else {
     UpdateInput_();
@@ -204,7 +205,7 @@ void StageSelectScene::Draw() {
     // 一覧(選択、点滅、ロック表示は UiMenuList が担当する)
     menu_.Draw(listPanel_.GetBodyOrigin(), listPanel_.GetBodySize().x, listAlpha);
   }
-  ExhibitionHint::GetInstance().Draw();
+  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
 
   // 操作の案内: 画面の下端の中央。一覧と一緒に現れる
   if (listAlpha > 0.0f) {

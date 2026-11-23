@@ -1,5 +1,6 @@
 #include "SceneFactory.h"
 
+#include "../AppServices.h"
 #include "GameScene.h"
 #include "DevScene.h"
 #include "SceneIds.h"
@@ -13,22 +14,22 @@ std::unique_ptr<BaseScene> SceneFactory::Create(const std::string &sceneId,
   (void)services;
 
   if (sceneId == SceneId::Title) {
-    return std::make_unique<TitleScene>();
+    return std::make_unique<TitleScene>(appServices_.GetAssetPreloader(), appServices_.GetExhibition());
   }
   if (sceneId == SceneId::StageSelect) {
-    return std::make_unique<StageSelectScene>();
+    return std::make_unique<StageSelectScene>(appServices_.GetExhibition());
   }
   if (sceneId == SceneId::Game) {
-    return std::make_unique<GameScene>();
+    return std::make_unique<GameScene>(appServices_.GetExhibition());
   }
   if (sceneId == SceneId::Dev) {
     return std::make_unique<DevScene>();
   }
   if (sceneId == SceneId::Clear) {
-    return std::make_unique<ClearScene>();
+    return std::make_unique<ClearScene>(appServices_.GetExhibition());
   }
   if (sceneId == SceneId::GameOver) {
-    return std::make_unique<GameOverScene>();
+    return std::make_unique<GameOverScene>(appServices_.GetExhibition());
   }
   return nullptr;
 }

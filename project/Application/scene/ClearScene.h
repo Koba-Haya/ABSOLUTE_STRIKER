@@ -8,9 +8,12 @@
 #include "ui/UiContinuePrompt.h"
 #include "result/RunResult.h"
 
+class ExhibitionSession;
+
 class ClearScene final : public BaseScene {
 public:
-  ClearScene() = default;
+  // exhibition: 展示モードの状態(読むだけ。所有しない。シーンより長く生きること)
+  explicit ClearScene(const ExhibitionSession &exhibition) : exhibition_(exhibition) {}
   ~ClearScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -23,6 +26,7 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
+  const ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
   float exhibitionHoldTimer_ = 0.0f;  // 展示: 継承の確定(メニューが開いたあと)からの経過(秒)
   float exhibitionTallyTimer_ = 0.0f; // 展示: 結果の集計が終わってからの経過(秒。継承の選択を始めるまでの待ち)
   ResultBanner banner_;     // 見出し(スプライト)

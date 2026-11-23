@@ -38,21 +38,17 @@ const std::array<RankPreset, 4> kPresets = {{
     {RunRank::B, 1.0f, 0.64f, MakeStats(40, 29, 5, 3, 2, 1, 4, 2)},
     {RunRank::C, 0.5f, 0.30f, MakeStats(40, 18, 5, 1, 4, 2, 3, 1)},
 }};
-
-// 直前に出したランクの位置(同じランクが続かないようにする。-1 は、まだ出していない)
-int g_lastPreset = -1;
 } // namespace
 
 RunResult ExhibitionResultMaker::Make(int scoreTarget, int playerMaxHp, const RatingSettings &settings) {
   // 直前と同じ見本を外して、重みで 1 つ選ぶ
-  static std::mt19937 random{std::random_device{}()};
   std::array<float, kPresets.size()> weights{};
   for (size_t i = 0; i < kPresets.size(); ++i) {
-    weights[i] = static_cast<int>(i) == g_lastPreset ? 0.0f : kPresets[i].weight;
+    weights[i] = static_cast<int>(i) == lastPreset_ ? 0.0f : kPresets[i].weight;
   }
   std::discrete_distribution<size_t> pick(weights.begin(), weights.end());
-  const size_t index = pick(random);
-  g_lastPreset = static_cast<int>(index);
+  const size_t index = pick(random_);
+  lastPreset_ = static_cast<int>(index);
 
   const RankPreset &preset = kPresets[index];
   const int score = static_cast<int>(static_cast<float>(scoreTarget) * preset.scoreRatio);

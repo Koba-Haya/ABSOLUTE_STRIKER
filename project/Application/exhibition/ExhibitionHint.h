@@ -18,7 +18,8 @@ public:
   void Initialize();
 
   /// <summary>案内を描く(点滅は、時刻から計算する)。Initialize の前は、何もしない</summary>
-  void Draw();
+  /// <param name="exhibitionEnabled">展示モードに入っているか(文言を切り替える)</param>
+  void Draw(bool exhibitionEnabled);
 
 private:
   ExhibitionHint() = default;

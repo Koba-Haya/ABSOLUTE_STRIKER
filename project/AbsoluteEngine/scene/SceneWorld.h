@@ -7,6 +7,7 @@
 #include "ComponentDeps.h"
 #include "ISceneQuery.h"
 #include "ISpawner.h"
+#include "SerialNumberIssuer.h"
 
 namespace AbsoluteEngine {
 
@@ -24,7 +25,11 @@ class GameObject;
 class SceneWorld : public ISpawner, public ISceneQuery {
 public:
   // 束(deps_)の、出す窓口と、調べる窓口は、この世界自身
-  SceneWorld() { deps_.sceneQuery = this; }
+  // 通し番号の発行役(serials_)も、この世界が持ち、束に結びつける
+  SceneWorld() {
+    deps_.sceneQuery = this;
+    deps_.serialNumbers = &serials_;
+  }
   // 窓口の束(deps_)が、この世界自身を指すため、コピーとムーブは禁止する(コピー先の束が、コピー元を指してしまうのを防ぐ)
   SceneWorld(const SceneWorld&) = delete;
   SceneWorld& operator=(const SceneWorld&) = delete;
@@ -96,6 +101,7 @@ public:
 private:
   ObjectList objects_;
   SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
+  SerialNumberIssuer serials_; // 通し番号の発行役(束の serialNumbers が指す)
   ComponentDeps deps_{this};  // 部品へ渡す窓口の束(出す窓口と、調べる窓口は、この世界自身。ほかは、持ち主が設定する)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };

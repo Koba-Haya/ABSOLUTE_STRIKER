@@ -1,5 +1,10 @@
 #pragma once
 #include <cstdint>
+#include <memory>
+#include <vector>
+
+class ModelResource;
+class TextureResource;
 
 // ゲームシーンが使う重い資産を、タイトル表示中に先に読み込んで保持しておくクラス。
 //
@@ -30,12 +35,21 @@ constexpr const char *kExplosionName = "explosion";
 constexpr uint32_t kExplosionMax = 100;
 } // namespace GameParticleGroups
 
+//
+// 持ち主: 保持する資産は、シーンが替わっても残す必要があるので、アプリの寿命を持つ AppServices が、このクラスのインスタンスを持つ。
+// (以前は、ファイル内のグローバル変数に持っていた。持ち主がいない状態をなくすため、インスタンスのメンバにした)
 class GameAssetPreloader {
 public:
   // 資産を読み込んで保持する。2回目以降は何もしない(読み込み済みのため)。
   // 所要時間は [CpuTimer] GameAssetPreloader.Preload としてログに出る
-  static void Preload();
+  void Preload();
 
   // 保持している資産をすべて手放す。DirectX の破棄より前に呼ぶこと
-  static void Release();
+  void Release();
+
+private:
+  // 保持している資産(強い参照)。Release() で空にする
+  std::vector<std::shared_ptr<ModelResource>> models_;
+  std::vector<std::shared_ptr<TextureResource>> textures_;
+  bool loaded_ = false; // 読み込み済みか(2 回目以降の Preload を、何もせず戻すため)
 };

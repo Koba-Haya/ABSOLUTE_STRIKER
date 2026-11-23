@@ -275,6 +275,13 @@ public:
   // duration: 遷移全体の長さ(秒)。雲を抜ける遷移が、time / duration で層をどこまで昇ったかを決める
   void SetTransition(const TransitionStyle &style, float cover, float time, float duration);
   void ClearTransition() { transitionCover_ = 0.0f; }
+
+  // 水滴の縁寄せの、ImGui での調整用の上書き(有効にすると、すべての遷移の設定を、この値で上書きする)。
+  // 以前は、ヘッダの関数内 static(グローバルな状態)に持っていた。読むのはこのクラスの描画だけなので、メンバとして持たせた。
+  // 書き換えは Set だけを通す(呼び出し側は、Get の値をコピーして編集し、Set で戻す)
+  const LensEdgeDebugOverride &GetLensEdgeOverride() const { return lensEdgeOverride_; }
+  void SetLensEdgeOverride(const LensEdgeDebugOverride &override) { lensEdgeOverride_ = override; }
+
   D3D12_GPU_DESCRIPTOR_HANDLE GetPostProcessTextureSrv() const {
       if (postProcessTexture_) return postProcessTexture_->GetSrvGpuHandle();
       return {};
@@ -471,6 +478,7 @@ private:
   ComPtr<ID3D12Resource> transitionParamCB_;
   TransitionParam* transitionParamMapped_ = nullptr;
   TransitionStyle transitionStyle_{};
+  LensEdgeDebugOverride lensEdgeOverride_{}; // 水滴の縁寄せの、調整用の上書き(無効のときは、遷移ごとの値を使う)
   float transitionCover_ = 0.0f;
   float transitionTime_ = 0.0f;
   float transitionDuration_ = 1.0f;

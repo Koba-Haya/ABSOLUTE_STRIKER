@@ -6,6 +6,7 @@
 #include "ui/UiMenuInput.h"
 #include "ui/UiPointer.h"
 #include "../exhibition/ExhibitionHint.h"
+#include "../exhibition/ExhibitionSession.h"
 #include "../ScreenSize.h"
 #include "Logger.h"
 #include "../stage/StageLaunchParams.h"
@@ -90,7 +91,7 @@ void ClearScene::Initialize(const SceneServices &services) {
   }
   // メニューは、結果の集計があるときは、集計が終わってから開く(Update で)。無いときは、従来どおり、最初から待ちつきで開く。
   // 展示中は、継承が決まってから(結果があるとき)開く。結果が無いときの、最初からの待ちつきの表示は、通常のときだけ
-  if (!ExhibitionMode::IsEnabled() && !hasResult) {
+  if (!exhibition_.IsEnabled() && !hasResult) {
     menu_.Open(kMenuOpenDelaySec);
     menuOpened_ = true;
   }
@@ -109,7 +110,7 @@ void ClearScene::Update() {
   // 集計を飛ばした同じ押下で、継承へ進んでしまうことはない(下で、飛ばした押下は使い切ったものとして扱う)
   // マウスの左クリックも、決定と同じに扱う(メニューを、マウスでも操作できるようにするため)
   // 展示中は、操作を受け付けない(来た人が押したキーやクリックで、自動の進行が乱れないように)
-  const bool exhibition = ExhibitionMode::IsEnabled();
+  const bool exhibition = exhibition_.IsEnabled();
   const UiPointer::State pointer = UiPointer::Poll(GetInput());
   const bool decidePressed = !exhibition && !IsSceneTransitioning() &&
                              (UiMenuInput::Poll(GetInput()) == UiMenuInput::Command::Decide || (pointer.valid && pointer.leftClicked));
@@ -224,6 +225,6 @@ void ClearScene::Draw() {
   continuePrompt_.Draw();
   picker_.Draw();
   menu_.Draw();
-  ExhibitionHint::GetInstance().Draw();
+  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
   backdrop_.End();
 }

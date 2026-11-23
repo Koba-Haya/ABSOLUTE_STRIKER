@@ -2,6 +2,7 @@
 #include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
+#include "AbsoluteEngine/scene/SerialNumberIssuer.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
@@ -31,12 +32,12 @@ constexpr float kTwoPi = 6.28318530717959f;
 const Vector3 kWorldUp = { 0.0f, 1.0f, 0.0f };
 const Vector3 kWorldRight = { 1.0f, 0.0f, 0.0f };
 constexpr float kParallelThreshold = 0.99f;
-// 敵ごとに乱数の種を変えるための、増やしていく番号(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
-unsigned int g_nextSeed = 1;
 } // namespace
 
-AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
-    : spawner_(spawner), screen_(screen), query_(query), random_(g_nextSeed++) {}
+// 乱数の種は、通し番号の発行役から、敵ごとに 1 つもらう(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
+AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                                         AbsoluteEngine::SerialNumberIssuer& serials)
+    : spawner_(spawner), screen_(screen), query_(query), random_(static_cast<unsigned int>(serials.Issue())) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();

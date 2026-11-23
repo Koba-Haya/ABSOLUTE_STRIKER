@@ -29,13 +29,16 @@ class GameObject;
 class ISpawner;
 class IScreenView;
 class ISceneQuery;
+class SerialNumberIssuer;
 }
 
 class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
-    // いずれも所有しない。このコンポーネントより長く生きること
-    AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query);
+    // serials: 狙いのばらつきの乱数の種を、敵ごとに変えるための通し番号の発行役(同じ敵の並びなら、毎回同じ種になる)。
+    // いずれも所有しない(種を決めるときに 1 回使うだけ)。このコンポーネントより長く生きること
+    AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                        AbsoluteEngine::SerialNumberIssuer& serials);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;

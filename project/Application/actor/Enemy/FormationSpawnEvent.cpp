@@ -4,6 +4,7 @@
 #include "AbsoluteEngine/scene/timeline/PrefabRegistry.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
+#include "AbsoluteEngine/scene/SerialNumberIssuer.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include <algorithm>
 #include <cstdlib> // rand()
@@ -67,14 +68,13 @@ void FormationSpawnEvent::Fire(const AbsoluteEngine::TimelineFireContext& contex
     }
 
     // 文脈で渡された窓口の束から、シーンへ追加する(プレハブを読むときも、同じ束を使う)
-    if (!context.deps || !context.deps->spawner) {
-        std::cerr << "[FormationSpawnEvent] オブジェクトを出す窓口が設定されていません" << std::endl;
+    if (!context.deps || !context.deps->spawner || !context.deps->serialNumbers) {
+        std::cerr << "[FormationSpawnEvent] オブジェクトを出す窓口、または通し番号の発行役が設定されていません" << std::endl;
         return;
     }
 
-    // 編隊メンバーをまとめて識別するためのID。Fire()のたびに新しい編隊として採番する。
-    static int nextFormationId = 0;
-    const int formationId = nextFormationId++;
+    // 編隊メンバーをまとめて識別するためのID。Fire()のたびに新しい編隊として、シーンの世界が持つ発行役から採番する。
+    const int formationId = context.deps->serialNumbers->Issue();
 
     // 編隊の中心位置(世界座標)。レール座標の指定なら、発火時刻のレール位置から変換する。
     // 散らす向きは、レール座標のときは道の右・上方向、世界座標のときは世界の X・Y 軸

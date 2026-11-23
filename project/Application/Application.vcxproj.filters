@@ -157,6 +157,9 @@
     <ClInclude Include="GameApp.h">
       <Filter>application</Filter>
     </ClInclude>
+    <ClInclude Include="AppServices.h">
+      <Filter>application</Filter>
+    </ClInclude>
     <ClInclude Include="scene\DevScene.h">
       <Filter>application\scene</Filter>
     </ClInclude>
@@ -260,6 +263,7 @@
     <ClInclude Include="exhibition\ExhibitionController.h" />
     <ClInclude Include="exhibition\ExhibitionHint.h" />
     <ClInclude Include="exhibition\ExhibitionResultMaker.h" />
+    <ClInclude Include="exhibition\ExhibitionSession.h" />
     <ClInclude Include="ui\UiContinuePrompt.h" />
     <ClInclude Include="ui\UiPipBar.h" />
     <ClInclude Include="ui\UiPointer.h" />

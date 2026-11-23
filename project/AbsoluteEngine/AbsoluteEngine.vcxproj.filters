@@ -84,6 +84,9 @@
     <ClCompile Include="base\CpuTimer.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="base\FrameTimer.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="base\EnginePath.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
@@ -311,6 +314,12 @@
     </ClInclude>
     <ClInclude Include="base\CpuTimer.h">
       <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\FrameTimer.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SerialNumberIssuer.h">
+      <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="base\EnginePath.h">
       <Filter>engine\base</Filter>

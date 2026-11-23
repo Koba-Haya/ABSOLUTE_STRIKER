@@ -54,9 +54,12 @@ enum class GamePhase {
   GameOver  // 死亡演出が Cover へ入り、ゲームオーバーへの遷移を要求した(または、クリア・ゲームオーバーの要求を出した)
 };
 
+class ExhibitionSession;
+
 class GameScene final : public BaseScene {
 public:
-  GameScene() = default;
+  // exhibition: 展示モードの状態(展示用の結果づくりで、状態が変わるので、const ではない。所有しない。シーンより長く生きること)
+  explicit GameScene(ExhibitionSession &exhibition) : exhibition_(exhibition) {}
   ~GameScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -85,6 +88,7 @@ protected:
   std::string GetDataName() const override;
 
 private:
+  ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
   // このシーンで遊ぶステージの定義を返す。荷物(StageLaunchParams)があればその ID のステージ、
   // 荷物が無い、または ID が一覧に無いときは、先頭のステージ。BaseScene::Initialize より前から呼ばれるので、毎回荷物から求める
   const StageDefinition &ResolveStage_() const;

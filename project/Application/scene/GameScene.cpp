@@ -60,7 +60,7 @@
 #include "ExhibitionMode.h"
 #include "../exhibition/ExhibitionController.h"
 #include "../exhibition/ExhibitionHint.h"
-#include "../exhibition/ExhibitionResultMaker.h"
+#include "../exhibition/ExhibitionSession.h"
 #include "StageStartDemoMode.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -323,7 +323,7 @@ void GameScene::Initialize(const SceneServices &services) {
       return std::make_unique<RailAnchorComponent>(*deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("AimedShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
+      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.serialNumbers);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
       return std::make_unique<BossComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
@@ -347,8 +347,6 @@ void GameScene::Initialize(const SceneServices &services) {
     CpuTimer::Scope scope("GameScene.LoadEditorScene");
     LoadEditorScene();
   }
-  // LoadEditorScene の中身の内訳(プレハブ読み込み、モデル読み込みの回数と合計)
-  CpuTimer::FlushAccumulated();
 
   // -----------------------------------------------------------------------
   // 【バグ修正】エディタで配置した敵への onDestroyed コールバック一括登録
@@ -389,13 +387,13 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   // 展示: 1 周ごとに、島の解放、ベスト記録、継承を初期へ戻す(毎周、解放の演出と、継承の選択を見せるため。仮の状態なので、保存はされない)。
   // 強化の状態の初期化(下の BeginStage)が、継承を読むので、その前に行う
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
       ExhibitionController::ResetLoopState();
   }
   // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
   itemSystem_.BeginStage(playerObj_);
   // 展示: 継承の選択に候補を出すため、強化を、最初からいくつか持たせる(BeginStage のあとに行う。BeginStage が、今回取った分を 0 に戻すため)
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
       for (const ExhibitionMode::InitialUpgrade &upgrade : ExhibitionMode::kInitialUpgrades) {
           itemSystem_.GrantEarned(upgrade.kind, upgrade.count);
       }
@@ -742,7 +740,8 @@ void GameScene::SetPlayerInputLocked_(bool locked) {
     return;
   }
   if (auto *player = playerObj_->GetComponent<PlayerComponent>()) {
-    player->SetInputLocked(locked);
+    // 展示中は、操作を一切受け付けない(ロックの解除を求められても、ロックしたままにする)
+    player->SetInputLocked(locked || exhibition_.IsEnabled());
   }
 }
 
@@ -921,7 +920,7 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 
 void GameScene::UpdateMouseCapture_() {
   // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
       MouseCapture::Apply(false);
       return;
   }
@@ -1039,7 +1038,7 @@ void GameScene::KillBossForDebug_() {
 }
 
 void GameScene::CheckKillBossShortcut_() {
-  if (!kDebugKillBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+  if (!kDebugKillBossEnabled || exhibition_.IsEnabled() || !GetInput()) {
     return;
   }
   // ボス戦の最中だけ受け付ける(道中や、演出・終了の要求の最中は何もしない。二重に倒さない)
@@ -1052,7 +1051,7 @@ void GameScene::CheckKillBossShortcut_() {
 }
 
 void GameScene::CheckSkipToBossShortcut_() {
-  if (!kDebugSkipToBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+  if (!kDebugSkipToBossEnabled || exhibition_.IsEnabled() || !GetInput()) {
     return;
   }
   // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
@@ -1171,7 +1170,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   if (GetInput()) {
       skipRequested = GetInput()->TriggerKey(kDeathSkipKey) || GetInput()->WasPadPressed(kDeathSkipPadButton);
   }
-  deathDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
+  deathDirector_.Update(deltaTime, !exhibition_.IsEnabled(), skipRequested);
 
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション)
   SetWorldTimeScale(deathDirector_.GetWorldTimeScale());
@@ -1236,7 +1235,7 @@ void GameScene::ReviveForDebug_() {
 }
 
 void GameScene::CheckDebugReviveShortcut_() {
-  if (!kDebugFlowShortcutEnabled || ExhibitionMode::IsEnabled() || !GetInput()) return;
+  if (!kDebugFlowShortcutEnabled || exhibition_.IsEnabled() || !GetInput()) return;
   if (GetInput()->TriggerKey(kDebugReviveKey)) {
       ReviveForDebug_();
   }
@@ -1313,9 +1312,9 @@ void GameScene::BeginClearing_() {
               playerMaxHp = pComp->GetMaxHp();
           }
       }
-      if (ExhibitionMode::IsEnabled()) {
+      if (exhibition_.IsEnabled()) {
           // 展示: ボス戦だけを通すので、実際の成績は低い。固定の成績(ランダムなランク)を、本物の評価に通して使う
-          clearResult_ = ExhibitionResultMaker::Make(ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+          clearResult_ = exhibition_.MakeResult(ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
       } else {
           clearResult_ = RunEvaluator::Evaluate(runStats_.GetStats(), scoreTracker_.GetScore(), scoreTracker_.GetKillCount(),
                                                 ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
@@ -1404,7 +1403,7 @@ void GameScene::UpdateClearing_(float deltaTime) {
   if (GetInput()) {
       skipRequested = GetInput()->TriggerKey(kClearSkipKey) || GetInput()->WasPadPressed(kClearSkipPadButton);
   }
-  clearDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
+  clearDirector_.Update(deltaTime, !exhibition_.IsEnabled(), skipRequested);
 
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション、最後に通常へ戻る)
   SetWorldTimeScale(clearDirector_.GetWorldTimeScale());
@@ -1545,7 +1544,7 @@ void GameScene::Update() {
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (kDebugShortcutsAvailable && !ExhibitionMode::IsEnabled() && GetInput() && GetInput()->TriggerKey(DIK_B)) {
+      if (kDebugShortcutsAvailable && !exhibition_.IsEnabled() && GetInput() && GetInput()->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
@@ -1589,7 +1588,7 @@ void GameScene::Update() {
 
       if (StageStartDemoMode::kEnabled) {
           UpdateStageStartDemoFlow_(deltaTime);
-      } else if (ExhibitionMode::IsEnabled()) {
+      } else if (exhibition_.IsEnabled()) {
           UpdateExhibitionFlow_(deltaTime);
       } else {
           CheckDebugFlowShortcut_();
@@ -1844,7 +1843,7 @@ void GameScene::Draw() {
   // 展示モードの切り替えの案内。HUD を出さない間(演出の最中など)も、常に出す。
   // 雲を先に合成しておく(雲が、案内を隠さないように。HUD と同じ方法。すでに合成済みなら、何も起きない)
   renderer->FlushVolumeClouds();
-  ExhibitionHint::GetInstance().Draw();
+  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
 
   Matrix4x4 projInverse;
   if (isDebugCamera_) {

@@ -10,13 +10,18 @@ struct ID3D12GraphicsCommandList;
 
 class Sprite;
 class UnifiedPipeline;
+class GameAssetPreloader;
+class ExhibitionSession;
 
 // 翼のプルームを出す先端の数(片側)
 constexpr int kContrailTipCount = 3;
 
 class TitleScene final : public BaseScene {
 public:
-  TitleScene() = default;
+  // assetPreloader: ゲームシーンが使う資産を、タイトル中に先読みして保持する部品(所有しない。シーンより長く生きること)
+  // exhibition: 展示モードの状態(読むだけ。所有しない。シーンより長く生きること)
+  TitleScene(GameAssetPreloader &assetPreloader, const ExhibitionSession &exhibition)
+      : assetPreloader_(assetPreloader), exhibition_(exhibition) {}
   ~TitleScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -29,6 +34,9 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
+  GameAssetPreloader &assetPreloader_; // 先読みした資産の保持(所有しない)
+  const ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
+
   // PRESS START の点滅アルファ(0〜1)を返す。time は秒
   static float CalcBlinkAlpha(float time);
 
