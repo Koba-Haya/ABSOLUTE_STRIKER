@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "TimelineSpawnPreview.h"
@@ -58,9 +59,11 @@ public:
   // --- エディタ ---
   // タイムラインのエディタウィンドウを描画する。
   // timelineFilePath: ウィンドウ内の保存ボタンが使うファイルパス
-  // debugCameraFlag: Debug/Game カメラ切替のトグルが操作するフラグ(所有しない。nullptr ならトグルを出さない)
+  // debugCameraState: いまのデバッグカメラの状態(true = 使用中)。ボタンの見た目に使う。nullopt ならトグルを出さない
   // onModified: データが変更されたときに呼ぶ関数(オートセーブ用。空でもよい)
-  void DrawEditorWindow(const std::string &timelineFilePath, bool *debugCameraFlag, std::function<void()> onModified);
+  // 戻り値: Debug/Game カメラの切り替えボタンが押されたか(切り替えは、呼び出し側が行う)
+  bool DrawEditorWindow(const std::string &timelineFilePath, std::optional<bool> debugCameraState,
+                        std::function<void()> onModified);
   // エディットモード中に毎フレーム呼ぶ。選択したイベントの、仮の敵(プレビュー)の出し入れと書き戻しを行う
   void UpdatePreview(const TimelineSpawnPreview::AddObjectFunc &addObject,
                      const TimelineSpawnPreview::SelectObjectFunc &selectObject);

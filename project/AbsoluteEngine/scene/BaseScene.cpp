@@ -362,6 +362,12 @@ void BaseScene::DrawTimelineEditorUI() {
         onModified = [editor]() { editor->NotifySceneModified(); };
     }
 
-    // Debug/Game カメラ切替フラグは、派生クラスがオーバーライドしていればそのポインタを渡す
-    timeline_->DrawEditorWindow(GetTimelineFilePath(), GetDebugCameraFlag(), std::move(onModified));
+    // Debug/Game カメラの状態は、派生クラスがオーバーライドしていれば渡す(表示用)。
+    // ボタンが押されたら、状態の持ち主であるシーンが切り替える
+    const std::optional<bool> debugCameraState = GetDebugCameraState();
+    const bool debugCameraToggled =
+        timeline_->DrawEditorWindow(GetTimelineFilePath(), debugCameraState, std::move(onModified));
+    if (debugCameraToggled && debugCameraState.has_value()) {
+        SetDebugCameraEnabled(!*debugCameraState);
+    }
 }

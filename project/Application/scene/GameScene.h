@@ -69,8 +69,9 @@ protected:
   // Debug Camera トグルがONの間だけ editorCamera_ の入力操作を許可する（タスクD）
   bool IsEditorCameraOperationEnabled() const override { return isDebugCamera_; }
 
-  // Timeline Editor内のDebug CameraトグルボタンにisDebugCamera_のアドレスを渡す
-  bool* GetDebugCameraFlag() override { return &isDebugCamera_; }
+  // Timeline Editor内のDebug Cameraトグルボタンの、表示用の状態と切り替え
+  std::optional<bool> GetDebugCameraState() const override { return isDebugCamera_; }
+  void SetDebugCameraEnabled(bool enabled) override { isDebugCamera_ = enabled; }
 
   // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
   const Camera* GetEditorViewCamera() const override;

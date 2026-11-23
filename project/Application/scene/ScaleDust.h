@@ -113,8 +113,9 @@ public:
   // このフレームの指定を反映する(持ち越しのバーストを出し、常時の発生と、力を GPU パーティクルへ渡す)。毎フレーム 1 回、描画の前に呼ぶ
   void Update();
 
-  ScaleDustSettings& GetSettings() { return settings_; }
+  // 設定の読み取りと、丸ごとの差し替え。書き換えは SetSettings の 1 か所だけにする(内部を非 const 参照で返さない)
   const ScaleDustSettings& GetSettings() const { return settings_; }
+  void SetSettings(const ScaleDustSettings& settings) { settings_ = settings; }
 
 private:
   static constexpr uint32_t kNoEmitter = 0xFFFFFFFFu;

@@ -3,6 +3,7 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "ISpawner.h"
@@ -174,10 +175,13 @@ protected:
   // OFF時は非表示のeditorCamera_が入力を奪わないようにする
   virtual bool IsEditorCameraOperationEnabled() const { return true; }
 
-  // Debug/Game カメラ切替フラグへの非所有ポインタを返す（Timeline Editorのトグルボタン用）
-  // 派生クラス（GameScene等）がisDebugCamera_のアドレスを返すようオーバーライドする
-  // デフォルトはnullptrで、その場合Timeline Editorはトグルボタンを表示しない
-  virtual bool* GetDebugCameraFlag() { return nullptr; }
+  // デバッグカメラ(Free Camera)の、いまの状態を返す（Timeline Editorのトグルボタンの表示用）。
+  // 持つシーン(GameScene等)は、オーバーライドして、使用中なら true を返す。
+  // 既定は std::nullopt(デバッグカメラを持たない)で、その場合 Timeline Editor はトグルボタンを表示しない
+  virtual std::optional<bool> GetDebugCameraState() const { return std::nullopt; }
+  // Timeline Editor のボタンが押されたときに呼ばれる。デバッグカメラを持つシーンは、オーバーライドして状態を切り替える。
+  // 状態の持ち主はシーンで、Timeline Editor は直接書き換えない
+  virtual void SetDebugCameraEnabled(bool /*enabled*/) {}
 
   // このシーンがタイムライン機能(TimelineManager/TimelineEditorWindow、および
   // シーンごとの "<sceneId>_timeline.json" の自動保存/読み込み)を使うかどうか。

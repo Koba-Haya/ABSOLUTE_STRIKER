@@ -62,7 +62,8 @@ void Draw(ScaleDustSettings &settings) {
 
 void Draw(PlayerDeathDust &deathDust) {
 #ifdef USE_IMGUI
-  PlayerDeathDustSettings &death = deathDust.GetSettings();
+  // 設定のコピーを編集して、最後に戻す(内部の設定を直接書き換えない)
+  PlayerDeathDustSettings death = deathDust.GetSettings();
   ImGui::SeparatorText("Sources (death)");
   int shardBase = static_cast<int>(death.shardBurstBase);
   int shardMax = static_cast<int>(death.shardBurstMax);
@@ -79,7 +80,10 @@ void Draw(PlayerDeathDust &deathDust) {
   if (ImGui::Button("Reset death dust sources")) {
     death = PlayerDeathDustSettings{};
   }
-  Draw(deathDust.GetDust().GetSettings());
+  deathDust.SetSettings(death);
+  ScaleDustSettings dust = deathDust.GetDustSettings();
+  Draw(dust);
+  deathDust.SetDustSettings(dust);
 #else
   (void)deathDust;
 #endif

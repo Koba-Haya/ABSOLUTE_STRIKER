@@ -76,7 +76,9 @@ public:
   // 光の中心(巣の中心から持ち上げた位置。ワールド)
   Vector3 GetPosition() const { return {center_.x, center_.y + settings_.lift, center_.z}; }
 
-  EmberCoreSettings& GetSettings() { return settings_; }
+  // 設定の読み取りと、丸ごとの差し替え。書き換えは SetSettings の 1 か所だけにする(内部を非 const 参照で返さない)
+  const EmberCoreSettings& GetSettings() const { return settings_; }
+  void SetSettings(const EmberCoreSettings& settings) { settings_ = settings; }
 
 private:
   static constexpr uint32_t kNoEmitter = 0xFFFFFFFFu;

@@ -61,13 +61,13 @@ void TimelineHost::Save(const std::string &filePath) const {
 #endif
 }
 
-void TimelineHost::DrawEditorWindow(const std::string &timelineFilePath, bool *debugCameraFlag,
+bool TimelineHost::DrawEditorWindow(const std::string &timelineFilePath, std::optional<bool> debugCameraState,
                                     std::function<void()> onModified) {
-  // Debug/Game カメラ切替フラグを接続する(nullptr ならトグルボタンは出ない)
-  editorWindow_->SetDebugCameraFlag(debugCameraFlag);
+  // Debug/Game カメラ切替ボタンの表示に使う、いまの状態を伝える(nullopt ならトグルボタンは出ない)
+  editorWindow_->SetDebugCameraState(debugCameraState);
   // トラック/イベントの追加・削除等を、既存のオートセーブ経路に接続する
   editorWindow_->SetOnModifiedCallback(std::move(onModified));
-  editorWindow_->Draw(timelineFilePath);
+  return editorWindow_->Draw(timelineFilePath);
 }
 
 void TimelineHost::UpdatePreview(const TimelineSpawnPreview::AddObjectFunc &addObject,

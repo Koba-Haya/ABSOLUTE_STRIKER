@@ -9,6 +9,7 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <optional>
 
 // 前方宣言（CommandManagerの完全定義は.cppでのみインクルードする）
 namespace AbsoluteEngine { class CommandManager; }
@@ -28,23 +29,25 @@ public:
     // nullptr を渡した場合はコマンド発行を無効化する
     void SetCommandManager(CommandManager* commandManager) { commandManager_ = commandManager; }
 
-    // Debug/Game カメラ切替フラグへの非所有ポインタを設定する
-    // Application層（GameScene等）が持つ bool を直接トグルするための橋渡し
-    // nullptr の場合はトグルボタンを表示しない
-    void SetDebugCameraFlag(bool* flag) { debugCameraFlag_ = flag; }
+    // Debug/Game カメラ切替ボタンの表示用に、いまのデバッグカメラの状態(true = 使用中)を伝える。
+    // 状態そのものは、このウィンドウが書き換えない(持ち主は、シーン側)。
+    // std::nullopt の場合は、デバッグカメラを持たないシーンなので、トグルボタンを表示しない
+    void SetDebugCameraState(std::optional<bool> state) { debugCameraState_ = state; }
 
     // トラック/イベントの追加・削除等でシーンが変更された際に呼ばれるコールバックを設定する
     // 既存のオートセーブ経路（EditorUIManager::SetSceneModified）に接続するために使う
     void SetOnModifiedCallback(std::function<void()> callback) { onModified_ = std::move(callback); }
 
     // 毎フレームUIを描画する（BaseScene::DrawEditorUI から呼ばれる想定）
-    // USE_IMGUI マクロが無効な場合は何もしない
-    void Draw(const std::string& timelineFilePath);
+    // USE_IMGUI マクロが無効な場合は何もしない。
+    // 戻り値: このフレームに、Debug Camera の切り替えボタンが押されたか(押されたら true。切り替えは呼び出し側が行う)
+    bool Draw(const std::string& timelineFilePath);
 
 private:
 #ifdef USE_IMGUI
-    // ツールバー（1行目: 再生系+Debug Cameraトグル、2行目: プレハブ関連）を描画する
-    void DrawToolbar(const std::string& timelineFilePath);
+    // ツールバー（1行目: 再生系+Debug Cameraトグル、2行目: プレハブ関連）を描画する。
+    // 戻り値: Debug Camera の切り替えボタンが押されたか
+    bool DrawToolbar(const std::string& timelineFilePath);
 
     // ルーラー（目盛り+再生ヘッド）とシークスライダーを描画する
     // トラックレーンと同じ座標系（ラベル列オフセット+可変レーン幅）を共有する
@@ -74,8 +77,8 @@ private:
     // nullptr の場合はコマンド発行を行わない
     CommandManager* commandManager_ = nullptr;
 
-    // Debug/Game カメラ切替フラグへの非所有ポインタ
-    bool* debugCameraFlag_ = nullptr;
+    // 表示用の、いまのデバッグカメラの状態(nullopt = 持たないシーン)。毎フレーム、シーンから伝えられる
+    std::optional<bool> debugCameraState_;
 
     // シーン変更通知コールバック（オートセーブ用）
     std::function<void()> onModified_;

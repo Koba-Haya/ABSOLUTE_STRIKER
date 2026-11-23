@@ -142,7 +142,7 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
   // 2. 灰の設定(調整 UI が書き換えた値を反映)。集まるにつれて、空気抵抗を、振動せずに収束する値へ寄せる
   ScaleDustSettings look = settings_.dust;
   look.dragPerSecond = Lerp(settings_.dust.dragPerSecond, settings_.gatherDrag, gather);
-  dust_.GetSettings() = look;
+  dust_.SetSettings(look);
 
   // 3. 発生: カメラの前方の球から、続けて出す(近景から遠景まで)。灯りの間は量を減らす
   Vector3 eye;
@@ -164,8 +164,9 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
   // 5. 核: 集まった量(集まりの進み)に応じて強くなり、灯りの間は脈打つ。外からの boost を足す
   const float coreProgress = Smooth((GetGatherProgress() - settings_.coreEaseStart) / std::max(1.0f - settings_.coreEaseStart, GameOverAshDefaults::kMinGatherSeconds));
   const float intensity = (phase_ == GameOverAshPhase::Drifting ? 0.0f : settings_.coreIntensity * coreProgress) + coreBoost_;
-  core_.GetSettings() = settings_.core;
-  core_.GetSettings().size *= std::max(coreSizeScale_, 0.0f); // 溜めで光を圧縮する
+  EmberCoreSettings coreLook = settings_.core;
+  coreLook.size *= std::max(coreSizeScale_, 0.0f); // 溜めで光を圧縮する
+  core_.SetSettings(coreLook);
   // 核の中心: 巣から、外から指示された位置(蝶の胴体)へ。核の光は中心から lift だけ上に出るので、その分を引いておく
   const float follow = std::clamp(followBlend_, 0.0f, 1.0f);
   const Vector3 followCenter{followPosition_.x, followPosition_.y - settings_.core.lift, followPosition_.z};
@@ -176,7 +177,7 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
 
   // 再生の色のバースト: このフレームだけ、鱗粉の設定を burst の値にして出す(粒は出た時点の色・速さを持つので、次のフレームの通常の設定には影響しない)
   if (burstPending_) {
-    ScaleDustSettings& dustSettings = dust_.GetSettings();
+    ScaleDustSettings dustSettings = dust_.GetSettings();
     dustSettings.emberColor = burst_.startColor;
     dustSettings.ashColor = burst_.endColor;
     dustSettings.speedMin = burst_.speedMin;
@@ -186,12 +187,13 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
     dustSettings.sizeMin = burst_.sizeMin;
     dustSettings.sizeMax = burst_.sizeMax;
     dustSettings.glowOwnColor = burst_.glowOwnColor;
+    dust_.SetSettings(dustSettings);
     dust_.Burst(burstCenter_, burst_.count, burst_.radius, {0.0f, burst_.upward, 0.0f});
     burstPending_ = false;
   } else if (groundStage_ == 2) {
     // 地面の吹き飛び: 巣の中心のまわりの 4 方向から、外側へ(低い角度)。4 つのバーストは 1 フレームに出せる数(バーストのプール)に収まる
     // (4 つとも、同じフレームの設定 = 土から灰の色を使う)
-    ScaleDustSettings& dustSettings = dust_.GetSettings();
+    ScaleDustSettings dustSettings = dust_.GetSettings();
     dustSettings.emberColor = ground_.startColor;
     dustSettings.ashColor = ground_.endColor;
     dustSettings.speedMin = 0.0f;
@@ -201,6 +203,7 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
     dustSettings.sizeMin = ground_.sizeMin;
     dustSettings.sizeMax = ground_.sizeMax;
     dustSettings.glowOwnColor = false;
+    dust_.SetSettings(dustSettings);
     const float outwardSpeed = 0.5f * (ground_.speedMin + ground_.speedMax);
     const uint32_t perSegment = std::max<uint32_t>(1u, ground_.count / kGroundSegments);
     for (uint32_t i = 0; i < kGroundSegments; ++i) {

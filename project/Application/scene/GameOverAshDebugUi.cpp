@@ -52,7 +52,8 @@ const char *PhaseName(GameOverAshPhase phase) {
 
 void Draw(GameOverAsh &ash) {
 #ifdef USE_IMGUI
-  GameOverAshSettings &s = ash.GetSettings();
+  // 設定のコピーを編集して、最後に 1 回だけ戻す(内部の設定を直接書き換えない)
+  GameOverAshSettings s = ash.GetSettings();
   ImGui::SetNextWindowPos(ImVec2(kWindowX, kWindowY), ImGuiCond_FirstUseEver);
   ImGui::Begin("Game Over Ash");
 
@@ -127,6 +128,7 @@ void Draw(GameOverAsh &ash) {
   ImGui::SeparatorText("Ash look and drift (ScaleDust)");
   ScaleDustDebugUi::Draw(s.dust);
 
+  ash.SetSettings(s);
   ImGui::End();
 #else
   (void)ash;
