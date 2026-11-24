@@ -170,6 +170,8 @@ private:
   void CheckKillBossShortcut_();
   // 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckDebugFlowShortcut_ と CheckKillBossShortcut_ と、展示の自動進行が使う)
   void KillBossForDebug_();
+  // 開発用: ボスの HP を、次のフェーズの境目まで減らす(シールドの確認用。6 キー)
+  void DamageBossToNextPhaseForDebug_();
   void UpdateHud_();
   // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
   // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する

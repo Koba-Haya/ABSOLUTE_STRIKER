@@ -5,6 +5,7 @@
 #include "BossAttackEffects.h"
 #include "BossModelSpec.h"
 #include "BossPhase.h"
+#include "BossShieldEffects.h"
 #include "BossState.h"
 #include "Type/Vector.h"
 #include <memory>
@@ -37,7 +38,8 @@ public:
 
     bool IsActive() const { return isActive_; }
     void OnCollision(AbsoluteEngine::GameObject* other) override;
-    void TakeDamage(int damage);
+    // hitPosition: 被弾した位置(ワールド)。シールドが受け止めたときに、ドームの波紋を出す位置に使う。nullptr なら、波紋は出ない
+    void TakeDamage(int damage, const Vector3* hitPosition = nullptr);
 
     float GetCollisionRadius() const { return radius_; }
     // 当たり判定の半径を、ボスの種類の定義(BossModelSpec)に合わせる(生成するシーンが呼ぶ)
@@ -48,6 +50,10 @@ public:
     int GetHp() const { return hp_; }
     int GetMaxHp() const { return maxHp_; }
     BossPhase GetPhase() const override { return phase_; }
+    // シールドの今の状態(演出が読む)。シールドの最中でなければ、stage = None
+    const BossShieldView& GetShieldView() const { return shieldView_; }
+    // 次のフェーズに入る HP(この値以下で、シールドが始まる)。最後のフェーズなら 0。開発用ショートカット(HP を境目まで減らす)が使う
+    int GetNextPhaseBoundaryHp() const;
 
 private:
     // --- IBossActions(状態クラスからの依頼を受ける窓口) ---
@@ -59,12 +65,23 @@ private:
         attackEffects_.OnStageChanged(stage, spec);
     }
     void ChangeState(std::unique_ptr<IBossState> next) override { pendingState_ = std::move(next); }
+    void Stagger() override { hitRequested_ = true; }
+    void ApplyBlastDamage(int damage) override;
+    void SetShieldView(const BossShieldView& view) override { shieldView_ = view; }
+    void FinishShield(BossPhase nextPhase) override {
+        phase_ = nextPhase;
+        shieldActive_ = false;
+    }
 
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
 
+    // HP から、入るべきフェーズを求める。いまのフェーズより進むときは、すぐには進めず、シールドの状態を始める
     void UpdatePhase();
+    // 次のフェーズの境目で、シールドを始める。ボスの HP を、境目の値へ戻して(一度に境目を大きく越えた分を、無かったことにする)、
+    // シールドの状態を予約する。nextPhase: シールドが終わったときに進めるフェーズ
+    void StartShield_(BossPhase nextPhase);
     // 予約された状態があれば、今の状態を Exit して切り替え、Enter を呼ぶ。最初の 1 回は、待機の状態を作る
     void ApplyPendingState();
     // カメラ(=レール)の前方に留まりつつ左右上下にゆっくり揺れる。自機の位置には影響されない。
@@ -74,6 +91,8 @@ private:
     void UpdateAnimation();
     // いまの攻撃の段のクリップを再生する。切り替えたら true。その段のクリップが無い(nullptr)ときは、何もせず false
     bool PlayAttackStageClip(AbsoluteEngine::ModelComponent& model);
+    // シールドのドームがある間は、当たり判定をドームの外側まで広げ、終わったら元の半径へ戻す
+    void UpdateColliderForShield_();
     // 弾を出す位置(口の前。muzzle ボーンが無いモデルは、ボスの位置)
     Vector3 GetBulletOrigin_() const;
     // シーンから自機のGameObjectを探す（Fire*で使用）
@@ -85,6 +104,9 @@ private:
     int maxHp_ = 40;
 
     BossPhase phase_ = BossPhase::Phase1;
+    float baseColliderRadius_ = -1.0f; // 当たり判定の元の半径(最初の UpdateColliderForShield_ で覚える。負なら、まだ)
+    bool shieldActive_ = false;  // シールドの最中か(始めてから、FinishShield まで)。この間は、フェーズの判定を止める
+    BossShieldView shieldView_;  // シールドの今の状態(状態クラスが更新する)
 
     // 今の状態と、次に切り替える状態(切り替えは、状態の Update が終わったあとに行う)
     std::unique_ptr<IBossState> state_;
@@ -104,4 +126,6 @@ private:
     BossAttackClips attackClips_;
     // 攻撃の演出(口の前の輪)
     BossAttackEffects attackEffects_;
+    // シールドの見た目(三角形の格子のドーム)
+    BossShieldEffects shieldEffects_;
 };

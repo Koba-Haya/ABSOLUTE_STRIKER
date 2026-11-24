@@ -1,6 +1,7 @@
 #pragma once
 #include "BossAttackPlan.h"
 #include "BossPhase.h"
+#include "BossShieldPlan.h"
 #include "BossState.h"
 #include <memory>
 
@@ -31,6 +32,14 @@ public:
     virtual void SetAttackStage(BossAttackStage stage, const BossAttackSpec& spec) = 0;
     // いまのフェーズ(HP の残りで決まる)
     virtual BossPhase GetPhase() const = 0;
+    // ボスをよろめかせる(被弾のよろめきのアニメーションを再生する)。シールドが砕けたときなどに使う
+    virtual void Stagger() = 0;
+    // 全画面の爆発のダメージを、自機に与える。自機が回避の無敵の間は、与えない
+    virtual void ApplyBlastDamage(int damage) = 0;
+    // シールドの今の状態を、外へ見せる(演出が読む)。シールドが終わるときは、既定の値(stage = None)を渡す
+    virtual void SetShieldView(const BossShieldView& view) = 0;
+    // シールドが終わったことを伝える。フェーズを nextPhase へ進めて、次の境目まで、シールドを張らない状態へ戻す
+    virtual void FinishShield(BossPhase nextPhase) = 0;
     // 次の状態を予約する。切り替えは、いま実行中の状態の Update が終わったあとに行われる
     // (Update の途中で、実行中の状態自身が消えてしまわないようにするため)
     virtual void ChangeState(std::unique_ptr<IBossState> next) = 0;

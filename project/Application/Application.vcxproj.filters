@@ -58,6 +58,8 @@
     <ClCompile Include="actor\Enemy\BossEffectParticles.cpp" />
     <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
     <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldEffects.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldState.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossModelSpec.cpp" />
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
@@ -196,6 +198,9 @@
     <ClInclude Include="actor\Enemy\BossAttackPlan.h" />
     <ClInclude Include="actor\Enemy\BossAttackState.h" />
     <ClInclude Include="actor\Enemy\BossIdleState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldEffects.h" />
+    <ClInclude Include="actor\Enemy\BossShieldPlan.h" />
+    <ClInclude Include="actor\Enemy\BossShieldState.h" />
     <ClInclude Include="actor\Enemy\BossPhase.h" />
     <ClInclude Include="actor\Enemy\BossState.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />

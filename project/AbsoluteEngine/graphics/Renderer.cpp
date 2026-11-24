@@ -10,6 +10,7 @@
 #include "particle/GPUParticleManager.h"
 #include "Ring.h"
 #include "ArcRing.h"
+#include "ShieldDome.h"
 #include "Cylinder.h"
 #include "ShaderCompilerUtils.h"
 #include "Skybox.h"
@@ -281,6 +282,12 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ribbonAlphaColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ribbonAlphaColorOnlyPipeline_->Initialize(device, utils, compiler,
                                                          includeHandler, ribbonAlphaColorOnlyDesc));
+    shieldDomePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(shieldDomePipeline_->Initialize(device, utils, compiler, includeHandler,
+                                               UnifiedPipeline::MakeShieldDomeDesc()));
+    shieldDomeColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(shieldDomeColorOnlyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                                        UnifiedPipeline::MakeShieldDomeColorOnlyDesc()));
     PipelineDesc arcRingColorOnlyDesc = arcRingDesc;
     arcRingColorOnlyDesc.enableDepth = false;
     arcRingColorOnlyDesc.dsvFormat = DXGI_FORMAT_UNKNOWN;
@@ -1605,6 +1612,31 @@ void Renderer::DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
 
   // 描画
   ring->Draw(cmdList);
+}
+
+bool Renderer::InitializeShieldDome(ShieldDome &dome) {
+  return dx_ && dome.Initialize(dx_->GetDevice());
+}
+
+void Renderer::DrawShieldDome(ShieldDome *dome) {
+  if (!dome || !dome->IsReady() || !shieldDomePipeline_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 雲の合成のあと(描画先が色だけ)は、シーンの深度をテクスチャとして読む版で描く。それ以外は、深度テストの版
+  const bool readSceneDepth = spriteColorOnly_ && shieldDomeColorOnlyPipeline_ && depthTexture_;
+  (readSceneDepth ? shieldDomeColorOnlyPipeline_ : shieldDomePipeline_)->SetPipelineState(cmdList);
+
+  // 定数バッファ (0:ドームのパラメータ(PS), 1:変換行列(VS))
+  cmdList->SetGraphicsRootConstantBufferView(0, dome->GetParamsCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, dome->GetTransformCBAddress());
+  if (readSceneDepth) {
+    ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+    cmdList->SetDescriptorHeaps(1, heaps);
+    cmdList->SetGraphicsRootDescriptorTable(2, depthTexture_->GetSrvGpuHandle());
+  }
+
+  dome->Draw(cmdList);
 }
 
 bool Renderer::InitializeArcRing(ArcRing &ring) {

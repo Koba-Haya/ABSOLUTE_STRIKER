@@ -22,4 +22,8 @@ public:
 
     // この状態から出るときに 1 回呼ばれる
     virtual void Exit(IBossActions& actions) { (void)actions; }
+
+    // ボスが攻撃を受けたとき(HP が減る前)に呼ばれる。この状態がダメージを受け止めるなら true を返す(ボスの HP は減らず、よろめきもしない)。
+    // 既定は false(受け止めない。ボスの HP が減る)。シールドの状態が、これを上書きする
+    virtual bool AbsorbDamage(IBossActions& actions, int damage) { (void)actions; (void)damage; return false; }
 };

@@ -1,6 +1,8 @@
 #include "BossComponent.h"
 #include "BossModelSpec.h"
 #include "BossIdleState.h"
+#include "BossShieldState.h"
+#include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "../Bullet/BossBulletVisualComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ISceneQuery.h"
@@ -56,10 +58,43 @@ void BossComponent::Update(float deltaTime) {
     const auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
     const bool hasMuzzle = model && model->TryGetBoneWorldPosition(BossBone::kMuzzle, muzzle);
     attackEffects_.Update(deltaTime, hasMuzzle ? &muzzle : nullptr);
+
+    // シールドのドームの中心: ボスの位置から、正面(カメラ側。あごの側)へ、少しずらす。ボスは、カメラのほうを向いている
+    Vector3 domeCenter = GetOwner()->GetTransform().translate;
+    Vector3 cameraForward{ 0.0f, 0.0f, 1.0f };
+    if (screen_.HasCamera()) {
+        cameraForward = screen_.GetForward();
+        domeCenter = { domeCenter.x - cameraForward.x * BossShieldEffectDefaults::kDomeCenterShift,
+                       domeCenter.y - cameraForward.y * BossShieldEffectDefaults::kDomeCenterShift,
+                       domeCenter.z - cameraForward.z * BossShieldEffectDefaults::kDomeCenterShift };
+    }
+    shieldEffects_.Update(deltaTime, shieldView_, domeCenter, cameraForward);
+    UpdateColliderForShield_();
 }
 
 void BossComponent::DrawAfterClouds() {
+    // ドームを先に描き、口の前の輪や粒を、その手前に重ねる。画面全体の白いフラッシュは、すべての手前に出すので、最後に描く
+    shieldEffects_.Draw();
     attackEffects_.Draw();
+    shieldEffects_.DrawFlash();
+}
+
+void BossComponent::UpdateColliderForShield_() {
+    auto* collider = GetOwner()->GetComponent<AbsoluteEngine::ColliderComponent>();
+    if (!collider) return;
+
+    // 元の半径を、最初に覚える(ボスの種類ごとの定義で決まった値)
+    AbsoluteEngine::ColliderComponent::Settings settings = collider->GetSettings();
+    if (baseColliderRadius_ < 0.0f) baseColliderRadius_ = settings.radius;
+
+    // シールドのドームがある間(展開と維持)は、当たり判定をドームの外側まで広げる。
+    // 自機の弾が、ドームの表面で止まり、波紋が弾の当たった所から出るようにするため。ドームの中心は、ボスの位置から前へずれているので、その分を足す
+    const bool domeActive = shieldView_.stage == BossShieldStage::Deploy || shieldView_.stage == BossShieldStage::Hold;
+    const float target = domeActive ? BossShieldEffectDefaults::kDomeRadius + BossShieldEffectDefaults::kDomeCenterShift : baseColliderRadius_;
+    if (settings.radius != target) {
+        settings.radius = target;
+        collider->SetSettings(settings);
+    }
 }
 
 void BossComponent::ApplyPendingState() {
@@ -169,16 +204,64 @@ void BossComponent::UpdateMovement(float deltaTime) {
     GetOwner()->SetRotation({ 0.0f, std::atan2(-forward.x, -forward.z) + kModelFrontYawOffset, 0.0f });
 }
 
-void BossComponent::UpdatePhase() {
-    if (maxHp_ <= 0) return;
-    const float hpRatio = static_cast<float>(hp_) / static_cast<float>(maxHp_);
-    if (hpRatio <= 1.0f / 3.0f) {
-        phase_ = BossPhase::Phase3;
-    } else if (hpRatio <= 2.0f / 3.0f) {
-        phase_ = BossPhase::Phase2;
-    } else {
-        phase_ = BossPhase::Phase1;
+namespace {
+// フェーズの境目(最大 HP に対する、残りの割合。この割合以下で、次のフェーズへ進む)
+constexpr float kPhase2HpRatio = 2.0f / 3.0f;
+constexpr float kPhase3HpRatio = 1.0f / 3.0f;
+// 割合から HP の値を求めるときの、浮動小数点の誤差(30 x 2/3 = 20 が、19.9999 になって切り捨てられないようにする)
+constexpr float kHpBoundaryEpsilon = 0.0001f;
+
+// 次のフェーズ(nextPhase)に入る HP の境目。この値以下になると、そのフェーズへ進む。Phase1 には「入る」境目がないので 0
+int BoundaryHpOf(BossPhase nextPhase, int maxHp) {
+    float ratio = 0.0f;
+    if (nextPhase == BossPhase::Phase2) ratio = kPhase2HpRatio;
+    if (nextPhase == BossPhase::Phase3) ratio = kPhase3HpRatio;
+    return static_cast<int>(std::floor(static_cast<float>(maxHp) * ratio + kHpBoundaryEpsilon));
+}
+
+// HP の残りから、いるべきフェーズ
+BossPhase PhaseFromHp(int hp, int maxHp) {
+    const float hpRatio = static_cast<float>(hp) / static_cast<float>(maxHp);
+    if (hpRatio <= kPhase3HpRatio) return BossPhase::Phase3;
+    if (hpRatio <= kPhase2HpRatio) return BossPhase::Phase2;
+    return BossPhase::Phase1;
+}
+} // namespace
+
+int BossComponent::GetNextPhaseBoundaryHp() const {
+    switch (phase_) {
+    case BossPhase::Phase1: return BoundaryHpOf(BossPhase::Phase2, maxHp_);
+    case BossPhase::Phase2: return BoundaryHpOf(BossPhase::Phase3, maxHp_);
+    case BossPhase::Phase3: return 0;
     }
+    return 0;
+}
+
+void BossComponent::UpdatePhase() {
+    // シールドの最中は、フェーズの判定を止める(シールドが終わったときに、FinishShield がフェーズを進める)
+    if (maxHp_ <= 0 || shieldActive_) return;
+
+    // HP が、いまのフェーズより先の境目を切ったら、すぐにはフェーズを進めず、シールドを始める。
+    // 一度に 2 つの境目を越えても、1 段ずつ進める(まず次のフェーズのシールド。そのあと、残りの境目で、もう一度)
+    if (static_cast<int>(PhaseFromHp(hp_, maxHp_)) > static_cast<int>(phase_)) {
+        StartShield_(static_cast<BossPhase>(static_cast<int>(phase_) + 1));
+    }
+}
+
+void BossComponent::StartShield_(BossPhase nextPhase) {
+    // 境目を大きく越えて減っていたら、境目の値へ戻す(シールドを壊すと、次のフェーズから、境目の HP で始まる)
+    hp_ = (std::max)(hp_, BoundaryHpOf(nextPhase, maxHp_));
+    shieldActive_ = true;
+    pendingState_ = std::make_unique<BossShieldState>(nextPhase);
+}
+
+void BossComponent::ApplyBlastDamage(int damage) {
+    auto playerObj = FindPlayer();
+    if (!playerObj) return;
+    auto* player = playerObj->GetComponent<PlayerComponent>();
+    // 回避の無敵の間は受けない(通常の被弾と同じ扱い)
+    if (!player || player->IsDead() || player->IsInvincible()) return;
+    player->TakeDamage(damage);
 }
 
 namespace {
@@ -255,8 +338,14 @@ void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed)
     }
 }
 
-void BossComponent::TakeDamage(int damage) {
+void BossComponent::TakeDamage(int damage, const Vector3* hitPosition) {
     if (!isActive_) return;
+
+    // いまの状態がダメージを受け止めるなら(シールド)、ボスの HP は減らさず、よろめきもしない。ドームには、被弾の波紋を出す
+    if (state_ && state_->AbsorbDamage(*this, damage)) {
+        if (hitPosition) shieldEffects_.AddHit(*hitPosition);
+        return;
+    }
 
     hp_ -= damage;
     if (hp_ <= 0) {
@@ -265,6 +354,7 @@ void BossComponent::TakeDamage(int damage) {
         // isActive_ が false になるので、以降は、移動・攻撃・被弾の処理が止まる。撃破の検知は IsActive() で行う
         isActive_ = false;
         attackEffects_.Stop(); // 撃破: 攻撃の演出(輪)を消す
+        shieldEffects_.Stop();
     } else {
         // 即死しなかった場合の被弾リアクション(よろめきのアニメーション。次の UpdateAnimation で再生する)
         hitRequested_ = true;
@@ -277,6 +367,7 @@ void BossComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない
     if ((other->GetName().find("PlayerBullet") != std::string::npos || other->GetTag() == "PlayerBullet") &&
         HomingBulletComponent::CanHit(*other, GetOwner())) {
-        TakeDamage(1);
+        const Vector3 hitPosition = other->GetTransform().translate;
+        TakeDamage(1, &hitPosition);
     }
 }

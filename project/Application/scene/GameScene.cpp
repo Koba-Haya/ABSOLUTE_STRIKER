@@ -198,6 +198,14 @@ constexpr BYTE kDebugSkipToBossKey = DIK_8;
 // キーは主列の 7(0 はスキップ、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
 constexpr bool kDebugKillBossEnabled = kDebugShortcutsAvailable;
 constexpr BYTE kDebugKillBossKey = DIK_7;
+
+// 開発用: ボスの HP を、次のフェーズの境目まで減らすショートカット。シールドの確認のため(境目を切ると、シールドが始まる。シールドの最中に押すと、耐久が 3 減る)。
+// キーは主列の 6(0 はスキップ、7 は撃破、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+constexpr BYTE kDebugBossPhaseKey = DIK_6;
+// シールドの最中に 6 キーを押したときの、シールドへのダメージと、波紋を出す位置(ボスの位置からのずれ)
+constexpr int kDebugShieldDamage = 3;
+constexpr float kDebugShieldHitOffsetY = 4.0f;
+constexpr float kDebugShieldHitOffsetZ = -6.0f;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
@@ -963,6 +971,7 @@ void GameScene::RemoveExpiredObjects_() {
 }
 
 void GameScene::SpawnBoss_() {
+  Logger::GetInstance().Log("[Boss] spawned"); // ボス戦の開始(自動撮影が、ログを見て、次の操作を始める目印)
   // ボス出現演出（PostEffect加点要素: GaussianFilter）
   postEffects_.OnBossIntro();
 
@@ -1038,6 +1047,27 @@ void GameScene::KillBossForDebug_() {
   }
 }
 
+void GameScene::DamageBossToNextPhaseForDebug_() {
+  // 本物の被弾の経路(TakeDamage)で、HP を、次のフェーズに入る境目まで減らす。境目を切るので、次のフレームで、シールドが始まる。
+  // シールドの最中に押すと、シールドの耐久を、全部減らす(シールドが砕ける成功の流れの確認用)。
+  // 最後のフェーズでは、境目が 0(撃破)になるので、何もしない(撃破は 7 キー)
+  for (const auto& obj : GetRootObjects()) {
+    if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
+      if (boss->GetShieldView().stage != BossShieldStage::None) {
+        // シールドの耐久を減らす(波紋も出る)。続けて押すと、傷みが増えて、耐久が 0 になると砕ける
+        const Vector3 bossPosition = obj->GetTransform().translate;
+        const Vector3 hitPosition = { bossPosition.x, bossPosition.y + kDebugShieldHitOffsetY, bossPosition.z + kDebugShieldHitOffsetZ };
+        boss->TakeDamage(kDebugShieldDamage, &hitPosition);
+        continue;
+      }
+      const int boundary = boss->GetNextPhaseBoundaryHp();
+      if (boundary > 0 && boss->GetHp() > boundary) {
+        boss->TakeDamage(boss->GetHp() - boundary);
+      }
+    }
+  }
+}
+
 void GameScene::CheckKillBossShortcut_() {
   if (!kDebugKillBossEnabled || exhibition_.IsEnabled() || !GetInput()) {
     return;
@@ -1048,6 +1078,8 @@ void GameScene::CheckKillBossShortcut_() {
   }
   if (GetInput()->TriggerKey(kDebugKillBossKey)) {
     KillBossForDebug_();
+  } else if (GetInput()->TriggerKey(kDebugBossPhaseKey)) {
+    DamageBossToNextPhaseForDebug_();
   }
 }
 

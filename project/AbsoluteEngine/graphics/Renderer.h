@@ -36,6 +36,7 @@ class ParticleManager;
 class Camera;
 class Ring;
 class ArcRing;
+class ShieldDome;
 class Cylinder;
 class CloudNoiseTextures;
 struct ID3D12Resource;
@@ -226,6 +227,11 @@ public:
   void DrawArcRing(ArcRing *ring);
   // ArcRing の板と定数バッファを、このレンダラーのデバイスで作る(アプリ側が、デバイスを直接触らずに済むようにする窓口)。失敗したら false
   bool InitializeArcRing(ArcRing &ring);
+  // シールドのドーム(三角形の格子の球)を描く。形と状態は ShieldDome::SetParams / SetTransform で、描く前に決めておく。
+  // 通常は、深度テストで、手前の物の後ろを隠す。雲の合成のあと(FlushVolumeClouds のあと)は、シーンの深度を読んで隠す
+  void DrawShieldDome(ShieldDome *dome);
+  // ShieldDome のメッシュと定数バッファを、このレンダラーのデバイスで作る。失敗したら false
+  bool InitializeShieldDome(ShieldDome &dome);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ。
   // blendMode: Add(既定。加算で光らせる。暗い背景向き)か Alpha(通常のアルファ合成。明るい背景でも、色が白く飛ばない)。それ以外は Add として描く
@@ -375,6 +381,8 @@ private:
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> arcRingPipeline_; // 切れ目のある輪(DrawArcRing)
   std::unique_ptr<UnifiedPipeline> arcRingColorOnlyPipeline_; // 同、雲の合成のあと(描画先が色だけ)の版
+  std::unique_ptr<UnifiedPipeline> shieldDomePipeline_;           // シールドのドーム(DrawShieldDome)
+  std::unique_ptr<UnifiedPipeline> shieldDomeColorOnlyPipeline_;  // 同、雲の合成のあとの版(シーンの深度を読む)
   std::unique_ptr<UnifiedPipeline> ribbonAlphaColorOnlyPipeline_; // リボン(アルファ合成)の、雲の合成のあとの版
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonAlphaPipeline_; // リボン(通常のアルファ合成版。DrawRibbon の blendMode が Alpha のとき)
