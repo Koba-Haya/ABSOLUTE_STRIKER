@@ -13,9 +13,27 @@ enum class BossKind {
 // 文字列を呼び出し側に直接書かず、ここだけで管理する(綴りの間違いを避け、名前を変えるときの修正箇所を 1 つにする)
 namespace BossAnimation {
 constexpr const char *kHover = "Hover";   // 待機の滞空(ループ)
-constexpr const char *kAttack = "Attack"; // 攻撃の予告から発射まで(ループしない。終わったら待機へ戻す)
 constexpr const char *kHit = "Hit";       // 被弾のよろめき(ループしない。終わったら待機へ戻す)
+// 攻撃は、段(予告 -> 溜め -> 発射)ごとに、別のクリップを再生する(甲虫のモデル)。段の長さは、ゲーム側の表(BossAttackPlan.h)が決める
+constexpr const char *kAttackTelegraph = "AttackTelegraph"; // 予告: 構えへ移る(1 回。終わったら最後の姿勢を保つ)
+constexpr const char *kAttackCharge = "AttackCharge";       // 溜め: 構えたまま震える(ループ)
+constexpr const char *kAttackFire = "AttackFire";           // 発射: 突き出して戻る(1 回。終わったら待機へ戻す)
+// 鷲のモデルは、まだ 1 本の攻撃クリップだけを持つ(予告から発射までの固定の長さ)
+constexpr const char *kAttackSingle = "Attack";
 } // namespace BossAnimation
+
+// ボスのモデルのボーン(骨)の名前。演出の位置を決めるために使う
+namespace BossBone {
+constexpr const char *kMuzzle = "muzzle"; // 口の前(弾と攻撃の演出の出口)。甲虫のモデルだけが持つ
+} // namespace BossBone
+
+// 攻撃の段ごとに再生するクリップの名前。nullptr の段は、クリップを切り替えない(前の段のクリップが続く)。
+// ボスのモデルごとに違うので、BossModelSpec が持つ。既定は、甲虫のモデルの 3 つのクリップ
+struct BossAttackClips {
+  const char *telegraph = BossAnimation::kAttackTelegraph;
+  const char *charge = BossAnimation::kAttackCharge;
+  const char *fire = BossAnimation::kAttackFire;
+};
 
 // 撃破演出の、ボロノイのひび割れの形(ボスのモデルごとに違う値)。座標と長さは、モデルを作ったときの単位(拡大前)
 struct BossCrackShape {
@@ -57,6 +75,9 @@ struct BossModelSpec {
 
   // --- 撃破演出(ボロノイのひび割れ)の形 ---
   BossCrackShape crackShape;
+
+  // --- 攻撃の段ごとのアニメーションのクリップ ---
+  BossAttackClips attackClips;
 };
 
 // ボスの種類から、見た目の定義を取り出す。戻り値は、プログラムの終わりまで有効

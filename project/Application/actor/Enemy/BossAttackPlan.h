@@ -21,8 +21,8 @@ enum class BossAttackKind {
 struct BossAttackSpec {
     BossAttackKind kind;
     float idleSec;      // この攻撃の前の待機(秒)
-    float telegraphSec; // 予告(あごを開き始める。秒)
-    float chargeSec;    // 溜め(発射の直前。秒)
+    float telegraphSec; // 予告(構えへ移る。秒)
+    float chargeSec;    // 溜め(構えたまま力を溜める。秒)
     float recoverSec;   // 発射のあとの隙(秒)
     float speed;        // 弾速
     int count;          // 弾の数(Spread のとき。Aimed は 1 発なので使わない)
@@ -41,9 +41,16 @@ constexpr float kAimedSpeed = 24.0f;
 constexpr float kSpreadSpeed = 16.0f;
 // 扇状弾の弾と弾の間の角度(度)
 constexpr float kSpreadAngleDeg = 12.0f;
-// 予告と溜めの秒数(合計 0.6 秒。従来の「発射の 0.6 秒前に、攻撃の予告を始める」と同じ)
-constexpr float kTelegraphSec = 0.3f;
-constexpr float kChargeSec = 0.3f;
+// 予告と溜めの秒数。フェーズが上がるほど短くする(弾幕の緊張感を保つ)。攻撃の周期は、従来の値に合わせない(予告と溜めを見せるため)。
+// 予告のクリップ(AttackTelegraph)は 0.6 秒。これより短い予告は、クリップの途中で溜めへ切り替わる(短い溜めのとき、構えが浅くなる)
+constexpr float kTelegraphSecPhase1 = 0.6f;
+constexpr float kChargeSecPhase1 = 0.6f;
+constexpr float kTelegraphSecPhase2 = 0.5f;
+constexpr float kChargeSecPhase2 = 0.5f;
+constexpr float kTelegraphSecPhase3 = 0.4f;
+constexpr float kChargeSecPhase3 = 0.4f;
+// 発射のあとの隙。発射のクリップ(AttackFire)の長さ(0.5 秒)に合わせる(突き出して戻るまでを、隙の間に見せる)
+constexpr float kRecoverSec = 0.5f;
 // 扇状弾の数
 constexpr int kSpreadCountPhase2 = 5;
 constexpr int kSpreadCountPhase3 = 8;
@@ -52,19 +59,18 @@ constexpr int kSpreadCountPhase3 = 8;
 namespace BossAttackPlanTable {
 using namespace BossAttackPlanDefaults;
 
-// idleSec と recoverSec の合計と、予告 + 溜めの 0.6 秒で、1 回の攻撃の周期が決まる。
-// 従来の間隔(Phase1: 単発 1.6 秒)に近くなるよう決めている。予告を入れた分、Phase3 の密度は、従来より少し下がる
+// 1 回の攻撃の周期 = idleSec + 予告 + 溜め + recoverSec
 inline constexpr BossAttackSpec kPhase1[] = {
-    { BossAttackKind::Aimed, 0.8f, kTelegraphSec, kChargeSec, 0.2f, kAimedSpeed, 1, 0.0f },
+    { BossAttackKind::Aimed, 0.5f, kTelegraphSecPhase1, kChargeSecPhase1, kRecoverSec, kAimedSpeed, 1, 0.0f },
 };
 inline constexpr BossAttackSpec kPhase2[] = {
-    { BossAttackKind::Aimed,  0.5f, kTelegraphSec, kChargeSec, 0.2f, kAimedSpeed,  1, 0.0f },
-    { BossAttackKind::Spread, 0.9f, kTelegraphSec, kChargeSec, 0.3f, kSpreadSpeed, kSpreadCountPhase2, kSpreadAngleDeg },
+    { BossAttackKind::Aimed,  0.4f, kTelegraphSecPhase2, kChargeSecPhase2, kRecoverSec, kAimedSpeed,  1, 0.0f },
+    { BossAttackKind::Spread, 0.6f, kTelegraphSecPhase2, kChargeSecPhase2, kRecoverSec, kSpreadSpeed, kSpreadCountPhase2, kSpreadAngleDeg },
 };
 inline constexpr BossAttackSpec kPhase3[] = {
-    { BossAttackKind::Aimed,  0.1f, kTelegraphSec, kChargeSec, 0.2f, kAimedSpeed,  1, 0.0f },
-    { BossAttackKind::Aimed,  0.1f, kTelegraphSec, kChargeSec, 0.2f, kAimedSpeed,  1, 0.0f },
-    { BossAttackKind::Spread, 0.3f, kTelegraphSec, kChargeSec, 0.3f, kSpreadSpeed, kSpreadCountPhase3, kSpreadAngleDeg },
+    { BossAttackKind::Aimed,  0.1f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kAimedSpeed,  1, 0.0f },
+    { BossAttackKind::Aimed,  0.1f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kAimedSpeed,  1, 0.0f },
+    { BossAttackKind::Spread, 0.3f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kSpreadSpeed, kSpreadCountPhase3, kSpreadAngleDeg },
 };
 } // namespace BossAttackPlanTable
 

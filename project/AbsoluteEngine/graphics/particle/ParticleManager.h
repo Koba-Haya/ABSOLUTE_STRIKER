@@ -65,13 +65,18 @@ public:
     bool Initialize(DirectXCommon* dx);
     void Finalize();
 
+    // その名前のグループがあるか(CreateParticleGroup は、同名のグループがあると中身を消すので、作る前に調べる用)
+    bool HasParticleGroup(const std::string& name) const { return groups_.contains(name); }
+
     // テクスチャ単位のグループを作成
     // - name: グループ名（ユーザーが付けるキー）
     // - texturePath: TextureManagerで読むファイルパス
     // - maxInstances: StructuredBuffer の最大要素数
     // - softAlpha: true にすると「柔らかいアルファ」のグループになる(霧・雲など、縁がなだらかに重なって見えるもの)。
     //   Draw の filter で、通常のグループ(加算などで描く)と別のタイミング・別のブレンドで描き分けられる
-    bool CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha = false);
+    // - afterClouds: true にすると「雲のあとに描く」グループになる(雲に隠れさせたくない粒。弾の演出など)。
+    //   このグループは、NormalOnly / SoftAlphaOnly では描かれず、FlushVolumeClouds のあとに AfterCloudsOnly で描く
+    bool CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha = false, bool afterClouds = false);
 
     // パーティクルをグループに発生させる（Emitterから呼ぶ想定）
     // endScale を渡すと、寿命の間に scale から endScale へ大きさを変える(煙が広がるなど)。省略時は一定
@@ -146,7 +151,8 @@ private:
               instanceSrvGpu(other.instanceSrvGpu),
               materialCB(std::move(other.materialCB)),
               materialMapped(other.materialMapped),
-              softAlpha(other.softAlpha) {
+              softAlpha(other.softAlpha),
+              afterClouds(other.afterClouds) {
             other.textureSrvGpu = {};
             other.maxInstances = 0;
             other.instanceLimit = 0;
@@ -185,6 +191,8 @@ private:
 
         // 「柔らかいアルファ」のグループか(Draw の filter で選ぶ)。メンバ宣言の順は、上のムーブコンストラクタの初期化の順と合わせる
         bool softAlpha = false;
+        // 「雲のあとに描く」グループか(Draw の filter で選ぶ)。上のムーブコンストラクタの初期化の順と合わせる
+        bool afterClouds = false;
     };
 
     DirectXCommon* dx_ = nullptr;

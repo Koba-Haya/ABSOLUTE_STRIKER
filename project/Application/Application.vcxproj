@@ -185,6 +185,8 @@
     <ClCompile Include="actor\Bullet\RibbonTrailComponent.cpp" />
     <ClCompile Include="actor\Bullet\RibbonTrailFadeComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossAttackEffects.cpp" />
+    <ClCompile Include="actor\Enemy\BossEffectParticles.cpp" />
     <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
     <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
@@ -217,6 +219,7 @@
     <ClCompile Include="inheritance\InheritanceState.cpp" />
     <ClCompile Include="actor\Player\LockOnSystem.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
+    <ClCompile Include="actor\Bullet\BossBulletVisualComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletFactory.cpp" />
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
     <ClCompile Include="scene\CloudImpact.cpp" />
@@ -311,6 +314,8 @@
     <ClInclude Include="actor\Bullet\RibbonTrailFadeComponent.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />
     <ClInclude Include="actor\Enemy\BossActions.h" />
+    <ClInclude Include="actor\Enemy\BossAttackEffects.h" />
+    <ClInclude Include="actor\Enemy\BossEffectParticles.h" />
     <ClInclude Include="actor\Enemy\BossAttackPlan.h" />
     <ClInclude Include="actor\Enemy\BossAttackState.h" />
     <ClInclude Include="actor\Enemy\BossIdleState.h" />
@@ -350,6 +355,7 @@
     <ClInclude Include="actor\Player\LockOnSystem.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />
     <ClInclude Include="ScreenSize.h" />
+    <ClInclude Include="actor\Bullet\BossBulletVisualComponent.h" />
     <ClInclude Include="actor\Bullet\BulletFactory.h" />
     <ClInclude Include="actor\Player\PlayerInput.h" />
     <ClInclude Include="scene\CloudImpact.h" />

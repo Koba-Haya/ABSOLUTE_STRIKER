@@ -625,6 +625,28 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeArcRingDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+  };
+  d.vsPath = L"resources/engine/shaders/ArcRing.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/ArcRing.PS.hlsl";
+  d.usePSMaterial_b0 = true;       // ルートパラメータ 0 番: PS の輪のパラメータ
+  d.useVSTransform_b0 = true;      // ルートパラメータ 1 番: VS の変換行列
+  d.usePSTextureTable_t0 = false;  // テクスチャは使わない(形はシェーダーで計算する)
+  d.enableDepth = true;            // 島や敵に隠れるようにする
+  d.depthWrite = false;            // 半透明の輪が、後ろの物を隠さないようにする
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Alpha;  // 通常のアルファ合成
+  d.cullMode = D3D12_CULL_MODE_NONE; // 板は裏から見ても描く
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeRibbonDesc() {
   PipelineDesc d{};
   d.inputElements = {

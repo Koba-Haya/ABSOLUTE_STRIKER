@@ -993,6 +993,7 @@ void GameScene::SpawnBoss_() {
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
   auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView(), GetSceneQuery());
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
+  bossComp->SetAttackClips(bossSpec.attackClips); // 攻撃の段(予告、溜め、発射)ごとのアニメーション。モデルごとに違う
 
   bossObj->AddComponent(std::move(bossComp));
 
@@ -1830,6 +1831,14 @@ void GameScene::Draw() {
   }
 
   renderer->RenderPrimitives();
+
+  // 雲の手前に見せたい演出(ボスの弾、攻撃の予告の輪など)。雲を先に合成して、そのあとに描く(雲に隠れない。以降の描画先は色だけ)。
+  // 描く物: コンポーネントの DrawAfterClouds と、「雲のあとに描く」印のある粒のグループ
+  renderer->FlushVolumeClouds();
+  for (auto& obj : GetRootObjects()) {
+      if (obj) obj->DrawAfterClouds();
+  }
+  ParticleManager::GetInstance()->Draw(BlendMode::Alpha, false, ParticleDrawFilter::AfterCloudsOnly);
 
   // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
   // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない

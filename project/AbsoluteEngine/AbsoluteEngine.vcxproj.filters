@@ -198,6 +198,9 @@
     <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp">
       <Filter>engine\graphics\primitive</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\primitive\ArcRing.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\primitive\Ring.cpp">
       <Filter>engine\graphics\primitive</Filter>
     </ClCompile>
@@ -451,6 +454,9 @@
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\primitive\PrimitiveDrawer.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\ArcRing.h">
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\primitive\Ring.h">

@@ -71,6 +71,8 @@ public:
 
   // オブジェクトと子ノードの描画
   virtual void Draw();
+  // 雲の合成のあとに描く演出を、描く(コンポーネントの DrawAfterClouds を、子も含めて呼ぶ)
+  virtual void DrawAfterClouds();
 
   // メタデータプロパティ
   const std::string& GetTag() const { return tag_; }

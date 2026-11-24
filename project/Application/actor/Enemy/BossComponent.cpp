@@ -1,6 +1,7 @@
 #include "BossComponent.h"
 #include "BossModelSpec.h"
 #include "BossIdleState.h"
+#include "../Bullet/BossBulletVisualComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
@@ -31,6 +32,8 @@ constexpr float kModelFrontYawOffset = 3.14159265f;
 // アニメーションの切り替えの混ぜ合わせ時間(秒)。急に切り替わって見えないようにする
 constexpr float kHoverBlendSeconds = 0.25f;  // 待機へ戻る
 constexpr float kAttackBlendSeconds = 0.15f; // 攻撃の予告へ入る
+constexpr float kChargeBlendSeconds = 0.10f; // 溜めへ入る(予告の終わりと姿勢がつながっているので、短く)
+constexpr float kFireBlendSeconds = 0.05f;   // 発射へ入る(突き出しを、すぐに始める)
 constexpr float kHitBlendSeconds = 0.05f;    // 被弾のよろめきへ入る(すぐに反応して見えるよう短く)
 }
 
@@ -47,6 +50,16 @@ void BossComponent::Update(float deltaTime) {
     ApplyPendingState();
 
     UpdateAnimation();
+
+    // 攻撃の演出は、口の前(muzzle ボーン)の位置に出す。モデルにそのボーンが無いとき(鷲)は、演出を出さない
+    Vector3 muzzle{ 0.0f, 0.0f, 0.0f };
+    const auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
+    const bool hasMuzzle = model && model->TryGetBoneWorldPosition(BossBone::kMuzzle, muzzle);
+    attackEffects_.Update(deltaTime, hasMuzzle ? &muzzle : nullptr);
+}
+
+void BossComponent::DrawAfterClouds() {
+    attackEffects_.Draw();
 }
 
 void BossComponent::ApplyPendingState() {
@@ -65,29 +78,65 @@ void BossComponent::UpdateAnimation() {
     auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
     if (!model) return;
 
-    // 被弾: すぐによろめく(攻撃の予告の途中でも割り込む)。連射を受けたときも、毎回頭から再生し直す(restart)
+    // 被弾: すぐによろめく(攻撃の途中でも割り込む)。連射を受けたときも、毎回頭から再生し直す(restart)。
+    // 攻撃の状態そのもの(弾を撃つ時刻)は止まらない。よろめきのアニメーションだけが、攻撃のアニメーションを一時的に上書きする
     if (hitRequested_) {
         hitRequested_ = false;
-        attackRequested_ = false;
+        attackStageChanged_ = false;
         model->PlayAnimation(BossAnimation::kHit, false, kHitBlendSeconds, true);
         animState_ = AnimState::Hit;
         return;
     }
 
-    // 攻撃の予告: よろめいている間は始めない(Hit が終わってから、次の発射の予告を出す)
-    if (attackRequested_ && animState_ != AnimState::Hit) {
-        attackRequested_ = false;
-        model->PlayAnimation(BossAnimation::kAttack, false, kAttackBlendSeconds, false);
-        animState_ = AnimState::Attack;
-        return;
+    // 攻撃の段が変わったら、その段のクリップへ切り替える。よろめいている間は、切り替えない(Hit が終わってから)。
+    // よろめきが終わったときに、予告か溜めの途中なら、待機へ戻らず、いまの段のクリップへ戻る(構えた姿勢へ戻る)。
+    // 発射の途中なら、突き出しをやり直さず、待機へ戻る
+    const bool hitFinished = animState_ == AnimState::Hit && model->IsAnimationFinished();
+    if (animState_ != AnimState::Hit || hitFinished) {
+        const bool backToHold = hitFinished &&
+            (attackStage_ == BossAttackStage::Telegraph || attackStage_ == BossAttackStage::Charge);
+        if (attackStageChanged_ || backToHold) {
+            attackStageChanged_ = false;
+            if (PlayAttackStageClip(*model)) return;
+        }
     }
-    attackRequested_ = false;
 
-    // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る(攻撃の要求は、状態の PlayAttackAnimation が立てる)
-    if (animState_ == AnimState::None || (animState_ != AnimState::Hover && model->IsAnimationFinished())) {
+    // 予告と溜めの間は、クリップが最後まで再生されても、待機へ戻らず、最後の姿勢を保つ(次の段が始まるまで)
+    const bool holdingAttackPose = animState_ == AnimState::Attack &&
+        (attackStage_ == BossAttackStage::Telegraph || attackStage_ == BossAttackStage::Charge);
+    // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る
+    if (animState_ == AnimState::None || (animState_ != AnimState::Hover && !holdingAttackPose && model->IsAnimationFinished())) {
         model->PlayAnimation(BossAnimation::kHover, true, kHoverBlendSeconds, false);
         animState_ = AnimState::Hover;
     }
+}
+
+bool BossComponent::PlayAttackStageClip(AbsoluteEngine::ModelComponent& model) {
+    const char* clip = nullptr;
+    bool loop = false;
+    float blendSeconds = 0.0f;
+    switch (attackStage_) {
+    case BossAttackStage::Telegraph:
+        clip = attackClips_.telegraph;
+        blendSeconds = kAttackBlendSeconds;
+        break;
+    case BossAttackStage::Charge:
+        clip = attackClips_.charge;
+        loop = true; // 溜めは、段の長さが決まっていないので、ループさせる
+        blendSeconds = kChargeBlendSeconds;
+        break;
+    case BossAttackStage::Fire:
+        clip = attackClips_.fire;
+        blendSeconds = kFireBlendSeconds;
+        break;
+    case BossAttackStage::None:
+        break;
+    }
+    if (!clip) return false;
+
+    model.PlayAnimation(clip, loop, blendSeconds, false);
+    animState_ = AnimState::Attack;
+    return true;
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> BossComponent::FindPlayer() const {
@@ -139,17 +188,29 @@ void SpawnBossBullet(AbsoluteEngine::ISpawner& spawner, const Vector3& spawnPos,
     spec.name     = "BossBullet";
     spec.position = spawnPos;
     spec.velocity = vel;
-    spec.color    = Vector4{ 1.0f, 0.2f, 0.6f, 1.0f }; // ボス弾は他の敵弾と区別できるよう色を変える
-    spawner.Spawn(BulletFactory::CreateEnemy(spec));
+    spec.visible  = false; // 球のモデルは付けない。見た目は、下の三日月の衝撃波(BossBulletVisualComponent)が描く
+    auto bullet = BulletFactory::CreateEnemy(spec);
+    bullet->AddComponent(std::make_unique<BossBulletVisualComponent>(vel));
+    spawner.Spawn(bullet);
 }
 } // namespace
+
+Vector3 BossComponent::GetBulletOrigin_() const {
+    // 弾は、攻撃の演出(輪、粒)と同じ、口の前(muzzle ボーン)から出す。モデルにそのボーンが無いとき(鷲)は、ボスの位置から出す
+    Vector3 muzzle{ 0.0f, 0.0f, 0.0f };
+    const auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>();
+    if (model && model->TryGetBoneWorldPosition(BossBone::kMuzzle, muzzle)) {
+        return muzzle;
+    }
+    return GetOwner()->GetTransform().translate;
+}
 
 void BossComponent::FireAimedShot(float speed) {
     if (!GetOwner()) return;
     auto playerObj = FindPlayer();
     if (!playerObj) return;
 
-    const Vector3 spawnPos = GetOwner()->GetTransform().translate;
+    const Vector3 spawnPos = GetBulletOrigin_();
     Vector3 toPlayer = {
         playerObj->GetTransform().translate.x - spawnPos.x,
         playerObj->GetTransform().translate.y - spawnPos.y,
@@ -167,7 +228,7 @@ void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed)
     auto playerObj = FindPlayer();
     if (!playerObj) return;
 
-    const Vector3 spawnPos = GetOwner()->GetTransform().translate;
+    const Vector3 spawnPos = GetBulletOrigin_();
     Vector3 toPlayer = {
         playerObj->GetTransform().translate.x - spawnPos.x,
         playerObj->GetTransform().translate.y - spawnPos.y,
@@ -203,6 +264,7 @@ void BossComponent::TakeDamage(int damage) {
         // 撃破。オブジェクトはここでは消さない(撃破演出がボスの姿を使うため。消えるのはシーンの終わり)。
         // isActive_ が false になるので、以降は、移動・攻撃・被弾の処理が止まる。撃破の検知は IsActive() で行う
         isActive_ = false;
+        attackEffects_.Stop(); // 撃破: 攻撃の演出(輪)を消す
     } else {
         // 即死しなかった場合の被弾リアクション(よろめきのアニメーション。次の UpdateAnimation で再生する)
         hitRequested_ = true;

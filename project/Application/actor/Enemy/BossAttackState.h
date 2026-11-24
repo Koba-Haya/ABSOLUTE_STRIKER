@@ -7,7 +7,8 @@
 //
 // 流れ: 予告(Telegraph) -> 溜め(Charge) -> 発射 -> 隙(Recover) -> 待機の状態へ戻る。
 // 各段の秒数と、攻撃の種類(単発、扇状)は、攻撃の定義(BossAttackSpec)で決まる。
-// 発射は、溜めが終わった瞬間に 1 回だけ行う。予告・溜めの段の切り替わりは、今後、演出(粒、光)を結びつける場所になる。
+// 発射は、溜めが終わった瞬間に 1 回だけ行う。段が変わるたびに、IBossActions::SetAttackStage で体へ伝える
+// (体は、段ごとのアニメーションに切り替える。今後、演出(粒、光)も、ここへ結びつける)。
 // 段(Telegraph / Charge / Recover)は、秒数の表だけで進むので、状態クラスには分けず、このクラスの中の列挙体で持つ。
 class BossAttackState : public IBossState {
 public:
@@ -16,6 +17,7 @@ public:
 
     void Enter(IBossActions& actions) override;
     void Update(IBossActions& actions, float deltaTime) override;
+    void Exit(IBossActions& actions) override;
 
 private:
     enum class Stage { Telegraph, Charge, Recover };

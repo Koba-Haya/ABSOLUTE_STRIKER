@@ -6,8 +6,13 @@
 void BossAttackState::Enter(IBossActions& actions) {
     stage_ = Stage::Telegraph;
     timer_ = 0.0f;
-    // 予告の始まりで、攻撃のアニメーション(あごを開いて溜める)を始める
-    actions.PlayAttackAnimation();
+    // 予告の始まりを伝える(体は、予告のアニメーション = 構えへ移る動き、に切り替える)
+    actions.SetAttackStage(BossAttackStage::Telegraph, spec_);
+}
+
+void BossAttackState::Exit(IBossActions& actions) {
+    // 攻撃が終わる(次の状態へ移る、または、ほかの理由で抜ける)ことを伝える
+    actions.SetAttackStage(BossAttackStage::None, spec_);
 }
 
 float BossAttackState::GetStageSec() const {
@@ -40,9 +45,11 @@ void BossAttackState::Update(IBossActions& actions, float deltaTime) {
         switch (stage_) {
         case Stage::Telegraph:
             stage_ = Stage::Charge;
+            actions.SetAttackStage(BossAttackStage::Charge, spec_);
             break;
         case Stage::Charge:
-            // 溜めが終わった瞬間に発射する
+            // 溜めが終わった瞬間に、発射のアニメーションと演出へ切り替えて、弾を撃つ
+            actions.SetAttackStage(BossAttackStage::Fire, spec_);
             Fire(actions);
             stage_ = Stage::Recover;
             break;

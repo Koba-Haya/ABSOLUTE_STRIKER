@@ -50,7 +50,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateBulletBase(
 std::shared_ptr<AbsoluteEngine::GameObject> CreateStraight(
     const BulletSpec& spec, const char* defaultName, const char* tag) {
   auto bulletObj = CreateBulletBase(spec.name.empty() ? defaultName : spec.name,
-                                    tag, spec.radius, spec.position, spec.color);
+                                    tag, spec.radius, spec.position, spec.color, spec.visible);
   auto bulletComp = std::make_unique<BulletComponent>();
   bulletComp->Initialize(spec.velocity);
   bulletComp->SetCanBeShotDown(spec.canBeShotDown);

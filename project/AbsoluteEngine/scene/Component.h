@@ -15,6 +15,9 @@ public:
 
     virtual void Update(float deltaTime) {}
     virtual void Draw() {}
+    // 雲の合成のあとに描きたいものがあるとき、ここで描く(Draw とは別。シーンが、雲を合成したあとに呼ぶ)。
+    // 雲に隠れさせたくない演出(弾の光など)用。このときの描画先は色だけで、深度は見ない
+    virtual void DrawAfterClouds() {}
     virtual void OnCollision(GameObject* other) {}
 
     // タイムラインのイベントが、レール座標の指定でこのオブジェクトを出現させた直後に呼ばれる。

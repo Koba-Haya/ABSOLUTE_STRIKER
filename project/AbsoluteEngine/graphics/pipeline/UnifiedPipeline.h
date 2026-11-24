@@ -120,6 +120,9 @@ public:
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
   static PipelineDesc MakeRingDesc();
+  // 切れ目のある輪(ArcRing)。板 1 枚を、ピクセルシェーダーが輪の形に描く。b0(PS)は輪のパラメータ、b0(VS)は変換行列。テクスチャなし。
+  // 通常のアルファ合成(明るい空や雲の上でも、色が白く飛ばない)
+  static PipelineDesc MakeArcRingDesc();
   // 軌跡の帯(リボン)。頂点は位置・UV・色。b0 は VS の変換行列だけ(PS の定数バッファ・テクスチャなし)
   static PipelineDesc MakeRibbonDesc();
   static PipelineDesc MakeCylinderDesc();

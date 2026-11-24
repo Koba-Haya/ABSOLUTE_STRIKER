@@ -62,6 +62,15 @@ void GameObject::Draw() {
   }
 }
 
+void GameObject::DrawAfterClouds() {
+  for (auto& comp : components_) {
+    comp->DrawAfterClouds();
+  }
+  for (auto& child : children_) {
+    child->DrawAfterClouds();
+  }
+}
+
 // Removed LoadModel and LoadTexture
 
 } // namespace AbsoluteEngine
