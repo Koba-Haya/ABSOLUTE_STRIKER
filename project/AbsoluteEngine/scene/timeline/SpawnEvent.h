@@ -22,21 +22,30 @@ public:
     ~SpawnEvent() override { Rewind(); }
 
     // -----------------------------------------------------------
-    // 設定値（エディタUIまたはデシリアライズ時に設定される）
+    // 設定値の読み取りと、編集結果の取り込み
+    // (設定値そのものは private。書き換えは、デシリアライズ、インスペクタ、ApplyEditedTransform だけが行う)
     // -----------------------------------------------------------
 
     // スポーンするプレハブのID（PrefabRegistryで解決される）
-    std::string prefabId_ = "";
+    const std::string& GetPrefabId() const { return prefabId_; }
 
-    // スポーン位置・回転・スケール
-    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
-    Transform spawnTransform_{};
+    // スポーン位置・回転・スケール(設定された値そのもの。レール座標の指定のときの出現位置は、ResolveSpawnTransform で求める)
+    const Transform& GetSpawnTransform() const { return spawnTransform_; }
 
-    // レール座標で位置を指定するか(false なら、spawnTransform_.translate の世界座標。従来の JSON はこちら)
-    bool useRail_ = false;
+    // レール座標で位置を指定しているか
+    bool UsesRail() const { return useRail_; }
 
-    // レール座標での出現位置(useRail_ が true のときだけ使う)
-    RailSpawnPoint rail_{};
+    // ギズモなどで編集された Transform を、設定値へ取り込む。
+    // レール座標の指定のときは、位置はレール座標だけで決まるので、位置を除いて(回転とスケールだけ)取り込む。
+    // そうでなければ、位置も含めて丸ごと取り込む
+    void ApplyEditedTransform(const Transform& edited) {
+        if (useRail_) {
+            spawnTransform_.rotate = edited.rotate;
+            spawnTransform_.scale = edited.scale;
+        } else {
+            spawnTransform_ = edited;
+        }
+    }
 
     // -----------------------------------------------------------
     // ITimelineEvent 実装
@@ -74,6 +83,23 @@ public:
     }
 
 private:
+    // -----------------------------------------------------------
+    // 設定値（エディタUIまたはデシリアライズ時に設定される）
+    // -----------------------------------------------------------
+
+    // スポーンするプレハブのID（PrefabRegistryで解決される）
+    std::string prefabId_ = "";
+
+    // スポーン位置・回転・スケール
+    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
+    Transform spawnTransform_{};
+
+    // レール座標で位置を指定するか(false なら、spawnTransform_.translate の世界座標。従来の JSON はこちら)
+    bool useRail_ = false;
+
+    // レール座標での出現位置(useRail_ が true のときだけ使う)
+    RailSpawnPoint rail_{};
+
     // Fire()でスポーンしたオブジェクトへの弱参照
     // shared_ptr を直接持つと所有権の衝突が起きるため weak_ptr を使用する
     std::weak_ptr<GameObject> spawnedObject_;

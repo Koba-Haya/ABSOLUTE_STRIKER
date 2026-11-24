@@ -38,12 +38,14 @@ void EnemyComponent::Update(float deltaTime) {
         float t = std::clamp(dissolveTimer_ / dissolveDuration_, 0.0f, 1.0f);
 
         if (auto dissolveComp = GetOwner()->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-            auto& dissolve = *dissolveComp;
+            // 設定のコピーを編集して、SetSettings で戻す
+            AbsoluteEngine::DissolveComponent::Settings dissolve = dissolveComp->GetSettings();
             dissolve.enable = true;
             dissolve.threshold = t;
             dissolve.edgeRange = 0.05f;
             dissolve.edgeColor = { 1.0f, 0.3f, 0.0f }; // オレンジのエッジ
             dissolve.maskColor  = { 1.0f, 0.1f, 0.0f };
+            dissolveComp->SetSettings(dissolve);
 
             if (t >= 1.0f) {
                 GetOwner()->Destroy();

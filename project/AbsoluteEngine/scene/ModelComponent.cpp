@@ -141,8 +141,9 @@ void ModelComponent::Draw() {
 
         auto dissolve = GetOwner()->GetComponent<DissolveComponent>();
         if (dissolve) {
-            modelInstance_->SetDissolveParam(dissolve->enable, dissolve->threshold, dissolve->edgeRange, dissolve->edgeColor, dissolve->maskColor, dissolve->emberAmount);
-            modelInstance_->SetCrackParam(dissolve->crack);
+            const DissolveComponent::Settings& d = dissolve->GetSettings();
+            modelInstance_->SetDissolveParam(d.enable, d.threshold, d.edgeRange, d.edgeColor, d.maskColor, d.emberAmount);
+            modelInstance_->SetCrackParam(dissolve->GetCrack());
         }
         
         modelInstance_->Draw();

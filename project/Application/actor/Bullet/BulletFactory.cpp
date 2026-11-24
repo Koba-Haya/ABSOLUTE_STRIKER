@@ -38,10 +38,10 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateBulletBase(
     bulletObj->AddComponent(std::move(modelComp));
   }
 
-  auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-  colliderComp->type   = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = radius;
-  bulletObj->AddComponent(std::move(colliderComp));
+  AbsoluteEngine::ColliderComponent::Settings colliderSettings;
+  colliderSettings.type   = AbsoluteEngine::ColliderComponent::Type::Sphere;
+  colliderSettings.radius = radius;
+  bulletObj->AddComponent(std::make_unique<AbsoluteEngine::ColliderComponent>(colliderSettings));
 
   bulletObj->SetPosition(position);
   return bulletObj;

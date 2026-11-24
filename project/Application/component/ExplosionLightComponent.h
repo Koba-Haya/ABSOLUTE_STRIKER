@@ -21,14 +21,17 @@ public:
         timer_ += deltaTime;
         auto lightComp = GetOwner()->GetComponent<AbsoluteEngine::LightNodeComponent>();
         if (lightComp) {
+            // 設定のコピーを編集して、SetSettings で戻す
+            AbsoluteEngine::LightNodeComponent::Settings light = lightComp->GetSettings();
             if (timer_ >= lifeTime_) {
                 isDead_ = true;
-                lightComp->type = AbsoluteEngine::LightNodeComponent::Type::None;
+                light.type = AbsoluteEngine::LightNodeComponent::Type::None;
             } else {
                 float t = timer_ / lifeTime_;
                 float currentIntensity = maxIntensity_ * (1.0f - t);
-                lightComp->intensity = currentIntensity;
+                light.intensity = currentIntensity;
             }
+            lightComp->SetSettings(light);
         } else {
             if (timer_ >= lifeTime_) {
                 isDead_ = true;

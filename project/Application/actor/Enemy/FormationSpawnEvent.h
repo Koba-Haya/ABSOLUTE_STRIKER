@@ -26,30 +26,6 @@ public:
     ~FormationSpawnEvent() override { Rewind(); }
 
     // -----------------------------------------------------------
-    // 設定値（エディタUIまたはデシリアライズ時に設定される）
-    // -----------------------------------------------------------
-
-    // スポーンするプレハブのID（PrefabRegistryで解決される。編隊メンバー全員が同一プレハブ）
-    std::string prefabId_ = "";
-
-    // 編隊の中心位置・回転・スケール（各メンバーはこの位置を基準にXY平面でオフセットされる）
-    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
-    Transform basePosition_{};
-
-    // レール座標で位置を指定するか(false なら、basePosition_.translate の世界座標。従来の JSON はこちら)
-    bool useRail_ = false;
-
-    // レール座標での編隊の中心位置(useRail_ が true のときだけ使う)。
-    // 各メンバーの散らしは、レール座標のときは道の右・上方向(世界座標のときは世界の X・Y 軸)
-    AbsoluteEngine::RailSpawnPoint rail_{};
-
-    // 編隊のメンバー数（3〜5にクランプ）
-    int memberCount_ = 4;
-
-    // クラスタ配置のばらつき半径
-    float clusterRadius_ = 3.0f;
-
-    // -----------------------------------------------------------
     // ITimelineEvent 実装
     // -----------------------------------------------------------
 
@@ -73,6 +49,30 @@ public:
     }
 
 private:
+    // -----------------------------------------------------------
+    // 設定値（エディタUIまたはデシリアライズ時に設定される）
+    // -----------------------------------------------------------
+
+    // スポーンするプレハブのID（PrefabRegistryで解決される。編隊メンバー全員が同一プレハブ）
+    std::string prefabId_ = "";
+
+    // 編隊の中心位置・回転・スケール（各メンバーはこの位置を基準にXY平面でオフセットされる）
+    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
+    Transform basePosition_{};
+
+    // レール座標で位置を指定するか(false なら、basePosition_.translate の世界座標。従来の JSON はこちら)
+    bool useRail_ = false;
+
+    // レール座標での編隊の中心位置(useRail_ が true のときだけ使う)。
+    // 各メンバーの散らしは、レール座標のときは道の右・上方向(世界座標のときは世界の X・Y 軸)
+    AbsoluteEngine::RailSpawnPoint rail_{};
+
+    // 編隊のメンバー数（3〜5にクランプ）
+    int memberCount_ = 4;
+
+    // クラスタ配置のばらつき半径
+    float clusterRadius_ = 3.0f;
+
     // Fire()でスポーンした各メンバーへの弱参照
     std::vector<std::weak_ptr<AbsoluteEngine::GameObject>> spawnedObjects_;
 };

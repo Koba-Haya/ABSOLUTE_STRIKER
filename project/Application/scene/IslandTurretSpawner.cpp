@@ -63,7 +63,10 @@ bool IslandTurretSpawner::SpawnTurret_(const AbsoluteEngine::ComponentDeps &deps
 
   // 当たり判定は、倍率を見ない(AABB の半幅をそのまま使う)ので、見た目の大きさに合わせる
   if (auto *collider = turret->GetComponent<AbsoluteEngine::ColliderComponent>()) {
-    collider->size = {halfSize, halfSize, halfSize};
+    // 設定のコピーを編集して、SetSettings で戻す
+    AbsoluteEngine::ColliderComponent::Settings colliderSettings = collider->GetSettings();
+    colliderSettings.size = {halfSize, halfSize, halfSize};
+    collider->SetSettings(colliderSettings);
   }
 
   deps.spawner->Spawn(turret);

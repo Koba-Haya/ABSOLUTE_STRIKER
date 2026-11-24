@@ -412,8 +412,8 @@ void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const V
   if (!obj) return;
 
   auto colliderComp = obj->GetComponent<ColliderComponent>();
-  if (colliderComp && colliderComp->type != ColliderComponent::Type::None) {
-    const auto& collider = *colliderComp;
+  if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
+    const auto& collider = colliderComp->GetSettings();
     Vector3 objPos = obj->GetTransform().translate;
     Vector3 scale = obj->GetTransform().scale;
     Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
@@ -509,8 +509,8 @@ void EditorUIManager::DrawColliderDebug(const SceneWorld::ObjectList& rootObject
     if (!obj) return;
 
     auto colliderComp = obj->GetComponent<ColliderComponent>();
-    if (colliderComp && colliderComp->type != ColliderComponent::Type::None) {
-      const auto& collider = *colliderComp;
+    if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
+      const auto& collider = colliderComp->GetSettings();
       Vector3 objPos = obj->GetTransform().translate;
       Vector3 scale = obj->GetTransform().scale;
       Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
@@ -647,26 +647,26 @@ void EditorUIManager::DrawHierarchy(SceneWorld& world) {
       if (ImGui::BeginMenu("Create Light")) {
           if (ImGui::Selectable("Directional Light")) {
               auto newObj = std::make_shared<GameObject>("Directional Light");
-              auto lightComp = std::make_unique<LightNodeComponent>();
-              lightComp->type = LightNodeComponent::Type::Directional;
-              newObj->AddComponent(std::move(lightComp));
+              LightNodeComponent::Settings lightSettings;
+              lightSettings.type = LightNodeComponent::Type::Directional;
+              newObj->AddComponent(std::make_unique<LightNodeComponent>(lightSettings));
               newObj->SetRotation({ 0.5f, 0.5f, 0.0f });
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
           if (ImGui::Selectable("Point Light")) {
               auto newObj = std::make_shared<GameObject>("Point Light");
-              auto lightComp = std::make_unique<LightNodeComponent>();
-              lightComp->type = LightNodeComponent::Type::Point;
-              newObj->AddComponent(std::move(lightComp));
+              LightNodeComponent::Settings lightSettings;
+              lightSettings.type = LightNodeComponent::Type::Point;
+              newObj->AddComponent(std::make_unique<LightNodeComponent>(lightSettings));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
           if (ImGui::Selectable("Spot Light")) {
               auto newObj = std::make_shared<GameObject>("Spot Light");
-              auto lightComp = std::make_unique<LightNodeComponent>();
-              lightComp->type = LightNodeComponent::Type::Spot;
-              newObj->AddComponent(std::move(lightComp));
+              LightNodeComponent::Settings lightSettings;
+              lightSettings.type = LightNodeComponent::Type::Spot;
+              newObj->AddComponent(std::make_unique<LightNodeComponent>(lightSettings));
               if (commandManager_) { commandManager_->ExecuteCommand(std::make_shared<CreateObjectCommand>(newObj, &world)); } else { world.Add(newObj); SetSceneModified(); }
               SelectObject(newObj);
           }
@@ -840,7 +840,8 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
     if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
       auto lightComp = obj->GetComponent<LightNodeComponent>();
       if (lightComp) {
-        LightNodeComponent& l = *lightComp;
+        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
+        LightNodeComponent::Settings l = lightComp->GetSettings();
         int currentType = static_cast<int>(l.type);
         const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
 
@@ -885,13 +886,16 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
           }
         }
 
+        // 編集したコピーを、コンポーネントへ反映する
+        lightComp->SetSettings(l);
+
         if (activated) {
-            obj->GetComponent<LightNodeComponent>()->Serialize(componentStateBefore_);
+            lightComp->Serialize(componentStateBefore_);
         }
         if (deactivatedAfterEdit) {
             if (commandManager_) {
                 nlohmann::json componentStateAfter;
-                l.Serialize(componentStateAfter);
+                lightComp->Serialize(componentStateAfter);
                 commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(obj, "LightNodeComponent", componentStateBefore_, componentStateAfter));
             }
         }
@@ -908,7 +912,8 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
     if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
       auto dissolveComp = obj->GetComponent<DissolveComponent>();
       if (dissolveComp) {
-        auto& dissolve = *dissolveComp;
+        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
+        DissolveComponent::Settings dissolve = dissolveComp->GetSettings();
         if (ImGui::Checkbox("Enable Dissolve", &dissolve.enable)) SetSceneModified();
         if (dissolve.enable) {
           if (ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f)) SetSceneModified();
@@ -924,6 +929,7 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
             SetSceneModified();
           }
         }
+        dissolveComp->SetSettings(dissolve);
       } else {
         ImGui::Text("No DissolveComponent attached.");
         if (ImGui::Button("Add DissolveComponent")) {
@@ -937,7 +943,8 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
     if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
       auto colliderComp = obj->GetComponent<ColliderComponent>();
       if (colliderComp) {
-        ColliderComponent& collider = *colliderComp;
+        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
+        ColliderComponent::Settings collider = colliderComp->GetSettings();
 
         const char* types[] = { "None", "Sphere", "AABB" };
         int currentType = static_cast<int>(collider.type);
@@ -955,6 +962,7 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
             if (ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f)) SetSceneModified();
           }
         }
+        colliderComp->SetSettings(collider);
       } else {
         ImGui::Text("No ColliderComponent attached.");
         if (ImGui::Button("Add ColliderComponent")) {

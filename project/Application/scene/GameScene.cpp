@@ -427,11 +427,11 @@ void GameScene::Initialize(const SceneServices &services) {
   if (!hasLight) {
       auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
       initialDirLight->SetRotation({ 0.5f, 0.5f, 0.0f });
-      auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-      lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
-      lightComp->color = { 1.0f, 1.0f, 1.0f };
-      lightComp->intensity = 1.0f;
-      initialDirLight->AddComponent(std::move(lightComp));
+      AbsoluteEngine::LightNodeComponent::Settings lightSettings;
+      lightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+      lightSettings.color = { 1.0f, 1.0f, 1.0f };
+      lightSettings.intensity = 1.0f;
+      initialDirLight->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(lightSettings));
       AddRootObject(initialDirLight);
   }
 
@@ -996,10 +996,10 @@ void GameScene::SpawnBoss_() {
 
   bossObj->AddComponent(std::move(bossComp));
 
-  auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-  colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = bossSpec.colliderRadius; // ボスなので大きめに
-  bossObj->AddComponent(std::move(colliderComp));
+  AbsoluteEngine::ColliderComponent::Settings colliderSettings;
+  colliderSettings.type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+  colliderSettings.radius = bossSpec.colliderRadius; // ボスなので大きめに
+  bossObj->AddComponent(std::make_unique<AbsoluteEngine::ColliderComponent>(colliderSettings));
   bossObj->SetTag("Boss");
 
   AddRootObject(bossObj);
@@ -1229,7 +1229,9 @@ void GameScene::ReviveForDebug_() {
           pComp->Revive();
       }
       if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-          dissolve->enable = false;
+          AbsoluteEngine::DissolveComponent::Settings state = dissolve->GetSettings();
+          state.enable = false;
+          dissolve->SetSettings(state);
       }
   }
 }
@@ -1250,11 +1252,13 @@ void GameScene::ApplyDeathPose_() {
   // 蝶の朽ち方(ディゾルブ)。ModelComponent が、毎フレームこの値を描画に渡す
   if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
       const PlayerDeathDissolve state = deathDirector_.GetDissolve();
-      dissolve->enable = state.enabled;
-      dissolve->threshold = state.threshold;
-      dissolve->edgeRange = state.edgeRange;
-      dissolve->edgeColor = state.edgeColor;
-      dissolve->emberAmount = state.emberAmount;
+      AbsoluteEngine::DissolveComponent::Settings settings = dissolve->GetSettings();
+      settings.enable = state.enabled;
+      settings.threshold = state.threshold;
+      settings.edgeRange = state.edgeRange;
+      settings.edgeColor = state.edgeColor;
+      settings.emberAmount = state.emberAmount;
+      dissolve->SetSettings(settings);
   }
 }
 

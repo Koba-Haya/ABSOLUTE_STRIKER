@@ -9,7 +9,7 @@
 namespace AbsoluteEngine {
 
 Transform TimelineSpawnPreview::ResolvePlacement(const TimelineManager &manager, const SpawnEvent &spawnEvent) {
-  Transform placed = spawnEvent.spawnTransform_;
+  Transform placed = spawnEvent.GetSpawnTransform();
 
   // 実際の出現(Fire)と同じ手順で、発火時刻のレール位置から世界座標を求める
   float triggerTime = 0.0f;
@@ -31,7 +31,7 @@ void TimelineSpawnPreview::SwitchPreview(TimelineManager &manager, ITimelineEven
   // 新しいイベントが選択されていて、それが SpawnEvent なら、プレビューオブジェクトを生成する
   if (selectedEvent != nullptr) {
     if (auto *spawnEv = dynamic_cast<SpawnEvent *>(selectedEvent)) {
-      const std::string path = PrefabRegistry::GetInstance().ResolveId(spawnEv->prefabId_);
+      const std::string path = PrefabRegistry::GetInstance().ResolveId(spawnEv->GetPrefabId());
       // 窓口の束が無いと、プレハブの部品を作れない(通常は、シーンが設定している)
       const ComponentDeps *deps = manager.GetDeps();
       if (!path.empty() && deps) {
@@ -60,16 +60,13 @@ void TimelineSpawnPreview::WriteBackToEvent(const TimelineManager &manager, ITim
   auto *spawnEv = dynamic_cast<SpawnEvent *>(selectedEvent);
   if (!spawnEv) return;
 
-  // ギズモまたはインスペクタで変更された Transform をイベントの値に書き戻す
-  if (spawnEv->useRail_) {
-    // レール座標の指定のときは、位置はレール座標(ahead, lateral, vertical)だけで決まる。
-    // ギズモで動かしても位置は書き戻さず(世界座標へ戻すと、レール座標の指定が崩れる)、
-    // 回転とスケールだけを書き戻す。プレビューの位置は、毎フレーム、レール座標から求め直す
-    spawnEv->spawnTransform_.rotate = previewObj->GetTransform().rotate;
-    spawnEv->spawnTransform_.scale = previewObj->GetTransform().scale;
+  // ギズモまたはインスペクタで変更された Transform を、イベントの値へ取り込む
+  // (レール座標の指定のときに、位置を取り込まない判断は、イベント自身が行う)
+  spawnEv->ApplyEditedTransform(previewObj->GetTransform());
+  if (spawnEv->UsesRail()) {
+    // レール座標の指定のときは、位置はレール座標だけで決まる(世界座標へ戻すと、レール座標の指定が崩れる)。
+    // ギズモで動かしても、プレビューの位置は、毎フレーム、レール座標から求め直す
     previewObj->SetPosition(ResolvePlacement(manager, *spawnEv).translate);
-  } else {
-    spawnEv->spawnTransform_ = previewObj->GetTransform();
   }
 }
 

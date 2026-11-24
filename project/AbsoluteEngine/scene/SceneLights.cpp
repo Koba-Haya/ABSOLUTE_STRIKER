@@ -29,8 +29,8 @@ void SceneLights::ApplyToRenderer(const SceneWorld& world, Renderer* renderer) {
     const auto& t = obj->GetTransform();
 
     auto lightComp = obj->GetComponent<LightNodeComponent>();
-    if (lightComp && lightComp->type != LightNodeComponent::Type::None) {
-      const auto& light = *lightComp;
+    if (lightComp && lightComp->GetSettings().type != LightNodeComponent::Type::None) {
+      const auto& light = lightComp->GetSettings();
 
       // Transform の回転から方向ベクトルを計算
       Matrix4x4 rotX = MakeRotateXMatrix(t.rotate.x);

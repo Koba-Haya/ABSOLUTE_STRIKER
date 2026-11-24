@@ -145,10 +145,10 @@ void DevScene::Update() {
               newEnemy->SetPosition({ rX, rY, rZ });
               newEnemy->SetTag("Enemy");
                 
-              auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-              colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-              colliderComp->radius = 2.0f;
-              newEnemy->AddComponent(std::move(colliderComp));
+              AbsoluteEngine::ColliderComponent::Settings colliderSettings;
+              colliderSettings.type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+              colliderSettings.radius = 2.0f;
+              newEnemy->AddComponent(std::make_unique<AbsoluteEngine::ColliderComponent>(colliderSettings));
               
               newEnemy->AddComponent(std::make_unique<EnemyComponent>());
               AddRootObject(newEnemy);
@@ -479,12 +479,12 @@ void DevScene::Update() {
                       // 爆発の光（ポイントライト）の生成
                       auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
                       lightObj->SetPosition(targetEnemyPos);
-                      auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-                      lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
-                      lightNodeComp->color = { 1.0f, 0.5f, 0.1f };
-                      lightNodeComp->radius = 30.0f;
-                      lightNodeComp->decay = 1.0f;
-                      lightObj->AddComponent(std::move(lightNodeComp));
+                      AbsoluteEngine::LightNodeComponent::Settings lightSettings;
+                      lightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Point;
+                      lightSettings.color = { 1.0f, 0.5f, 0.1f };
+                      lightSettings.radius = 30.0f;
+                      lightSettings.decay = 1.0f;
+                      lightObj->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(lightSettings));
                       constexpr float kExplosionLightLifeTime = 0.5f;
                       constexpr float kExplosionLightMaxIntensity = 20.0f;
                       lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
@@ -518,7 +518,7 @@ void DevScene::Update() {
 
       if (obj->GetName() == "Enemy") {
           auto dissolveComp = obj->GetComponent<AbsoluteEngine::DissolveComponent>();
-          return dissolveComp && dissolveComp->enable && dissolveComp->threshold >= 1.0f;
+          return dissolveComp && dissolveComp->GetSettings().enable && dissolveComp->GetSettings().threshold >= 1.0f;
       }
       if (obj->GetName() == "ExplosionLight") {
           for (const auto& comp : obj->GetComponents()) {
@@ -704,21 +704,21 @@ void DevScene::InitResources_() {
   // 最初からシーンに配置しておくライトを rootObjects_ に追加する
   auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
   initialDirLight->SetRotation({ 0.5f, 0.5f, 0.0f }); // 適当な方向
-  auto dirLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-  dirLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
-  dirLightComp->color = { 1.0f, 1.0f, 1.0f };
-  dirLightComp->intensity = 1.0f;
-  initialDirLight->AddComponent(std::move(dirLightComp));
+  AbsoluteEngine::LightNodeComponent::Settings dirLightSettings;
+  dirLightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+  dirLightSettings.color = { 1.0f, 1.0f, 1.0f };
+  dirLightSettings.intensity = 1.0f;
+  initialDirLight->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(dirLightSettings));
   AddRootObject(initialDirLight);
 
   auto initialPointLight = std::make_shared<AbsoluteEngine::GameObject>("Point Light");
   initialPointLight->SetPosition({ 0.0f, 2.0f, -2.0f });
-  auto pointLightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-  pointLightComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
-  pointLightComp->color = { 1.0f, 1.0f, 1.0f };
-  pointLightComp->intensity = 1.0f;
-  pointLightComp->radius = 10.0f;
-  initialPointLight->AddComponent(std::move(pointLightComp));
+  AbsoluteEngine::LightNodeComponent::Settings pointLightSettings;
+  pointLightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Point;
+  pointLightSettings.color = { 1.0f, 1.0f, 1.0f };
+  pointLightSettings.intensity = 1.0f;
+  pointLightSettings.radius = 10.0f;
+  initialPointLight->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(pointLightSettings));
   AddRootObject(initialPointLight);
 
   // オフスクリーンテスト初期化
