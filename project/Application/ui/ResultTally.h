@@ -18,10 +18,13 @@
 /// 終わったら IsFinished が true。待たずに飛ばしたいときは Skip(最後の状態へ、すぐ移る)。
 /// 使い方: Initialize(シーンの開始時に 1 回)-> SetVerticalRange -> Begin(結果と待ち時間)-> Update / Draw(毎フレーム)
 /// </summary>
+class RatingCatalog;
+
 class ResultTally {
 public:
   /// <summary>文字の資源とパネルを用意する。ファイルが無いときは、探した場所を表示して終了する</summary>
-  void Initialize();
+  /// <param name="rating">評価の基準(各行の配点と、ランクの境目。所有しない。このクラスより長く生きていること)</param>
+  void Initialize(const RatingCatalog &rating);
 
   /// <summary>集計を置く縦の範囲(画面ピクセル。top は上端、bottom は下端)を決める。見出しとメニューの間を、渡す。Begin の前に呼ぶ</summary>
   void SetVerticalRange(float top, float bottom);
@@ -51,6 +54,8 @@ public:
   void Draw();
 
 private:
+  const RatingCatalog *rating_ = nullptr; // 評価の基準(所有しない。Initialize で受け取る)
+
   /// 評価の 1 行(左のパネルに出す)
   struct Row {
     const char *label;       // 項目名

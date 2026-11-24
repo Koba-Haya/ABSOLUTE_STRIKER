@@ -4,6 +4,7 @@
 #include "Vector.h"
 
 class BitmapFont;
+class StageProgress;
 struct StageDefinition;
 
 /// <summary>
@@ -17,8 +18,9 @@ public:
   StageCard();
   ~StageCard();
 
-  /// <summary>font は文字を描くために使う(所有しない。カードより長く生きていること)</summary>
-  void Initialize(BitmapFont *font);
+  /// <summary>font は文字を描くために使う。progress は、ステージが解放されているかを調べるために使う(読むだけ)。
+  /// どちらも所有しない。カードより長く生きていること</summary>
+  void Initialize(BitmapFont *font, const StageProgress &progress);
 
   /// <summary>カードの位置と大きさ(画面ピクセル座標。position は左上)</summary>
   void SetBounds(const Vector2 &position, const Vector2 &size);
@@ -54,6 +56,8 @@ public:
   float GetContentAlpha() const { return panel_.GetContentAlpha(); }
 
 private:
+  const StageProgress *progress_ = nullptr; // ステージの進行(所有しない。Initialize で受け取る)
+
   /// 中身(番号、名前、説明文、ロック表示)を描く
   void DrawContent_(float alpha);
   /// 鍵の演出の進行を進める(待ち -> 再生中 -> 終わり)。contentAlpha は、中身の薄さ(すっかり現れたら、演出を始める)

@@ -7,6 +7,7 @@
 #include "ComponentDeps.h"
 #include "ISceneQuery.h"
 #include "ISpawner.h"
+#include "CollisionManager.h"
 #include "SerialNumberIssuer.h"
 
 namespace AbsoluteEngine {
@@ -101,6 +102,7 @@ public:
 private:
   ObjectList objects_;
   SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
+  CollisionManager collision_; // 衝突判定と押し戻し(Update のたびに使う)
   SerialNumberIssuer serials_; // 通し番号の発行役(束の serialNumbers が指す)
   ComponentDeps deps_{this};  // 部品へ渡す窓口の束(出す窓口と、調べる窓口は、この世界自身。ほかは、持ち主が設定する)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)

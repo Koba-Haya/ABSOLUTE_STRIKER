@@ -5,6 +5,7 @@
 #include <vector>
 
 struct ItemDefinition;
+class ItemCatalog;
 
 // 「どの敵を倒したら、どのアイテムが、どの確率で出るか」を、resources/item/item_drops.json から読んで、抽選するクラス。
 // 分けた理由: 出現の方針(確率、対象の敵)だけを担当し、アイテムの見た目(ItemCatalog)や、出現の処理(ItemSpawner)から
@@ -13,7 +14,8 @@ struct ItemDefinition;
 // 1 つの敵に複数の行を書いたときは、上から順に抽選し、最初に当たった 1 つだけが出る。
 class ItemDropTable {
 public:
-  ItemDropTable();
+  // catalog: 抽選の行が指す、アイテムの定義の表(所有しない。このクラスより長く生きること。出す定義は、この表が持つ)
+  explicit ItemDropTable(const ItemCatalog &catalog);
 
   // 敵 enemyName を倒したときの抽選。当たったアイテムの定義を返す。外れ、対象外なら nullptr。
   // canDrop は「そのアイテムを今出す意味があるか」を返す関数(例: 上限に達したロックオン強化は出さない)。
@@ -32,11 +34,11 @@ public:
 private:
   // 抽選の 1 行
   struct DropRule {
-    const ItemDefinition *item = nullptr; // ItemCatalog が持つ定義への参照(ItemCatalog は終了まで残る)
+    const ItemDefinition *item = nullptr; // ItemCatalog が持つ定義への参照(ItemCatalog は GameData が持ち、アプリの終了まで残る)
     float chance = 0.0f;                  // 出る確率(0 から 1)
   };
 
-  void Load_();
+  void Load_(const ItemCatalog &catalog);
   float Next01_();
 
   std::unordered_map<std::string, std::vector<DropRule>> rules_;

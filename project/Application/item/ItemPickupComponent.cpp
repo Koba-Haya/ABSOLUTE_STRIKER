@@ -27,7 +27,8 @@ float Distance(const Vector3 &a, const Vector3 &b) {
 }
 } // namespace
 
-void ItemPickupComponent::Configure(const ItemPickupSettings &settings, float baseScale, std::function<void()> onCollected) {
+void ItemPickupComponent::Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, float baseScale, std::function<void()> onCollected) {
+  upgrade_ = upgrade;
   settings_ = settings;
   baseScale_ = baseScale;
   onCollected_ = std::move(onCollected);
@@ -106,7 +107,7 @@ void ItemPickupComponent::Update(float deltaTime) {
     const float distance = Distance(basePosition_, playerPos);
     // 吸い寄せ範囲: 基本の値に、強化(吸い寄せ範囲)を足す
     const float pullRadius = settings_.pullRadius + ItemEffectApplier::GetValue(ItemEffectKind::PullRadius, PlayerUpgradeState::Persistent(),
-                                                                                ItemCatalog::GetInstance().GetUpgradeSettings());
+                                                                                upgrade_);
     if (distance <= settings_.pickupRadius) {
       // 取得: 効果は、この瞬間に 1 回だけ出す
       collected_ = true;

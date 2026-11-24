@@ -433,7 +433,7 @@ void TitleScene::Draw() {
   }
 
   // 展示モードの切り替えの案内(2D。EndRenderScene の前に描く)
-  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
 
   renderer->EndRenderScene(Inverse(GetMainCamera()->GetProjectionMatrix()));
 }

@@ -17,8 +17,9 @@
 
 class InheritanceState {
 public:
-  // 唯一のインスタンス(初回の呼び出しで、保存ファイルを読む。無い、壊れているときは、継承なしで始める)
-  static InheritanceState &GetInstance();
+  // 保存ファイルを読む(持ち主の GameData が、アプリの初期化で呼ぶ)。無い、壊れているときは、継承なしで始める。
+  // 以前は Singleton で、最初の GetInstance のときに読んでいた
+  void Load();
 
   // 世代数(最初のプレイは 0 世代。クリアして継承を確定するたびに、1 ずつ進む)
   int GetGeneration() const { return generation_; }
@@ -46,8 +47,6 @@ public:
   void EndVolatile();
 
 private:
-  InheritanceState();
-  void Load_();
   // 保存する。失敗したときは、ログに出して、続ける
   void Save_() const;
 

@@ -15,7 +15,7 @@ constexpr const char *kItemObjectName = "Item";
 constexpr const char *kItemTag = "Item";
 } // namespace
 
-void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
+void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const ItemDefinition &item, const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, const Vector3 &position,
                         std::function<void()> onCollected) {
   auto obj = std::make_shared<AbsoluteEngine::GameObject>(kItemObjectName);
   obj->SetTag(kItemTag);
@@ -32,7 +32,7 @@ void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::IScen
 
   // 動きと取得
   auto pickup = std::make_unique<ItemPickupComponent>(query);
-  pickup->Configure(settings, item.scale, std::move(onCollected));
+  pickup->Configure(settings, upgrade, item.scale, std::move(onCollected));
   obj->AddComponent(std::move(pickup));
 
   spawner.Spawn(obj);

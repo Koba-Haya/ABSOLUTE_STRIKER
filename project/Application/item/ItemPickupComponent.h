@@ -23,7 +23,8 @@ public:
   ~ItemPickupComponent() override = default;
 
   // 出現直後に ItemSpawner が呼ぶ。baseScale は定義の拡大率、onCollected は取得の瞬間に 1 回呼ぶ関数
-  void Configure(const ItemPickupSettings &settings, float baseScale, std::function<void()> onCollected);
+  // upgrade: 強化の設定(吸い寄せ範囲の強化の効き目を求めるため、値をコピーして持つ)
+  void Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, float baseScale, std::function<void()> onCollected);
 
   void Update(float deltaTime) override;
 
@@ -40,6 +41,7 @@ private:
   void ApplyVisual_(float scale);
 
   ItemPickupSettings settings_;
+  ItemUpgradeSettings upgrade_; // 強化の設定(吸い寄せ範囲の強化の効き目)
   float baseScale_ = 1.0f;
   std::function<void()> onCollected_;
 

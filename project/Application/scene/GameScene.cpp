@@ -201,7 +201,7 @@ constexpr BYTE kDebugKillBossKey = DIK_7;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
-  const StageCatalog &catalog = StageCatalog::GetInstance();
+  const StageCatalog &catalog = gameData_.GetStageCatalog();
   if (const auto *params = TryGetLaunchPayload<StageLaunchParams>()) {
     if (const StageDefinition *stage = catalog.Find(params->stageId)) {
       return *stage;
@@ -223,7 +223,7 @@ void GameScene::Initialize(const SceneServices &services) {
   {
     const StageDefinition &stage = ResolveStage_();
     const auto *params = TryGetLaunchPayload<StageLaunchParams>();
-    if (params != nullptr && StageCatalog::GetInstance().Find(params->stageId) == nullptr) {
+    if (params != nullptr && gameData_.GetStageCatalog().Find(params->stageId) == nullptr) {
       Logger::GetInstance().Log("[Stage] unknown stage id '%s' in launch payload; falling back to '%s'",
                                 params->stageId.c_str(), stage.id.c_str());
     }
@@ -388,7 +388,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // 展示: 1 周ごとに、島の解放、ベスト記録、継承を初期へ戻す(毎周、解放の演出と、継承の選択を見せるため。仮の状態なので、保存はされない)。
   // 強化の状態の初期化(下の BeginStage)が、継承を読むので、その前に行う
   if (exhibition_.IsEnabled()) {
-      ExhibitionController::ResetLoopState();
+      ExhibitionController::ResetLoopState(gameData_);
   }
   // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
   itemSystem_.BeginStage(playerObj_);
@@ -1318,10 +1318,10 @@ void GameScene::BeginClearing_() {
       }
       if (exhibition_.IsEnabled()) {
           // 展示: ボス戦だけを通すので、実際の成績は低い。固定の成績(ランダムなランク)を、本物の評価に通して使う
-          clearResult_ = exhibition_.MakeResult(ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+          clearResult_ = exhibition_.MakeResult(ResolveStage_().scoreTarget, playerMaxHp, gameData_.GetRatingCatalog().GetSettings());
       } else {
           clearResult_ = RunEvaluator::Evaluate(runStats_.GetStats(), scoreTracker_.GetScore(), scoreTracker_.GetKillCount(),
-                                                ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+                                                ResolveStage_().scoreTarget, playerMaxHp, gameData_.GetRatingCatalog().GetSettings());
       }
       const RunResult& r = *clearResult_;
       Logger::GetInstance().Log("[Rating] rank=%s total=%.1f | score=%.1f kill=%.1f damage=%.1f formation=%.1f multiLock=%.1f bossNoDamage=%.1f",
@@ -1342,7 +1342,7 @@ void GameScene::BeginClearing_() {
   // 次のステージを解放して、保存する(演出の途中でスキップされても、解放は取りこぼさない)。
   // ステージ選択で、鍵が外れる演出が、この解放のあと 1 回だけ出る
   if (nextLockedStage != nullptr) {
-      StageProgress::GetInstance().Unlock(nextLockedStage->id);
+      gameData_.GetStageProgress().Unlock(nextLockedStage->id);
   }
 
   // ボスの見た目の演出(外殻のひびと剥がれ)を始める。撃破されたボスは、消さずに残っている
@@ -1376,12 +1376,12 @@ const StageDefinition *GameScene::FindNextLockedStage_() const {
   const StageDefinition &current = ResolveStage_();
   // 演出の中心(ひび割れの形)が無いボスは、粒の出る場所と、島へ飛ぶ流れが作れないので、解放の演出は出さない
   if (GetBossModelSpec(current.boss).crackShape.cellSize <= 0.0f) return nullptr;
-  const auto &stages = StageCatalog::GetInstance().GetStages();
+  const auto &stages = gameData_.GetStageCatalog().GetStages();
   for (size_t i = 0; i + 1 < stages.size(); ++i) {
       if (stages[i].id == current.id) {
           const StageDefinition &next = stages[i + 1];
           // 次のステージが、まだロックされている(定義でも、保存でも)なら、解放する
-          return StageProgress::GetInstance().IsUnlocked(next) ? nullptr : &next;
+          return gameData_.GetStageProgress().IsUnlocked(next) ? nullptr : &next;
       }
   }
   return nullptr; // 最終ステージ(次が無い)、または一覧に無い
@@ -1847,7 +1847,7 @@ void GameScene::Draw() {
   // 展示モードの切り替えの案内。HUD を出さない間(演出の最中など)も、常に出す。
   // 雲を先に合成しておく(雲が、案内を隠さないように。HUD と同じ方法。すでに合成済みなら、何も起きない)
   renderer->FlushVolumeClouds();
-  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
 
   Matrix4x4 projInverse;
   if (isDebugCamera_) {
@@ -1983,9 +1983,9 @@ void GameScene::DrawEditorUI() {
 
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
     // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
-    for (const ItemDefinition& def : ItemCatalog::GetInstance().GetItems()) {
+    for (const ItemDefinition& def : gameData_.GetItemCatalog().GetItems()) {
         const PlayerUpgradeState& upgradeState = PlayerUpgradeState::Persistent();
-        const int maxStacks = ItemCatalog::GetInstance().GetUpgradeSettings().Get(def.effect).maxStacks;
+        const int maxStacks = gameData_.GetItemCatalog().GetUpgradeSettings().Get(def.effect).maxStacks;
         ImGui::Text("Upgrade %s: earned %d + inherited %.1f  (max %d)", def.id.c_str(), upgradeState.GetEarned(def.effect),
                     upgradeState.GetInherited(def.effect), maxStacks);
         ImGui::SameLine();

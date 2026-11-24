@@ -30,11 +30,6 @@ const Vector4 kTextColor{1.0f, 1.0f, 1.0f, 1.0f};
 const Vector4 kBackingColor{0.04f, 0.09f, 0.16f, 0.55f}; // 明るい雲や空の上でも読めるように、暗い下地を敷く
 } // namespace
 
-ExhibitionHint &ExhibitionHint::GetInstance() {
-  static ExhibitionHint instance;
-  return instance;
-}
-
 void ExhibitionHint::Initialize() {
   if (ready_) return;
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);

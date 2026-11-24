@@ -46,7 +46,7 @@ void SceneWorld::Update(float deltaTime) {
   }
 
   // 全オブジェクトの更新が終わってから、衝突判定を行う
-  CollisionManager::GetInstance().Update(objects_);
+  collision_.Update(objects_);
 }
 
 void SceneWorld::CollectGarbage() {

@@ -50,7 +50,9 @@ void GameApp::Initialize() {
   // シーンの組み合わせごとの画面遷移の表(アプリ側が持つ)
   sceneManager_->SetTransitionResolver(&SceneTransitionTable::Resolve);
   // 展示モードの切り替えの案内(全シーン共通)。文字の資源を、ここで 1 回だけ読む
-  ExhibitionHint::GetInstance().Initialize();
+  appServices_.GetExhibitionHint().Initialize();
+  // ゲームのデータ(定義の表と保存データ)を読む。最初のシーンが始まる前に読む(以前は、最初に使われたときに読んでいた)
+  appServices_.GetGameData().Load();
   sceneManager_->Start(SceneId::Title);
 }
 
@@ -264,7 +266,7 @@ void GameApp::Update() {
 #endif
 
   // 展示モードの切り替え(TAB)。シーンの更新より前に見る(切り替えの遷移の要求を、そのフレームから有効にするため)
-  ExhibitionController::Update(appServices_.GetExhibition(), GetInput(), *sceneManager_);
+  ExhibitionController::Update(appServices_.GetExhibition(), appServices_.GetGameData(), GetInput(), *sceneManager_);
 
   sceneManager_->Update();
   sceneManager_->ApplySceneChangeIfNeeded();

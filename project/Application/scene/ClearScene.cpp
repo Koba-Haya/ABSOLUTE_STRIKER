@@ -7,6 +7,7 @@
 #include "ui/UiPointer.h"
 #include "../exhibition/ExhibitionHint.h"
 #include "../exhibition/ExhibitionSession.h"
+#include "../GameData.h"
 #include "../ScreenSize.h"
 #include "Logger.h"
 #include "../stage/StageLaunchParams.h"
@@ -76,14 +77,14 @@ void ClearScene::Initialize(const SceneServices &services) {
     const float bannerBottom = ScreenSize::kHeight * kBannerCenterYRatio + kBannerHeight * 0.5f;
     const float rangeTop = bannerBottom + kTallyGapBelowBanner;
     const float rangeBottom = menu_.GetPanelTop() - kTallyGapAboveMenu;
-    tally_.Initialize();
+    tally_.Initialize(gameData_.GetRatingCatalog());
     tally_.SetVerticalRange(rangeTop, rangeBottom);
-    picker_.Initialize();
+    picker_.Initialize(gameData_.GetItemCatalog(), gameData_.GetRatingCatalog(), gameData_.GetInheritanceState());
     picker_.SetVerticalRange(rangeTop, rangeBottom);
     continuePrompt_.Initialize();
     continuePrompt_.SetPosition(ScreenSize::kCenterX, menu_.GetPanelTop() + kContinuePromptOffsetBelowMenuTop);
     // 今回の結果を、ベスト記録と比べて、更新して保存する(集計を飛ばしても、記録は残る)。更新の内容は、集計が「ベスト更新」として見せる
-    const BestUpdate bestUpdate = StageProgress::GetInstance().RecordRun(params->stageId, *params->result);
+    const BestUpdate bestUpdate = gameData_.GetStageProgress().RecordRun(params->stageId, *params->result);
     Logger::GetInstance().Log("[Best] stage=%s previous=%s%s scoreImproved=%d pointsImproved=%d rankImproved=%d", params->stageId.c_str(),
                               bestUpdate.previous.exists ? "yes " : "none", bestUpdate.previous.exists ? RankToString(bestUpdate.previous.rank) : "",
                               bestUpdate.scoreImproved, bestUpdate.pointsImproved, bestUpdate.rankImproved);
@@ -155,8 +156,8 @@ void ClearScene::Update() {
   if (inheritanceStarted_ && !inheritanceCommitted_ && (!picker_.IsActive() || picker_.IsDone())) {
     inheritanceCommitted_ = true;
     const std::vector<InheritanceState::Pick> picks = picker_.IsActive() ? picker_.GetPicks() : std::vector<InheritanceState::Pick>{};
-    const float rarity = RatingCatalog::GetInstance().GetSettings().GetInheritanceRule(resultRank_).rarity;
-    InheritanceState::GetInstance().Commit(picks, rarity, ItemCatalog::GetInstance().GetUpgradeSettings());
+    const float rarity = gameData_.GetRatingCatalog().GetSettings().GetInheritanceRule(resultRank_).rarity;
+    gameData_.GetInheritanceState().Commit(picks, rarity, gameData_.GetItemCatalog().GetUpgradeSettings());
     menu_.Open();
     menuOpened_ = true;
   }
@@ -225,6 +226,6 @@ void ClearScene::Draw() {
   continuePrompt_.Draw();
   picker_.Draw();
   menu_.Draw();
-  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
   backdrop_.End();
 }

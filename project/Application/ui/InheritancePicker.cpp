@@ -92,14 +92,14 @@ const Vector4 &RankColor(RunRank rank) {
   return kRankColorC;
 }
 
-// 強化の種類 kind の、アイテムの定義(名前と色を引く)。無ければ nullptr
-const ItemDefinition *FindDefinition(ItemEffectKind kind) {
-  for (const ItemDefinition &item : ItemCatalog::GetInstance().GetItems()) {
+} // namespace
+
+const ItemDefinition *InheritancePicker::FindDefinition_(ItemEffectKind kind) const {
+  for (const ItemDefinition &item : items_->GetItems()) {
     if (item.effect == kind) return &item;
   }
   return nullptr;
 }
-} // namespace
 
 bool InheritancePicker::HasCandidates() {
   const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
@@ -109,7 +109,10 @@ bool InheritancePicker::HasCandidates() {
   return false;
 }
 
-void InheritancePicker::Initialize() {
+void InheritancePicker::Initialize(const ItemCatalog &items, const RatingCatalog &rating, const InheritanceState &inheritance) {
+  items_ = &items;
+  rating_ = &rating;
+  inheritance_ = &inheritance;
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);
   listPanel_.Initialize(&font_);
   listPanel_.SetTitle(kListTitle);
@@ -132,8 +135,8 @@ int InheritancePicker::UsedSlots_() const {
 
 void InheritancePicker::Begin(RunRank rank, float delaySeconds) {
   const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
-  const ItemUpgradeSettings &upgrade = ItemCatalog::GetInstance().GetUpgradeSettings();
-  const InheritanceRule &rule = RatingCatalog::GetInstance().GetSettings().GetInheritanceRule(rank);
+  const ItemUpgradeSettings &upgrade = items_->GetUpgradeSettings();
+  const InheritanceRule &rule = rating_->GetSettings().GetInheritanceRule(rank);
 
   // 候補: 今回取った強化の種類(取った数が 1 以上のもの)
   candidates_.clear();
@@ -145,8 +148,8 @@ void InheritancePicker::Begin(RunRank rank, float delaySeconds) {
     candidate.kind = kind;
     candidate.earned = earned;
     candidate.maxStacks = upgrade.Get(kind).maxStacks;
-    candidate.inherited = InheritanceState::GetInstance().GetInheritedStacks(kind);
-    if (const ItemDefinition *definition = FindDefinition(kind)) {
+    candidate.inherited = inheritance_->GetInheritedStacks(kind);
+    if (const ItemDefinition *definition = FindDefinition_(kind)) {
       candidate.name = definition->shortName;
       candidate.color = {definition->uiColor.x, definition->uiColor.y, definition->uiColor.z, 1.0f};
     } else {
@@ -461,7 +464,7 @@ void InheritancePicker::DrawInfo_(float alpha) {
   y += lineStep;
 
   // 世代(0 世代が、第 1 世代。確定すると、次の世代へ進む)
-  const int generation = InheritanceState::GetInstance().GetGeneration();
+  const int generation = inheritance_->GetGeneration();
   std::snprintf(text, sizeof(text), "第 %d 世代 -> 第 %d 世代", generation + 1, generation + 2);
   font_.Draw(text, {centerX, y}, kInfoFontSize, WithAlphaScale(kInfoLabelColor, alpha), BitmapFont::Align::Center);
   y += lineStep;

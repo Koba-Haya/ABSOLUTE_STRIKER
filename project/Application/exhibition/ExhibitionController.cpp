@@ -5,6 +5,7 @@
 #include "SceneIds.h"
 #include "SceneManager.h"
 #include "../inheritance/InheritanceState.h"
+#include "../GameData.h"
 #include "ExhibitionSession.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageLaunchParams.h"
@@ -19,7 +20,7 @@ namespace {
 constexpr int kToggleKey = DIK_TAB;
 } // namespace
 
-void ExhibitionController::Update(ExhibitionSession &session, const Input &input, SceneManager &sceneManager) {
+void ExhibitionController::Update(ExhibitionSession &session, GameData &data, const Input &input, SceneManager &sceneManager) {
 #ifdef USE_IMGUI
   // 開発用の窓で、文字を入力している間は、切り替えない
   if (ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput) return;
@@ -30,23 +31,23 @@ void ExhibitionController::Update(ExhibitionSession &session, const Input &input
 
   if (!session.IsEnabled()) {
     // 入る: 実際のデータを退避して、仮の状態にし、ゲームの最初から始める
-    StageProgress::GetInstance().BeginVolatile();
-    InheritanceState::GetInstance().BeginVolatile();
+    data.GetStageProgress().BeginVolatile();
+    data.GetInheritanceState().BeginVolatile();
     session.SetEnabled(true);
-    const auto &stages = StageCatalog::GetInstance().GetStages();
+    const auto &stages = data.GetStageCatalog().GetStages();
     Logger::GetInstance().Log("[Exhibition] enter");
     sceneManager.RequestChange(SceneId::Game, StageLaunchParams{stages.empty() ? std::string{} : stages.front().id});
   } else {
     // 出る: 退避したデータへ戻して、タイトルへ戻る
-    StageProgress::GetInstance().EndVolatile();
-    InheritanceState::GetInstance().EndVolatile();
+    data.GetStageProgress().EndVolatile();
+    data.GetInheritanceState().EndVolatile();
     session.SetEnabled(false);
     Logger::GetInstance().Log("[Exhibition] leave");
     sceneManager.RequestChange(SceneId::Title);
   }
 }
 
-void ExhibitionController::ResetLoopState() {
-  StageProgress::GetInstance().Reset();
-  InheritanceState::GetInstance().Reset();
+void ExhibitionController::ResetLoopState(GameData &data) {
+  data.GetStageProgress().Reset();
+  data.GetInheritanceState().Reset();
 }

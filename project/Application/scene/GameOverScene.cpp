@@ -228,6 +228,6 @@ void GameOverScene::Draw() {
   banner_.Draw();
   // 結果メニュー(展示中は、現れ始めないので何も描かない)
   menu_.Draw();
-  ExhibitionHint::GetInstance().Draw(exhibition_.IsEnabled());
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
   backdrop_.End();
 }

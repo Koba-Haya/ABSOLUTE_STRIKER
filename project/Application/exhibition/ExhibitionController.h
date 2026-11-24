@@ -1,6 +1,7 @@
 #pragma once
 
 class ExhibitionSession;
+class GameData;
 class Input;
 class SceneManager;
 
@@ -16,8 +17,9 @@ class ExhibitionController {
 public:
   /// <summary>毎フレーム呼ぶ。TAB が押されたら、展示モードに入る / 出る。画面遷移の最中は、受け付けない</summary>
   /// <param name="session">展示モードの状態(入る / 出るで、書き換える)</param>
-  static void Update(ExhibitionSession &session, const Input &input, SceneManager &sceneManager);
+  /// <param name="data">ゲームのデータ(入る / 出るで、進行と継承を、退避したり戻したりする。最初のステージの ID も引く)</param>
+  static void Update(ExhibitionSession &session, GameData &data, const Input &input, SceneManager &sceneManager);
 
   /// <summary>展示の 1 周ごとの初期化(ゲームの開始で呼ぶ)。島の解放、ベスト記録、継承を、初期の状態へ戻す(仮の状態なので、保存はされない)</summary>
-  static void ResetLoopState();
+  static void ResetLoopState(GameData &data);
 };

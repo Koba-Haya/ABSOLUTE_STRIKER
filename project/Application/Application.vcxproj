@@ -289,6 +289,7 @@
     <ClCompile Include="scene\ScoreTracker.cpp" />
     <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="GameApp.cpp" />
+    <ClCompile Include="GameData.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
     <ClCompile Include="scene\GameOverScene.cpp" />
@@ -427,6 +428,7 @@
     <ClInclude Include="camera\RailCameraComponent.h" />
     <ClInclude Include="GameApp.h" />
     <ClInclude Include="AppServices.h" />
+    <ClInclude Include="GameData.h" />
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />

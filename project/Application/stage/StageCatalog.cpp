@@ -61,22 +61,13 @@ bool HasPathSeparator(const std::string &name) {
 }
 } // namespace
 
-StageCatalog::StageCatalog() {
-  Load_();
-}
-
-StageCatalog &StageCatalog::GetInstance() {
-  static StageCatalog instance;
-  return instance;
-}
-
 const StageDefinition *StageCatalog::Find(const std::string &stageId) const {
   const auto it = std::find_if(stages_.begin(), stages_.end(),
                                [&stageId](const StageDefinition &stage) { return stage.id == stageId; });
   return it == stages_.end() ? nullptr : &*it;
 }
 
-void StageCatalog::Load_() {
+void StageCatalog::Load() {
   const std::filesystem::path path = AbsoluteEngine::AssetPath::Resolve(kCatalogPath);
   const std::string pathText = path.string();
 

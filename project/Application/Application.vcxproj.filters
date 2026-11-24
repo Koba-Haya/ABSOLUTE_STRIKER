@@ -24,6 +24,9 @@
     <ClCompile Include="GameApp.cpp">
       <Filter>application</Filter>
     </ClCompile>
+    <ClCompile Include="GameData.cpp">
+      <Filter>application</Filter>
+    </ClCompile>
     <ClCompile Include="scene\DevScene.cpp">
       <Filter>application\scene</Filter>
     </ClCompile>
@@ -158,6 +161,9 @@
       <Filter>application</Filter>
     </ClInclude>
     <ClInclude Include="AppServices.h">
+      <Filter>application</Filter>
+    </ClInclude>
+    <ClInclude Include="GameData.h">
       <Filter>application</Filter>
     </ClInclude>
     <ClInclude Include="scene\DevScene.h">
