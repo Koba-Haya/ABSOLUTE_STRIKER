@@ -54,6 +54,8 @@
     <ClCompile Include="actor\Bullet\RibbonTrailFadeComponent.cpp" />
     <ClCompile Include="actor\Bullet\BulletComponent.cpp" />
     <ClCompile Include="actor\Player\PlayerComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
+    <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossModelSpec.cpp" />
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
@@ -185,6 +187,12 @@
     <ClInclude Include="actor\Bullet\RibbonTrailFadeComponent.h" />
     <ClInclude Include="actor\Bullet\BulletComponent.h" />
     <ClInclude Include="actor\Player\PlayerComponent.h" />
+    <ClInclude Include="actor\Enemy\BossActions.h" />
+    <ClInclude Include="actor\Enemy\BossAttackPlan.h" />
+    <ClInclude Include="actor\Enemy\BossAttackState.h" />
+    <ClInclude Include="actor\Enemy\BossIdleState.h" />
+    <ClInclude Include="actor\Enemy\BossPhase.h" />
+    <ClInclude Include="actor\Enemy\BossState.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />
     <ClInclude Include="actor\Enemy\BossModelSpec.h" />
     <ClInclude Include="actor\Enemy\EnemyComponent.h" />

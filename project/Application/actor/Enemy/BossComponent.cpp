@@ -1,5 +1,6 @@
 #include "BossComponent.h"
 #include "BossModelSpec.h"
+#include "BossIdleState.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
@@ -13,18 +14,7 @@
 #include <cmath>
 
 namespace {
-// フェーズごとの攻撃間隔・弾速（マジックナンバーをここに集約し、調整しやすくする）
-constexpr float kAimedIntervalPhase1 = 1.6f;
-constexpr float kAimedIntervalPhase2 = 1.3f;
-constexpr float kAimedIntervalPhase3 = 0.8f;
-constexpr float kAimedSpeed = 24.0f;
-
-constexpr float kSpreadIntervalPhase2 = 2.2f;
-constexpr float kSpreadIntervalPhase3 = 1.5f;
-constexpr float kSpreadSpeed = 16.0f;
-constexpr int   kSpreadCountPhase2 = 5;
-constexpr int   kSpreadCountPhase3 = 8;
-constexpr float kSpreadAngleDeg = 12.0f;
+// 攻撃の間隔・弾速・弾の数は、攻撃の表(BossAttackPlan.h)に移した
 
 // カメラの前方に留まる距離・左右上下の揺れ幅と速さ
 // 基準はカメラ(=レール上の位置)であり、自機の動きには影響されない。
@@ -42,8 +32,6 @@ constexpr float kModelFrontYawOffset = 3.14159265f;
 constexpr float kHoverBlendSeconds = 0.25f;  // 待機へ戻る
 constexpr float kAttackBlendSeconds = 0.15f; // 攻撃の予告へ入る
 constexpr float kHitBlendSeconds = 0.05f;    // 被弾のよろめきへ入る(すぐに反応して見えるよう短く)
-// 単発弾を撃つ、この時間(秒)前から、攻撃の予告(あごを開く、翼を開くなど)を始める
-constexpr float kAttackLeadSeconds = 0.6f;
 }
 
 void BossComponent::Update(float deltaTime) {
@@ -51,8 +39,26 @@ void BossComponent::Update(float deltaTime) {
 
     UpdateMovement(deltaTime);
     UpdatePhase();
-    UpdateAttack(deltaTime);
+
+    // 状態の切り替えを済ませてから、今の状態を 1 回進める。状態の中で ChangeState が呼ばれても、
+    // 切り替えは、この Update が終わったあと(次の ApplyPendingState)に行うので、実行中の状態が消えることはない
+    ApplyPendingState();
+    if (state_) state_->Update(*this, deltaTime);
+    ApplyPendingState();
+
     UpdateAnimation();
+}
+
+void BossComponent::ApplyPendingState() {
+    // 最初の 1 回: まだ状態が無いので、待機から始める(表の 0 番目の攻撃を待つ)
+    if (!state_ && !pendingState_) {
+        pendingState_ = std::make_unique<BossIdleState>(0);
+    }
+    if (!pendingState_) return;
+
+    if (state_) state_->Exit(*this);
+    state_ = std::move(pendingState_);
+    state_->Enter(*this);
 }
 
 void BossComponent::UpdateAnimation() {
@@ -77,7 +83,7 @@ void BossComponent::UpdateAnimation() {
     }
     attackRequested_ = false;
 
-    // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る
+    // 最初の 1 回(None)と、Hit / Attack が最後まで再生されたあとは、待機へ戻る(攻撃の要求は、状態の PlayAttackAnimation が立てる)
     if (animState_ == AnimState::None || (animState_ != AnimState::Hover && model->IsAnimationFinished())) {
         model->PlayAnimation(BossAnimation::kHover, true, kHoverBlendSeconds, false);
         animState_ = AnimState::Hover;
@@ -123,38 +129,6 @@ void BossComponent::UpdatePhase() {
         phase_ = BossPhase::Phase2;
     } else {
         phase_ = BossPhase::Phase1;
-    }
-}
-
-void BossComponent::UpdateAttack(float deltaTime) {
-    aimedShotTimer_ += deltaTime;
-    spreadShotTimer_ += deltaTime;
-
-    float aimedInterval = kAimedIntervalPhase1;
-    switch (phase_) {
-        case BossPhase::Phase1: aimedInterval = kAimedIntervalPhase1; break;
-        case BossPhase::Phase2: aimedInterval = kAimedIntervalPhase2; break;
-        case BossPhase::Phase3: aimedInterval = kAimedIntervalPhase3; break;
-    }
-    // 発射の少し前に、攻撃の予告のアニメーションを始める(1 回の発射につき 1 回)
-    if (!attackAnnounced_ && aimedShotTimer_ >= aimedInterval - kAttackLeadSeconds) {
-        attackAnnounced_ = true;
-        attackRequested_ = true;
-    }
-    if (aimedShotTimer_ >= aimedInterval) {
-        aimedShotTimer_ -= aimedInterval;
-        attackAnnounced_ = false;
-        FireAimedShot(kAimedSpeed);
-    }
-
-    // 扇状弾はPhase2以降のみ（Phase1は単発弾のみで動きを覚えてもらう）
-    if (phase_ == BossPhase::Phase2 || phase_ == BossPhase::Phase3) {
-        const float spreadInterval = (phase_ == BossPhase::Phase3) ? kSpreadIntervalPhase3 : kSpreadIntervalPhase2;
-        if (spreadShotTimer_ >= spreadInterval) {
-            spreadShotTimer_ -= spreadInterval;
-            const int count = (phase_ == BossPhase::Phase3) ? kSpreadCountPhase3 : kSpreadCountPhase2;
-            FireSpreadShot(count, kSpreadAngleDeg, kSpreadSpeed);
-        }
     }
 }
 
