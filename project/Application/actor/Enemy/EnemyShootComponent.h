@@ -5,9 +5,18 @@
 #include "EnemyShootUtil.h"
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+class IScreenView;
+class ISceneQuery;
+}
+
 class EnemyShootComponent : public AbsoluteEngine::IComponent {
 public:
-    EnemyShootComponent() = default;
+    // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
+    // いずれも所有しない。このコンポーネントより長く生きること
+    EnemyShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
+        : spawner_(spawner), screen_(screen), query_(query) {}
     ~EnemyShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -28,6 +37,9 @@ public:
     void ClearShootFlag() { wantToShoot_ = false; }
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+    AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
     float shootInterval_ = 2.0f; // デフォルトは2秒に1回
     float shootTimer_ = 0.0f;
     EnemyShootUtil::IslandHideGate islandGate_; // 島に隠れている間は撃たない。出てきてから少し待つ

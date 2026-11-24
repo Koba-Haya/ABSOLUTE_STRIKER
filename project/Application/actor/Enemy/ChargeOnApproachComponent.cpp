@@ -1,7 +1,9 @@
 #include "ChargeOnApproachComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"
 #include "TelegraphComponent.h"
 #include "externals/nlohmann/json.hpp"
@@ -16,27 +18,21 @@ constexpr const char* kKeyWindupPullSpeed = "windupPullSpeed";
 }
 
 void ChargeOnApproachComponent::Update(float deltaTime) {
-    if (!owner_) return;
-
-    auto& t = owner_->GetTransform();
+    if (!GetOwner()) return;
 
     if (triggered_) {
         // 突進中: 発火瞬間に確定した方向へ直進し続ける（毎フレーム再計算しない）
-        t.translate.x += chargeDir_.x * chargeSpeed_ * deltaTime;
-        t.translate.y += chargeDir_.y * chargeSpeed_ * deltaTime;
-        t.translate.z += chargeDir_.z * chargeSpeed_ * deltaTime;
+        GetOwner()->Translate({chargeDir_.x * chargeSpeed_ * deltaTime, chargeDir_.y * chargeSpeed_ * deltaTime,
+                               chargeDir_.z * chargeSpeed_ * deltaTime});
         return;
     }
 
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
+    if (!screen_.HasCamera()) return;
 
     // カメラの移動速度を推定する（前フレームとのeye差分）。
     // プレイヤーはeye基準で毎フレーム位置決めされるため、操作していなくても
     // カメラのレール前進と同じ速度でワールド座標が流れ続ける。
-    const Vector3 eye = camera->GetEye();
+    const Vector3 eye = screen_.GetEye();
     Vector3 cameraVelocity = { 0, 0, 0 };
     if (hasPrevEye_ && deltaTime > 0.0f) {
         cameraVelocity = {
@@ -49,15 +45,13 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     hasPrevEye_ = true;
 
     // --- 予備動作の最中: 自機と反対へ引く(だんだん遅くなる)。済んだら、次のフレームで突進を始める ---
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (windingUp_) {
         windupTimer_ += deltaTime;
         const float duration = telegraph ? telegraph->GetDuration() : 0.0f;
         const float progress = (duration > 0.0f) ? std::min(windupTimer_ / duration, 1.0f) : 1.0f;
         const float pull = windupPullSpeed_ * (1.0f - progress) * deltaTime;
-        t.translate.x += windupAwayDir_.x * pull;
-        t.translate.y += windupAwayDir_.y * pull;
-        t.translate.z += windupAwayDir_.z * pull;
+        GetOwner()->Translate({windupAwayDir_.x * pull, windupAwayDir_.y * pull, windupAwayDir_.z * pull});
         if (progress >= 1.0f) {
             windingUp_ = false;
             windupDone_ = true;
@@ -67,16 +61,10 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     }
 
     // --- プレイヤーを探し、距離判定 ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
-    const Vector3 currentPos = t.translate;
+    const Vector3 currentPos = GetOwner()->GetTransform().translate;
     const Vector3 playerPos = playerObj->GetTransform().translate;
     Vector3 toPlayer = {
         playerPos.x - currentPos.x,

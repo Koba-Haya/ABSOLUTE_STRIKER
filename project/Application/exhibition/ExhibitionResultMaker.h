@@ -1,4 +1,6 @@
 #pragma once
+#include <random>
+
 #include "../result/RatingSettings.h"
 #include "../result/RunResult.h"
 
@@ -17,5 +19,9 @@ public:
   /// <param name="scoreTarget">ステージの目標スコア(評価のスコアの割合に使う)</param>
   /// <param name="playerMaxHp">自機の最大 HP(被ダメージの割合に使う)</param>
   /// <param name="settings">評価の設定(rating.json)</param>
-  static RunResult Make(int scoreTarget, int playerMaxHp, const RatingSettings &settings);
+  RunResult Make(int scoreTarget, int playerMaxHp, const RatingSettings &settings);
+
+private:
+  int lastPreset_ = -1;                              // 直前に出した見本の位置(同じ見本が続かないようにする。-1 は、まだ出していない)
+  std::mt19937 random_{std::random_device{}()};      // 見本を選ぶ乱数
 };

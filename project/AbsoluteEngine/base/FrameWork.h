@@ -3,6 +3,7 @@
 #include "DirectXCommon.h"
 #include "Input.h"
 #include "Audio.h"
+#include "FrameTimer.h"
 
 // マネージャー群
 #include "ImGuiManager.h"
@@ -69,5 +70,7 @@ private:
 	Input input_;
 	AudioManager audio_;
 	ImGuiManager imgui_;
+	// 1 フレームの CPU 時間の測定(停止の調査用。メインループだけが使う)
+	FrameTimer frameTimer_;
 };
 

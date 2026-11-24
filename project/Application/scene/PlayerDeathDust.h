@@ -48,9 +48,12 @@ public:
   // シーンの終わりに呼ぶ(借りているエミッタとフィールドを返す)
   void Shutdown();
 
-  // 調整用(ImGui が書き換える)。発生の量・場所の設定と、鱗粉そのものの設定
-  PlayerDeathDustSettings& GetSettings() { return settings_; }
-  ScaleDust& GetDust() { return dust_; }
+  // 調整用(ImGui が、コピーを編集して Set で戻す)。発生の量・場所の設定と、鱗粉そのものの設定。
+  // 内部の ScaleDust は返さず、その設定だけを、読み取りと差し替えの窓口にする
+  const PlayerDeathDustSettings& GetSettings() const { return settings_; }
+  void SetSettings(const PlayerDeathDustSettings& settings) { settings_ = settings; }
+  const ScaleDustSettings& GetDustSettings() const { return dust_.GetSettings(); }
+  void SetDustSettings(const ScaleDustSettings& settings) { dust_.SetSettings(settings); }
 
 private:
   ScaleDust dust_;

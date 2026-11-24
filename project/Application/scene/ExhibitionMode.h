@@ -4,22 +4,14 @@
 #include "SceneIds.h"
 #include "../item/ItemDefinition.h"
 
-// 展示用の自動巡回の設定(クリア演出の展示)。
-// IsEnabled が true の間は、操作を一切受け付けず、次の順に繰り返す:
+// 展示用の自動巡回の設定(クリア演出の展示)。この名前空間は、時間などの定数だけを持つ。
+// 展示モードに入っているか(状態)は、ExhibitionSession が持つ。入っている間は、操作を一切受け付けず、次の順に繰り返す:
 //   ゲーム(スタート演出)-> ボス戦へ飛ぶ -> すぐ倒す -> 撃破演出と島の解放 -> クリア画面(固定の結果、継承の自動操作)
 //   -> ステージ選択(鍵が外れる演出)-> 自動で決定 -> ゲーム ...
 // 展示の間は、保存データを書き込まない(メモリ上の仮の状態で動く。ExhibitionController が、入るときに実際のデータを退避し、出るときに戻す)。
 // 周回のたびに、仮の状態を初期へ戻す(島の解放、ベスト記録、継承を、毎周見せるため)。
-// 切り替え: 実行中に TAB キーで、入る / 出る(ExhibitionController)。起動時は、通常のプレイ。
+// 切り替え: 実行中に TAB キーで、入る / 出る(ExhibitionController が ExhibitionSession を書き換える)。起動時は、通常のプレイ。
 namespace ExhibitionMode {
-
-// 展示モードに入っているか(実行中に変わる値。入る / 出るは ExhibitionController だけが呼ぶ)
-inline bool &EnabledFlag_() {
-  static bool enabled = false;
-  return enabled;
-}
-inline bool IsEnabled() { return EnabledFlag_(); }
-inline void SetEnabled(bool enabled) { EnabledFlag_() = enabled; }
 
 // ステージ選択で、鍵が外れる演出が終わってから、カーソルを先頭のステージへ戻すまで / 戻してから決定するまでの時間(秒)
 constexpr float kStageSelectHoldSec = 1.2f;

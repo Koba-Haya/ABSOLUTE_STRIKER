@@ -4,7 +4,6 @@
 #include <cmath>
 
 #include "../ScreenSize.h"
-#include "../scene/ExhibitionMode.h"
 
 namespace {
 // 文字の資源(AssetPath の論理パス)
@@ -31,11 +30,6 @@ const Vector4 kTextColor{1.0f, 1.0f, 1.0f, 1.0f};
 const Vector4 kBackingColor{0.04f, 0.09f, 0.16f, 0.55f}; // 明るい雲や空の上でも読めるように、暗い下地を敷く
 } // namespace
 
-ExhibitionHint &ExhibitionHint::GetInstance() {
-  static ExhibitionHint instance;
-  return instance;
-}
-
 void ExhibitionHint::Initialize() {
   if (ready_) return;
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);
@@ -43,7 +37,7 @@ void ExhibitionHint::Initialize() {
   ready_ = true;
 }
 
-void ExhibitionHint::Draw() {
+void ExhibitionHint::Draw(bool exhibitionEnabled) {
   if (!ready_) return;
 
   // 点滅: 0 から 1 を往復する波を、最小の濃さから 1 の間へ写す。時刻は、実時間で測る(シーンをまたいでも、途切れない)
@@ -52,7 +46,7 @@ void ExhibitionHint::Draw() {
   const float wave = kHalf + kHalf * std::sin(kTwoPi * t / kBlinkPeriodSeconds);
   const float alpha = kBlinkMinAlpha + (1.0f - kBlinkMinAlpha) * wave;
 
-  const char *text = ExhibitionMode::IsEnabled() ? kTextExhibition : kTextNormal;
+  const char *text = exhibitionEnabled ? kTextExhibition : kTextNormal;
   const float textWidth = font_.Measure(text, kFontSize).x;
   const float lineHeight = font_.GetLineHeight(kFontSize);
   const float right = ScreenSize::kWidth - kRightMargin;

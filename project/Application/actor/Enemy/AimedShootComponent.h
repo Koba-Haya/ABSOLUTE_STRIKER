@@ -26,11 +26,19 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
+class IScreenView;
+class ISceneQuery;
+class SerialNumberIssuer;
 }
 
 class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
-    AimedShootComponent();
+    // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
+    // serials: 狙いのばらつきの乱数の種を、敵ごとに変えるための通し番号の発行役(同じ敵の並びなら、毎回同じ種になる)。
+    // いずれも所有しない(種を決めるときに 1 回使うだけ)。このコンポーネントより長く生きること
+    AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                        AbsoluteEngine::SerialNumberIssuer& serials);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -41,6 +49,10 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+    AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
+
     // 狙いの向き dir(長さ1)に、最大 aimErrorDegrees_ 度のばらつきを足して返す
     Vector3 ApplyAimError_(const Vector3& dir);
 

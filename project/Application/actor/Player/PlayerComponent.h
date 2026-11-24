@@ -9,15 +9,23 @@
 #include <memory>
 
 class Input;
-class GameCamera;
-class BaseScene;
+namespace AbsoluteEngine {
+class ISpawner;
+class IScreenView;
+class ISceneQuery;
+class IPlayState;
+}
 
 class PlayerComponent : public AbsoluteEngine::IComponent {
 public:
   // 最大 HP の基本の値(強化で増える前)
   static constexpr int kBaseMaxHp = 5;
 
-  PlayerComponent() = default;
+  // spawner: 弾を出す窓口。screen: 照準や追従に使う、カメラの位置・向き・行列を知る窓口。query: 敵を探す窓口(ロックオン用)。
+  // playState: 再生状態を知る窓口。input: 入力。いずれも所有しない。このコンポーネントより長く生きること
+  PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                  AbsoluteEngine::IPlayState& playState, Input& input)
+      : spawner_(spawner), screen_(screen), query_(query), playState_(playState), input_(input) {}
   ~PlayerComponent() override = default;
 
 
@@ -76,6 +84,11 @@ public:
   const Vector3& GetFarReticleWorldPos()  const { return farReticleWorldPos_; }
 
 private:
+  AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+  AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置・向き・行列)を知る窓口
+  AbsoluteEngine::ISceneQuery& query_;  // 敵を探すために、シーンのオブジェクト一覧を調べる窓口(ロックオン用)
+  AbsoluteEngine::IPlayState& playState_; // 再生状態(エディットか、プレイか)を知る窓口
+  Input& input_;                        // 入力(キーボード、マウス、パッド)
   LockOnSystem lockon_;
   PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 
@@ -85,15 +98,15 @@ private:
   // 回避の発動判定と進行。戻り値は今フレームのロール角オフセット（ラジアン）
   float UpdateDodge_(const PlayerInputState& in, const Vector2& moveDir, float deltaTime, bool isPlaying);
   // カーソルに追従して自機位置・姿勢を更新する
-  void UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
+  void UpdateBodyTransform_(const Vector3& cursorRayDir, float dodgeRollOffset, float deltaTime);
   // 照準点（カーソルレイ上）と発射基点から、3重レティクルのワールド座標を求める
-  void UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir, const Vector3& muzzlePos);
+  void UpdateReticles_(const Vector3& cursorRayDir, const Vector3& muzzlePos);
   // 弾・リボンの尾・ミサイルの発射位置（muzzle ボーンの今のワールド位置。無ければ自機中心）
   Vector3 GetMuzzlePosition_() const;
-  void UpdateFire_(const PlayerInputState& in, BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
+  void UpdateFire_(const PlayerInputState& in, const Vector3& muzzlePos);
   void EmitMuzzleFlash_(const Vector3& muzzlePos) const;
-  void FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos);
-  void FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos);
+  void FireHomingBullets_(const Vector3& muzzlePos);
+  void FireNormalBullet_(const Vector3& muzzlePos);
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)

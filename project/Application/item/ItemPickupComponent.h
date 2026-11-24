@@ -8,6 +8,7 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISceneQuery;
 }
 
 // 落ちているアイテム 1 個の動き(ゆれる、自転する、自機が近づいたら吸い寄せられる、取得する、時間で消える)。
@@ -17,17 +18,21 @@ class GameObject;
 // 残りの短い間(collectSeconds)は、膨らんでから縮みつつ自機へ吸い込まれる演出だけを行い、その後に消える。
 class ItemPickupComponent : public AbsoluteEngine::IComponent {
 public:
-  ItemPickupComponent() = default;
+  // query: 自機を探す窓口(所有しない。このコンポーネントより長く生きること)
+  explicit ItemPickupComponent(AbsoluteEngine::ISceneQuery &query) : query_(query) {}
   ~ItemPickupComponent() override = default;
 
   // 出現直後に ItemSpawner が呼ぶ。baseScale は定義の拡大率、onCollected は取得の瞬間に 1 回呼ぶ関数
-  void Configure(const ItemPickupSettings &settings, float baseScale, std::function<void()> onCollected);
+  // upgrade: 強化の設定(吸い寄せ範囲の強化の効き目を求めるため、値をコピーして持つ)
+  void Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, float baseScale, std::function<void()> onCollected);
 
   void Update(float deltaTime) override;
 
   std::string GetTypeName() const override { return "ItemPickupComponent"; }
 
 private:
+  AbsoluteEngine::ISceneQuery &query_; // 自機を探すために、シーンのオブジェクト一覧を調べる窓口
+
   // 自機のオブジェクトを探す(見つかるまで毎フレーム試す。見つけたら覚える)
   std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer_();
   // 自機へ向かって、speed で dt 秒ぶん近づく(base 位置を動かす)
@@ -36,6 +41,7 @@ private:
   void ApplyVisual_(float scale);
 
   ItemPickupSettings settings_;
+  ItemUpgradeSettings upgrade_; // 強化の設定(吸い寄せ範囲の強化の効き目)
   float baseScale_ = 1.0f;
   std::function<void()> onCollected_;
 

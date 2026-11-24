@@ -13,7 +13,7 @@ void CollisionManager::CollectColliders(std::shared_ptr<GameObject> obj, std::ve
     if (!obj || !obj->IsActive()) return;
 
     auto collider = obj->GetComponent<ColliderComponent>();
-    if (collider && collider->type != ColliderComponent::Type::None) {
+    if (collider && collider->GetSettings().type != ColliderComponent::Type::None) {
         outColliders.push_back(collider);
     }
 
@@ -55,16 +55,16 @@ CollisionManager::CollisionResult CollisionManager::CheckCollision(ColliderCompo
     result.isHit = false;
 
     Vector3 posA = a->GetOwner()->GetTransform().translate;
-    posA.x += a->centerOffset.x; posA.y += a->centerOffset.y; posA.z += a->centerOffset.z;
+    posA.x += a->GetSettings().centerOffset.x; posA.y += a->GetSettings().centerOffset.y; posA.z += a->GetSettings().centerOffset.z;
     Vector3 posB = b->GetOwner()->GetTransform().translate;
-    posB.x += b->centerOffset.x; posB.y += b->centerOffset.y; posB.z += b->centerOffset.z;
+    posB.x += b->GetSettings().centerOffset.x; posB.y += b->GetSettings().centerOffset.y; posB.z += b->GetSettings().centerOffset.z;
 
-    if (a->type == ColliderComponent::Type::Sphere && b->type == ColliderComponent::Type::Sphere) {
+    if (a->GetSettings().type == ColliderComponent::Type::Sphere && b->GetSettings().type == ColliderComponent::Type::Sphere) {
         float dx = posA.x - posB.x;
         float dy = posA.y - posB.y;
         float dz = posA.z - posB.z;
         float distSq = dx * dx + dy * dy + dz * dz;
-        float rSum = a->radius + b->radius;
+        float rSum = a->GetSettings().radius + b->GetSettings().radius;
         
         if (distSq <= rSum * rSum) {
             result.isHit = true;
@@ -80,14 +80,14 @@ CollisionManager::CollisionResult CollisionManager::CheckCollision(ColliderCompo
         return result;
     }
     
-    if (a->type == ColliderComponent::Type::AABB && b->type == ColliderComponent::Type::AABB) {
+    if (a->GetSettings().type == ColliderComponent::Type::AABB && b->GetSettings().type == ColliderComponent::Type::AABB) {
         float dx = posA.x - posB.x;
         float dy = posA.y - posB.y;
         float dz = posA.z - posB.z;
         
-        float penX = (a->size.x + b->size.x) - std::abs(dx);
-        float penY = (a->size.y + b->size.y) - std::abs(dy);
-        float penZ = (a->size.z + b->size.z) - std::abs(dz);
+        float penX = (a->GetSettings().size.x + b->GetSettings().size.x) - std::abs(dx);
+        float penY = (a->GetSettings().size.y + b->GetSettings().size.y) - std::abs(dy);
+        float penZ = (a->GetSettings().size.z + b->GetSettings().size.z) - std::abs(dz);
         
         if (penX > 0 && penY > 0 && penZ > 0) {
             result.isHit = true;
@@ -106,54 +106,54 @@ CollisionManager::CollisionResult CollisionManager::CheckCollision(ColliderCompo
     }
 
     // Sphere vs AABB
-    ColliderComponent* sphere = a->type == ColliderComponent::Type::Sphere ? a : b;
-    ColliderComponent* aabb = a->type == ColliderComponent::Type::AABB ? a : b;
-    if (sphere->type == ColliderComponent::Type::Sphere && aabb->type == ColliderComponent::Type::AABB) {
+    ColliderComponent* sphere = a->GetSettings().type == ColliderComponent::Type::Sphere ? a : b;
+    ColliderComponent* aabb = a->GetSettings().type == ColliderComponent::Type::AABB ? a : b;
+    if (sphere->GetSettings().type == ColliderComponent::Type::Sphere && aabb->GetSettings().type == ColliderComponent::Type::AABB) {
         Vector3 posS = sphere->GetOwner()->GetTransform().translate;
-        posS.x += sphere->centerOffset.x; posS.y += sphere->centerOffset.y; posS.z += sphere->centerOffset.z;
+        posS.x += sphere->GetSettings().centerOffset.x; posS.y += sphere->GetSettings().centerOffset.y; posS.z += sphere->GetSettings().centerOffset.z;
         Vector3 posBox = aabb->GetOwner()->GetTransform().translate;
-        posBox.x += aabb->centerOffset.x; posBox.y += aabb->centerOffset.y; posBox.z += aabb->centerOffset.z;
+        posBox.x += aabb->GetSettings().centerOffset.x; posBox.y += aabb->GetSettings().centerOffset.y; posBox.z += aabb->GetSettings().centerOffset.z;
         
-        float closestX = std::max(posBox.x - aabb->size.x, std::min(posS.x, posBox.x + aabb->size.x));
-        float closestY = std::max(posBox.y - aabb->size.y, std::min(posS.y, posBox.y + aabb->size.y));
-        float closestZ = std::max(posBox.z - aabb->size.z, std::min(posS.z, posBox.z + aabb->size.z));
+        float closestX = std::max(posBox.x - aabb->GetSettings().size.x, std::min(posS.x, posBox.x + aabb->GetSettings().size.x));
+        float closestY = std::max(posBox.y - aabb->GetSettings().size.y, std::min(posS.y, posBox.y + aabb->GetSettings().size.y));
+        float closestZ = std::max(posBox.z - aabb->GetSettings().size.z, std::min(posS.z, posBox.z + aabb->GetSettings().size.z));
 
         float dx = posS.x - closestX;
         float dy = posS.y - closestY;
         float dz = posS.z - closestZ;
         float distSq = dx * dx + dy * dy + dz * dz;
 
-        if (distSq <= sphere->radius * sphere->radius) {
+        if (distSq <= sphere->GetSettings().radius * sphere->GetSettings().radius) {
             result.isHit = true;
             float dist = std::sqrt(distSq);
             
             if (dist > 0.0001f) {
                 result.normal = {dx / dist, dy / dist, dz / dist};
-                result.depth = sphere->radius - dist;
+                result.depth = sphere->GetSettings().radius - dist;
             } else {
                 // 球の中心がAABBの内部にある場合 (中心から一番近い面へ押し出す)
                 float dpx = posS.x - posBox.x;
                 float dpy = posS.y - posBox.y;
                 float dpz = posS.z - posBox.z;
-                float px = aabb->size.x - std::abs(dpx);
-                float py = aabb->size.y - std::abs(dpy);
-                float pz = aabb->size.z - std::abs(dpz);
+                float px = aabb->GetSettings().size.x - std::abs(dpx);
+                float py = aabb->GetSettings().size.y - std::abs(dpy);
+                float pz = aabb->GetSettings().size.z - std::abs(dpz);
                 
                 if (px <= py && px <= pz) {
-                    result.depth = sphere->radius + px;
+                    result.depth = sphere->GetSettings().radius + px;
                     result.normal = {dpx > 0 ? 1.0f : -1.0f, 0, 0};
                 } else if (py <= px && py <= pz) {
-                    result.depth = sphere->radius + py;
+                    result.depth = sphere->GetSettings().radius + py;
                     result.normal = {0, dpy > 0 ? 1.0f : -1.0f, 0};
                 } else {
-                    result.depth = sphere->radius + pz;
+                    result.depth = sphere->GetSettings().radius + pz;
                     result.normal = {0, 0, dpz > 0 ? 1.0f : -1.0f};
                 }
             }
             
             // aabb が b の場合、法線は BからAへのベクトルなので AがSphereの場合はそのまま
             // もし AがAABBの場合、法線の向きを逆にする必要がある
-            if (a->type == ColliderComponent::Type::AABB) {
+            if (a->GetSettings().type == ColliderComponent::Type::AABB) {
                 result.normal.x = -result.normal.x;
                 result.normal.y = -result.normal.y;
                 result.normal.z = -result.normal.z;
@@ -176,13 +176,9 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
 
     if (aMove && bMove) {
         // 両方動く場合は質量に応じて押し出し量を分配するのが理想だが、今回は簡易的に半分ずつ
-        a->GetOwner()->GetTransform().translate.x += result.normal.x * result.depth * 0.5f;
-        a->GetOwner()->GetTransform().translate.y += result.normal.y * result.depth * 0.5f;
-        a->GetOwner()->GetTransform().translate.z += result.normal.z * result.depth * 0.5f;
-
-        b->GetOwner()->GetTransform().translate.x -= result.normal.x * result.depth * 0.5f;
-        b->GetOwner()->GetTransform().translate.y -= result.normal.y * result.depth * 0.5f;
-        b->GetOwner()->GetTransform().translate.z -= result.normal.z * result.depth * 0.5f;
+        const float halfDepth = result.depth * 0.5f;
+        a->GetOwner()->Translate({result.normal.x * halfDepth, result.normal.y * halfDepth, result.normal.z * halfDepth});
+        b->GetOwner()->Translate({-result.normal.x * halfDepth, -result.normal.y * halfDepth, -result.normal.z * halfDepth});
 
         // 反発処理 (簡易的: 速度をゼロまたは反転)
         Vector3 vA = rbA->GetVelocity();
@@ -190,9 +186,7 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
         rbA->SetVelocity({vA.x * 0.5f, vA.y * 0.5f, vA.z * 0.5f});
         rbB->SetVelocity({vB.x * 0.5f, vB.y * 0.5f, vB.z * 0.5f});
     } else if (aMove) {
-        a->GetOwner()->GetTransform().translate.x += result.normal.x * result.depth;
-        a->GetOwner()->GetTransform().translate.y += result.normal.y * result.depth;
-        a->GetOwner()->GetTransform().translate.z += result.normal.z * result.depth;
+        a->GetOwner()->Translate({result.normal.x * result.depth, result.normal.y * result.depth, result.normal.z * result.depth});
         
         // Bは動かない壁のようなものなので、Aの速度を減衰させる (跳ね返りは未実装、または簡易的に)
         Vector3 vA = rbA->GetVelocity();
@@ -205,9 +199,7 @@ void CollisionManager::ResolvePenetration(ColliderComponent* a, ColliderComponen
             rbA->SetVelocity(vA);
         }
     } else if (bMove) {
-        b->GetOwner()->GetTransform().translate.x -= result.normal.x * result.depth;
-        b->GetOwner()->GetTransform().translate.y -= result.normal.y * result.depth;
-        b->GetOwner()->GetTransform().translate.z -= result.normal.z * result.depth;
+        b->GetOwner()->Translate({-result.normal.x * result.depth, -result.normal.y * result.depth, -result.normal.z * result.depth});
 
         Vector3 vB = rbB->GetVelocity();
         float dot = vB.x * -result.normal.x + vB.y * -result.normal.y + vB.z * -result.normal.z;

@@ -4,7 +4,7 @@
 #include "../../actor/Player/PlayerComponent.h"
 
 void RamAttackComponent::OnCollision(AbsoluteEngine::GameObject* other) {
-    if (!owner_ || !other) return;
+    if (!GetOwner() || !other) return;
 
     auto* player = other->GetComponent<PlayerComponent>();
     if (!player) return;
@@ -12,7 +12,7 @@ void RamAttackComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (player->IsDead()) return;
 
     // プレイヤーに衝突した瞬間に確実に自爆撃破する（現在のHPに関わらず）
-    if (auto* enemyComp = owner_->GetComponent<EnemyComponent>()) {
+    if (auto* enemyComp = GetOwner()->GetComponent<EnemyComponent>()) {
         // 自機に当たって壊れるのは、自機が倒したのではない(スコア、アイテムは出さない。爆発は出る)
         enemyComp->OnHit(enemyComp->GetMaxHp(), EnemyDestroyReason::SelfDestruct);
     }

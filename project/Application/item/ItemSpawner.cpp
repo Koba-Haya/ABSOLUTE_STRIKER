@@ -4,7 +4,8 @@
 #include <utility>
 
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "ItemPickupComponent.h"
@@ -14,12 +15,12 @@ constexpr const char *kItemObjectName = "Item";
 constexpr const char *kItemTag = "Item";
 } // namespace
 
-void ItemSpawner::Spawn(BaseScene &scene, const ItemDefinition &item, const ItemPickupSettings &settings, const Vector3 &position,
+void ItemSpawner::Spawn(AbsoluteEngine::ISpawner &spawner, AbsoluteEngine::ISceneQuery &query, const ItemDefinition &item, const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, const Vector3 &position,
                         std::function<void()> onCollected) {
   auto obj = std::make_shared<AbsoluteEngine::GameObject>(kItemObjectName);
   obj->SetTag(kItemTag);
-  obj->GetTransform().translate = position;
-  obj->GetTransform().scale = {item.scale, item.scale, item.scale};
+  obj->SetPosition(position);
+  obj->SetScale({item.scale, item.scale, item.scale});
 
   // 見た目: 照明なし(パレットの色をそのまま出す)。落ちている強化が、背景の中で光って見えるようにする
   auto model = std::make_unique<AbsoluteEngine::ModelComponent>();
@@ -30,9 +31,9 @@ void ItemSpawner::Spawn(BaseScene &scene, const ItemDefinition &item, const Item
   obj->AddComponent(std::move(model));
 
   // 動きと取得
-  auto pickup = std::make_unique<ItemPickupComponent>();
-  pickup->Configure(settings, item.scale, std::move(onCollected));
+  auto pickup = std::make_unique<ItemPickupComponent>(query);
+  pickup->Configure(settings, upgrade, item.scale, std::move(onCollected));
   obj->AddComponent(std::move(pickup));
 
-  scene.AddRootObject(obj);
+  spawner.Spawn(obj);
 }

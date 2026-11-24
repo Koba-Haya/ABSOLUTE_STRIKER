@@ -17,11 +17,6 @@ constexpr const char *kHitEffectRingTexture = "resources/app/textures/gradationL
 constexpr const char *kPrefabCubeModel = "resources/app/cube/cube.obj";
 constexpr const char *kPrefabCubeTexture = "resources/app/cube/white100x100.png";
 
-// 保持している資産(強い参照)。Release() で空にする
-std::vector<std::shared_ptr<ModelResource>> g_models;
-std::vector<std::shared_ptr<TextureResource>> g_textures;
-bool g_loaded = false;
-
 template <typename T> void Hold(std::vector<std::shared_ptr<T>> &list, std::shared_ptr<T> res) {
   // 読み込みに失敗した(nullptr)ものは保持しない
   if (res) {
@@ -31,7 +26,7 @@ template <typename T> void Hold(std::vector<std::shared_ptr<T>> &list, std::shar
 } // namespace
 
 void GameAssetPreloader::Preload() {
-  if (g_loaded) {
+  if (loaded_) {
     return;
   }
   CpuTimer::Scope scope("GameAssetPreloader.Preload");
@@ -39,14 +34,14 @@ void GameAssetPreloader::Preload() {
   auto *am = AbsoluteEngine::AssetManager::GetInstance();
 
   // モデル
-  Hold(g_models, am->Load<ModelResource>(GameAssetPaths::kPlayerModel));
-  Hold(g_models, am->Load<ModelResource>(kPrefabCubeModel));
+  Hold(models_, am->Load<ModelResource>(GameAssetPaths::kPlayerModel));
+  Hold(models_, am->Load<ModelResource>(kPrefabCubeModel));
 
   // テクスチャ
-  Hold(g_textures, am->Load<TextureResource>(GameAssetPaths::kSkyboxDds));
-  Hold(g_textures, am->Load<TextureResource>(GameAssetPaths::kDissolveNoise));
-  Hold(g_textures, am->Load<TextureResource>(kHitEffectRingTexture));
-  Hold(g_textures, am->Load<TextureResource>(kPrefabCubeTexture));
+  Hold(textures_, am->Load<TextureResource>(GameAssetPaths::kSkyboxDds));
+  Hold(textures_, am->Load<TextureResource>(GameAssetPaths::kDissolveNoise));
+  Hold(textures_, am->Load<TextureResource>(kHitEffectRingTexture));
+  Hold(textures_, am->Load<TextureResource>(kPrefabCubeTexture));
 
   // パーティクルグループ。ParticleManager は作ったグループを持ち続け、
   // ゲームシーン側の同名の作成は「リセットして再利用」になるので、ここで先に作っておくと安い
@@ -55,11 +50,11 @@ void GameAssetPreloader::Preload() {
   ParticleManager::GetInstance()->CreateParticleGroup(GameParticleGroups::kExplosionName, GameAssetPaths::kExplosionParticleTexture,
                                                       GameParticleGroups::kExplosionMax);
 
-  g_loaded = true;
+  loaded_ = true;
 }
 
 void GameAssetPreloader::Release() {
-  g_models.clear();
-  g_textures.clear();
-  g_loaded = false;
+  models_.clear();
+  textures_.clear();
+  loaded_ = false;
 }

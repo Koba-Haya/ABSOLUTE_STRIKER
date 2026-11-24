@@ -86,12 +86,9 @@ struct TransitionStyle {
 };
 
 // ImGui での調整用: 有効にすると、すべての遷移の LensEdgeStyle を、この値で上書きする(Release では使わない)。
-// 遷移ごとの値を決めるまでの、見た目の調整に使う。気に入った値は SceneTransitionTable へ写す
+// 遷移ごとの値を決めるまでの、見た目の調整に使う。気に入った値は SceneTransitionTable へ写す。
+// 値は、Renderer が持つ(Renderer::GetLensEdgeOverride / SetLensEdgeOverride)。この型は、その値の形だけを決める
 struct LensEdgeDebugOverride {
   bool enabled = false;
   LensEdgeStyle style;
 };
-inline LensEdgeDebugOverride &GetLensEdgeDebugOverride() {
-  static LensEdgeDebugOverride instance;
-  return instance;
-}

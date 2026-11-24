@@ -8,9 +8,17 @@
 #include "ui/UiContinuePrompt.h"
 #include "result/RunResult.h"
 
+class ExhibitionHint;
+class GameData;
+class ExhibitionSession;
+
 class ClearScene final : public BaseScene {
 public:
-  ClearScene() = default;
+  // exhibition: 展示モードの状態(読むだけ。所有しない。シーンより長く生きること)
+  // exhibitionHint: 展示モードの切り替えの案内(描画に使う。所有しない)
+  // gameData: ゲームのデータ(定義の表と、進行・継承の保存データ。所有しない。シーンより長く生きること)
+  ClearScene(const ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
+      : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData) {}
   ~ClearScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -23,6 +31,9 @@ protected:
   bool UsesTimeline() const override { return false; }
 
 private:
+  const ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
+  ExhibitionHint &exhibitionHint_;      // 展示モードの切り替えの案内(所有しない)
+  GameData &gameData_;                  // ゲームのデータ(所有しない)
   float exhibitionHoldTimer_ = 0.0f;  // 展示: 継承の確定(メニューが開いたあと)からの経過(秒)
   float exhibitionTallyTimer_ = 0.0f; // 展示: 結果の集計が終わってからの経過(秒。継承の選択を始めるまでの待ち)
   ResultBanner banner_;     // 見出し(スプライト)

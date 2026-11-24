@@ -240,6 +240,7 @@
     <ClCompile Include="actor\Player\PlayerAnimator.cpp" />
     <ClCompile Include="actor\Player\WingShatter.cpp" />
     <ClCompile Include="actor\Player\ReticleAim.cpp" />
+    <ClCompile Include="actor\Player\PlayerFinder.cpp" />
     <ClCompile Include="scene\CloudSeaDebugUi.cpp" />
     <ClCompile Include="scene\VolumeCloudDebugUi.cpp" />
     <ClCompile Include="scene\GameIntroDirector.cpp" />
@@ -288,6 +289,7 @@
     <ClCompile Include="scene\ScoreTracker.cpp" />
     <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="GameApp.cpp" />
+    <ClCompile Include="GameData.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
     <ClCompile Include="scene\GameOverScene.cpp" />
@@ -367,6 +369,7 @@
     <ClInclude Include="actor\Player\WingShatter.h" />
     <ClInclude Include="actor\Player\PlayerModelDefs.h" />
     <ClInclude Include="actor\Player\ReticleAim.h" />
+    <ClInclude Include="actor\Player\PlayerFinder.h" />
     <ClInclude Include="scene\CloudSeaDebugUi.h" />
     <ClInclude Include="scene\VolumeCloudDebugUi.h" />
     <ClInclude Include="scene\GameIntroDirector.h" />
@@ -390,6 +393,7 @@
     <ClInclude Include="exhibition\ExhibitionController.h" />
     <ClInclude Include="exhibition\ExhibitionHint.h" />
     <ClInclude Include="exhibition\ExhibitionResultMaker.h" />
+    <ClInclude Include="exhibition\ExhibitionSession.h" />
     <ClInclude Include="ui\UiContinuePrompt.h" />
     <ClInclude Include="ui\UiPipBar.h" />
     <ClInclude Include="ui\UiPointer.h" />
@@ -423,6 +427,8 @@
     <ClInclude Include="scene\ScoreTracker.h" />
     <ClInclude Include="camera\RailCameraComponent.h" />
     <ClInclude Include="GameApp.h" />
+    <ClInclude Include="AppServices.h" />
+    <ClInclude Include="GameData.h" />
     <ClInclude Include="scene\ClearScene.h" />
     <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />

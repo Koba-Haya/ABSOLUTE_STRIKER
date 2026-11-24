@@ -1422,8 +1422,7 @@ void Renderer::ApplyTransitionPass_() {
     param->mistPlane[2] = 0.0f;
     param->mistPlane[3] = 0.0f;
     // 水滴の縁寄せ。ImGui の調整用の上書きが有効なら、そちらを使う
-    const LensEdgeDebugOverride &edgeOverride = GetLensEdgeDebugOverride();
-    const LensEdgeStyle &edge = edgeOverride.enabled ? edgeOverride.style : transitionStyle_.mist.edge;
+    const LensEdgeStyle &edge = lensEdgeOverride_.enabled ? lensEdgeOverride_.style : transitionStyle_.mist.edge;
     param->lensEdge[0] = edge.innerEdge;
     param->lensEdge[1] = edge.outerEdge;
     param->lensEdge[2] = edge.jitter;

@@ -1,5 +1,5 @@
 #include "RailAnchorComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../camera/RailCameraComponent.h"
 #include "Method.h"
@@ -14,9 +14,7 @@ constexpr const char* kKeyLifetime = "lifetime";
 } // namespace
 
 RailCameraComponent* RailAnchorComponent::FindRailCamera_() const {
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
+    for (const auto& obj : query_.Objects()) {
         if (!obj) continue;
         if (auto* camera = obj->GetComponent<RailCameraComponent>()) {
             return camera;
@@ -33,7 +31,7 @@ bool RailAnchorComponent::GetCameraDistance_(float& outDistance) const {
 }
 
 void RailAnchorComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     railCamera_ = FindRailCamera_();
     float cameraDistance = 0.0f;
@@ -47,7 +45,7 @@ void RailAnchorComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame
     //   ahead   = 出現した距離 - カメラの今の距離(カメラの1フレーム分のずれがあっても、位置は連続する)
     //   lateral = 出現位置が、フレームの右方向にどれだけずれているか(編隊の散らしがあっても正しく求まる)
     //   vertical= 同じく、上方向にどれだけずれているか
-    const Vector3 spawnPos = owner_->GetTransform().translate;
+    const Vector3 spawnPos = GetOwner()->GetTransform().translate;
     const Vector3 offset = { spawnPos.x - frame.position.x, spawnPos.y - frame.position.y, spawnPos.z - frame.position.z };
     aheadOffset_ = frame.distance - cameraDistance;
     lateral_ = Dot(offset, frame.right);
@@ -64,12 +62,12 @@ void RailAnchorComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame
 }
 
 void RailAnchorComponent::Update(float deltaTime) {
-    if (!owner_ || !anchored_) return;
+    if (!GetOwner() || !anchored_) return;
 
     // 寿命が来たら、自分で消える(画面を横切り終えた敵の後始末)
     elapsed_ += deltaTime;
     if (lifetime_ > 0.0f && elapsed_ >= lifetime_) {
-        owner_->Destroy();
+        GetOwner()->Destroy();
         return;
     }
 
@@ -83,11 +81,10 @@ void RailAnchorComponent::Update(float deltaTime) {
 
     // レール座標から世界座標へ。カメラの距離 + ahead の地点の座標系を取り、右・上へずらす(曲がったレールでも道に沿う)
     const AbsoluteEngine::RailFrame frame = railCamera_->GetRailFrame(cameraDistance + aheadOffset_);
-    auto& t = owner_->GetTransform();
-    t.translate = {
+    GetOwner()->SetPosition({
         frame.position.x + frame.right.x * lateral_ + frame.up.x * vertical_,
         frame.position.y + frame.right.y * lateral_ + frame.up.y * vertical_,
-        frame.position.z + frame.right.z * lateral_ + frame.up.z * vertical_ };
+        frame.position.z + frame.right.z * lateral_ + frame.up.z * vertical_ });
 }
 
 void RailAnchorComponent::Serialize(nlohmann::json& j) const {

@@ -53,16 +53,7 @@ float RequireNumber(const nlohmann::json &parent, const char *key, const std::st
 }
 } // namespace
 
-RatingCatalog::RatingCatalog() {
-  Load_();
-}
-
-RatingCatalog &RatingCatalog::GetInstance() {
-  static RatingCatalog instance;
-  return instance;
-}
-
-void RatingCatalog::Load_() {
+void RatingCatalog::Load() {
   const std::string path = AbsoluteEngine::AssetPath::Resolve(kRatingPath).string();
   std::ifstream file(AbsoluteEngine::AssetPath::Resolve(kRatingPath), std::ios::binary);
   if (!file) {

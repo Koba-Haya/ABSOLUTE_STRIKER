@@ -14,6 +14,7 @@
 #include "SceneIds.h"
 #include "ExhibitionMode.h"
 #include "../exhibition/ExhibitionHint.h"
+#include "../exhibition/ExhibitionSession.h"
 #include "ParticleManager.h"
 #include "ModelResource.h"
 #include "GameAssetPreloader.h"
@@ -245,7 +246,7 @@ void TitleScene::Initialize(const SceneServices &services) {
   contrailHasPrev_ = false;
 
   // ゲームシーンが使う重い資産を、ここで先に読んで保持する(遷移時の停止を避けるため)
-  GameAssetPreloader::Preload();
+  assetPreloader_.Preload();
 }
 
 void TitleScene::Finalize() {
@@ -358,7 +359,7 @@ void TitleScene::Update() {
 
   EmitContrails(state.playerWorld);
 
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
     // 展示: 操作を受け付けず、一定時間たったら自動でスタート演出を始める
     if (!startRequested_ && time_ >= ExhibitionMode::kTitleWaitSec) {
       RequestStart();
@@ -432,7 +433,7 @@ void TitleScene::Draw() {
   }
 
   // 展示モードの切り替えの案内(2D。EndRenderScene の前に描く)
-  ExhibitionHint::GetInstance().Draw();
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
 
   renderer->EndRenderScene(Inverse(GetMainCamera()->GetProjectionMatrix()));
 }

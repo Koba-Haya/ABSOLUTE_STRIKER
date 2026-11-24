@@ -60,7 +60,7 @@
 #include "ExhibitionMode.h"
 #include "../exhibition/ExhibitionController.h"
 #include "../exhibition/ExhibitionHint.h"
-#include "../exhibition/ExhibitionResultMaker.h"
+#include "../exhibition/ExhibitionSession.h"
 #include "StageStartDemoMode.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -201,7 +201,7 @@ constexpr BYTE kDebugKillBossKey = DIK_7;
 } // namespace
 
 const StageDefinition &GameScene::ResolveStage_() const {
-  const StageCatalog &catalog = StageCatalog::GetInstance();
+  const StageCatalog &catalog = gameData_.GetStageCatalog();
   if (const auto *params = TryGetLaunchPayload<StageLaunchParams>()) {
     if (const StageDefinition *stage = catalog.Find(params->stageId)) {
       return *stage;
@@ -223,7 +223,7 @@ void GameScene::Initialize(const SceneServices &services) {
   {
     const StageDefinition &stage = ResolveStage_();
     const auto *params = TryGetLaunchPayload<StageLaunchParams>();
-    if (params != nullptr && StageCatalog::GetInstance().Find(params->stageId) == nullptr) {
+    if (params != nullptr && gameData_.GetStageCatalog().Find(params->stageId) == nullptr) {
       Logger::GetInstance().Log("[Stage] unknown stage id '%s' in launch payload; falling back to '%s'",
                                 params->stageId.c_str(), stage.id.c_str());
     }
@@ -252,6 +252,10 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   BaseScene::Initialize(services);
+
+  // 実行中に出てきた敵(タイムライン、編隊、島のタレットなど)へ、撃破時のコールバックを付ける。
+  // 最初のオブジェクトを出す前に登録する
+  SetObjectSpawnedCallback([this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { RegisterEnemyCallbacks(obj); });
 
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
@@ -296,13 +300,12 @@ void GameScene::Initialize(const SceneServices &services) {
   debugCamera_->SetKeyboardRotationEnabled(true);
   debugCamera_->SetMovementSpeeds(0.5f, 0.02f, 0.005f);
 
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailCameraComponent", []() {
-      auto comp = std::make_unique<RailCameraComponent>();
-      return comp;
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailCameraComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<RailCameraComponent>(*deps.cameraRig, *deps.playState, *deps.sceneQuery);
   });
   // コンポーネントファクトリの登録
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("PlayerComponent", []() {
-      auto comp = std::make_unique<PlayerComponent>();
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.playState, *deps.input);
       comp->Initialize();
       return comp;
   });
@@ -310,13 +313,27 @@ void GameScene::Initialize(const SceneServices &services) {
   AbsoluteEngine::ComponentFactory::GetInstance().Register("StraightMoveComponent", []() { return std::make_unique<StraightMoveComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyComponent", []() { return std::make_unique<EnemyComponent>(); });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyModelAnimatorComponent", []() { return std::make_unique<EnemyModelAnimatorComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("TelegraphComponent", []() { return std::make_unique<TelegraphComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("EnemyShootComponent", []() { return std::make_unique<EnemyShootComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("RailAnchorComponent", []() { return std::make_unique<RailAnchorComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("AimedShootComponent", []() { return std::make_unique<AimedShootComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("BossComponent", []() { return std::make_unique<BossComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("TurretShootComponent", []() { return std::make_unique<TurretShootComponent>(); });
-  AbsoluteEngine::ComponentFactory::GetInstance().Register("ChargeOnApproachComponent", []() { return std::make_unique<ChargeOnApproachComponent>(); });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TelegraphComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<TelegraphComponent>(*deps.spawner, *deps.screen);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("EnemyShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailAnchorComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<RailAnchorComponent>(*deps.sceneQuery);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("AimedShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.serialNumbers);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TurretShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
+  });
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("ChargeOnApproachComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
+      return std::make_unique<ChargeOnApproachComponent>(*deps.screen, *deps.sceneQuery);
+  });
   AbsoluteEngine::ComponentFactory::GetInstance().Register("RamAttackComponent", []() { return std::make_unique<RamAttackComponent>(); });
 
   // タイムラインイベントファクトリの登録（編隊敵: FormationSpawnEventはApplication層の
@@ -330,8 +347,6 @@ void GameScene::Initialize(const SceneServices &services) {
     CpuTimer::Scope scope("GameScene.LoadEditorScene");
     LoadEditorScene();
   }
-  // LoadEditorScene の中身の内訳(プレハブ読み込み、モデル読み込みの回数と合計)
-  CpuTimer::FlushAccumulated();
 
   // -----------------------------------------------------------------------
   // 【バグ修正】エディタで配置した敵への onDestroyed コールバック一括登録
@@ -364,7 +379,7 @@ void GameScene::Initialize(const SceneServices &services) {
   // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
   auto playerComp = playerObj_->GetComponent<PlayerComponent>();
   if (!playerComp) {
-      auto pComp = std::make_unique<PlayerComponent>();
+      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView(), GetSceneQuery(), GetPlayState(), *GetInput());
       pComp->Initialize();
       playerObj_->AddComponent(std::move(pComp));
   } else {
@@ -372,51 +387,26 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   // 展示: 1 周ごとに、島の解放、ベスト記録、継承を初期へ戻す(毎周、解放の演出と、継承の選択を見せるため。仮の状態なので、保存はされない)。
   // 強化の状態の初期化(下の BeginStage)が、継承を読むので、その前に行う
-  if (ExhibitionMode::IsEnabled()) {
-      ExhibitionController::ResetLoopState();
+  if (exhibition_.IsEnabled()) {
+      ExhibitionController::ResetLoopState(gameData_);
   }
   // ドロップアイテムの強化の状態を、ステージの開始に合わせて初期化する(持ち越す設定なら、前のステージの値を戻す)
   itemSystem_.BeginStage(playerObj_);
   // 展示: 継承の選択に候補を出すため、強化を、最初からいくつか持たせる(BeginStage のあとに行う。BeginStage が、今回取った分を 0 に戻すため)
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
       for (const ExhibitionMode::InitialUpgrade &upgrade : ExhibitionMode::kInitialUpgrades) {
           itemSystem_.GrantEarned(upgrade.kind, upgrade.count);
       }
   }
 
-  // -----------------------------------------------------------------------
-  // 自機のモデルを、蝶に差し替える。
-  // resources/editor/scenes/Game.json 上が別のモデルを指していても、実行時に必ず蝶にする。
-  // 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)
-  // -----------------------------------------------------------------------
+  // 自機のモデルを、蝶に差し替え、見た目を設定する(Stop による復元のあとにも、同じ設定をやり直す)
+  SetupPlayerVisuals_();
+  // 崩壊で翅が裂けて飛び散る破片。分け方と描画用のモデルは重いので、シーンの開始時に作る(翅の描画から消した三角形も、ここで元に戻る)。
+  // 自機のモデルは、データを読むためだけに渡す(保存されない。解放のたびに、そのときの自機のモデルが渡される)
   {
-      auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
-      if (!playerModelComp) {
-          auto newModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
-          playerObj_->AddComponent(std::move(newModelComp));
-          playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
-      }
-      // JSON がすでに同じモデルを指しているときは、読み込み直さない。
-      // 読み込み直すと、直前のインスタンスを同じフレームの更新で破棄してしまい、アップロード中のテクスチャが先に消える
-      if (playerModelComp->GetModelPath() != kPlayerModelPath) {
-          playerModelComp->LoadModel(kPlayerModelPath);
-      }
-      playerModelComp->FitToWingspan(kPlayerWingspan);
-      // 死亡の崩壊(ディゾルブ)に使う、蝶専用のマスクと、ディゾルブの制御用のコンポーネント(普通は無効。死亡演出が制御する)
-      playerModelComp->LoadDissolveMask(GameAssetPaths::kPlayerDissolveMask);
-      // 崩壊で翅が裂けて飛び散る破片。分け方と描画用のモデルは重いので、シーンの開始時に作る(翅の描画から消した三角形も、ここで元に戻る)
-      {
-          auto* assets = AbsoluteEngine::AssetManager::GetInstance();
-          wingShatter_.Initialize(playerModelComp, assets->Load<TextureResource>(GameAssetPaths::kPlayerAtlas),
-                                  assets->Load<TextureResource>(GameAssetPaths::kPlayerDissolveMask));
-      }
-      // 蝶の翅は薄く、両面が見える。Lambert のままだと、光の当たらない側(裏面、影の側)が真っ黒になるので、環境光つきの薄い面にする
-      playerModelComp->SetLightingMode(ModelLightingMode::kThinSurface);
-      if (!playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-          playerObj_->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
-      }
-      // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
-      playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
+      auto* assets = AbsoluteEngine::AssetManager::GetInstance();
+      wingShatter_.Initialize(playerObj_->GetComponent<AbsoluteEngine::ModelComponent>(), assets->Load<TextureResource>(GameAssetPaths::kPlayerAtlas),
+                              assets->Load<TextureResource>(GameAssetPaths::kPlayerDissolveMask));
   }
 
   playerScope.reset(); // プレイヤー周りの区間の終わり
@@ -436,12 +426,12 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   if (!hasLight) {
       auto initialDirLight = std::make_shared<AbsoluteEngine::GameObject>("Directional Light");
-      initialDirLight->GetTransform().rotate = { 0.5f, 0.5f, 0.0f };
-      auto lightComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-      lightComp->type = AbsoluteEngine::LightNodeComponent::Type::Directional;
-      lightComp->color = { 1.0f, 1.0f, 1.0f };
-      lightComp->intensity = 1.0f;
-      initialDirLight->AddComponent(std::move(lightComp));
+      initialDirLight->SetRotation({ 0.5f, 0.5f, 0.0f });
+      AbsoluteEngine::LightNodeComponent::Settings lightSettings;
+      lightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Directional;
+      lightSettings.color = { 1.0f, 1.0f, 1.0f };
+      lightSettings.intensity = 1.0f;
+      initialDirLight->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(lightSettings));
       AddRootObject(initialDirLight);
   }
 
@@ -455,7 +445,7 @@ void GameScene::Initialize(const SceneServices &services) {
   }
   if (!hasRailCamera) {
       auto railCamObj = std::make_shared<AbsoluteEngine::GameObject>("RailCamera");
-      auto rComp = std::make_unique<RailCameraComponent>();
+      auto rComp = std::make_unique<RailCameraComponent>(GetCameraRig(), GetPlayState(), GetSceneQuery());
       railCamObj->AddComponent(std::move(rComp));
       AddRootObject(railCamObj);
   }
@@ -596,12 +586,12 @@ void GameScene::UpdateIntro_(float deltaTime) {
   camera->SetPerspective(kGameCameraFovY * pose.fovScale, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
 
   if (playerObj_) {
-    playerObj_->GetTransform().translate = {introBasePlayerPosition_.x + shift.x, introBasePlayerPosition_.y + shift.y,
-                                           introBasePlayerPosition_.z + shift.z};
+    playerObj_->SetPosition({introBasePlayerPosition_.x + shift.x, introBasePlayerPosition_.y + shift.y,
+                             introBasePlayerPosition_.z + shift.z});
     // 昇りの機首上げ(X まわりの負の回転で、機首が上を向く)
     Vector3 rotation = introBasePlayerRotation_;
     rotation.x -= pose.pitchUp;
-    playerObj_->GetTransform().rotate = rotation;
+    playerObj_->SetRotation(rotation);
   }
   UpdatePlayerModelOnly_(deltaTime);
 }
@@ -750,7 +740,8 @@ void GameScene::SetPlayerInputLocked_(bool locked) {
     return;
   }
   if (auto *player = playerObj_->GetComponent<PlayerComponent>()) {
-    player->SetInputLocked(locked);
+    // 展示中は、操作を一切受け付けない(ロックの解除を求められても、ロックしたままにする)
+    player->SetInputLocked(locked || exhibition_.IsEnabled());
   }
 }
 
@@ -762,8 +753,8 @@ void GameScene::FinishIntro_() {
     camera->SetPerspective(kGameCameraFovY, Renderer::GetInstance()->GetAspectRatio(), kGameCameraNear, kGameCameraFar);
   }
   if (playerObj_) {
-    playerObj_->GetTransform().translate = introBasePlayerPosition_;
-    playerObj_->GetTransform().rotate = introBasePlayerRotation_;
+    playerObj_->SetPosition(introBasePlayerPosition_);
+    playerObj_->SetRotation(introBasePlayerRotation_);
   }
 
   // イントロが終わったら、ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)へ続ける。基準の位置は、いま戻したスタート位置
@@ -793,22 +784,9 @@ const Camera* GameScene::GetEditorViewCamera() const {
 }
 
 // -----------------------------------------------------------------------
-// AddRootObject オーバーライド（タスクC: 依存性注入）
-// BaseScene::AddRootObject を呼んだ後、追加オブジェクトが EnemyComponent を持って
-// いれば onDestroyed コールバックを自動注入する。
-// タイムライン経由でスポーンされた敵にもコールバックが登録される。
-// -----------------------------------------------------------------------
-void GameScene::AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) {
-    // まず基底クラスの処理でリストに追加する
-    BaseScene::AddRootObject(obj);
-
-    RegisterEnemyCallbacks(obj);
-}
-
-// -----------------------------------------------------------------------
 // RegisterEnemyCallbacks
 // EnemyComponent::onDestroyed の登録を1箇所に集約したもの
-// （Initialize でのロード済みオブジェクト・AddRootObject 経由・タイムライン生成の全てで共通）。
+// （Initialize でのロード済みオブジェクト・出す経路(SetObjectSpawnedCallback で登録した通知)・タイムライン生成の全てで共通）。
 // FormationMemberComponent を持つ場合は編隊トラッキングの初期カウントも行う。
 // -----------------------------------------------------------------------
 void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
@@ -837,7 +815,7 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
     // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
     enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
         // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
-        hitEffects_.Spawn(*this, hitPos);
+        hitEffects_.Spawn(GetSpawner(), hitPos);
 
         // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
         // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
@@ -847,7 +825,7 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
         }
 
         // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
-        itemSystem_.OnEnemyDestroyed(*this, enemyName, hitPos);
+        itemSystem_.OnEnemyDestroyed(GetSpawner(), GetSceneQuery(), enemyName, hitPos);
 
         // スコア加算
         scoreTracker_.OnEnemyKilled();
@@ -860,6 +838,52 @@ void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::Gam
             }
         }
     };
+}
+
+// 自機のオブジェクトへ、実行時の見た目の設定を行う。
+// resources/editor/scenes/Game.json 上が別のモデルを指していても、実行時に必ず蝶にする。
+// 大きさ(翼幅)と中心は、モデルの頂点から求める(モデルを替えても大きさがそろう)。
+// Initialize と、エディタの Stop による復元(RestoreScene)の両方から呼ぶ。復元で作り直された自機は、JSON から作られ、
+// JSON には、モデルのパスなどしか保存されないので、ここでの設定をやり直さないと、翼幅や照明、羽ばたきが失われる
+void GameScene::SetupPlayerVisuals_() {
+  if (!playerObj_) return;
+
+  auto* playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+  if (!playerModelComp) {
+      auto newModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
+      playerObj_->AddComponent(std::move(newModelComp));
+      playerModelComp = playerObj_->GetComponent<AbsoluteEngine::ModelComponent>();
+  }
+  // JSON がすでに同じモデルを指しているときは、読み込み直さない。
+  // 読み込み直すと、直前のインスタンスを同じフレームの更新で破棄してしまい、アップロード中のテクスチャが先に消える
+  if (playerModelComp->GetModelPath() != kPlayerModelPath) {
+      playerModelComp->LoadModel(kPlayerModelPath);
+  }
+  playerModelComp->FitToWingspan(kPlayerWingspan);
+  // 死亡の崩壊(ディゾルブ)に使う、蝶専用のマスクと、ディゾルブの制御用のコンポーネント(普通は無効。死亡演出が制御する)
+  playerModelComp->LoadDissolveMask(GameAssetPaths::kPlayerDissolveMask);
+  // 蝶の翅は薄く、両面が見える。Lambert のままだと、光の当たらない側(裏面、影の側)が真っ黒になるので、環境光つきの薄い面にする
+  playerModelComp->SetLightingMode(ModelLightingMode::kThinSurface);
+  if (!playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+      playerObj_->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
+  }
+  // 通常は羽ばたいている。アニメーションの切り替え(被弾など)は PlayerComponent 側で行う
+  playerModelComp->PlayAnimation(PlayerAnimation::kFlap, true);
+}
+
+// エディタの Stop で、全オブジェクトが JSON から作り直されたあと、自機へ、実行時の設定をやり直す。
+// 作り直す前の自機は解放されているので、保存していた参照(強化の反映先)も覚え直す
+void GameScene::RestoreScene() {
+  BaseScene::RestoreScene();
+
+  playerObj_ = FindPlayerObject_();
+  if (!playerObj_) return;
+
+  SetupPlayerVisuals_();
+  // 死亡演出で消した翅の三角形(共有のモデルに残っている)を元に戻す
+  wingShatter_.Reset();
+  // 強化の状態(PlayerUpgradeState)は、シーンの JSON には保存されない。新しい自機へ、いまの強化を反映し直す
+  itemSystem_.RebindPlayer(playerObj_);
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> GameScene::FindPlayerObject_() const {
@@ -896,7 +920,7 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 
 void GameScene::UpdateMouseCapture_() {
   // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
       MouseCapture::Apply(false);
       return;
   }
@@ -949,14 +973,14 @@ void GameScene::SpawnBoss_() {
   // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromCameraと合わせておく）。
   constexpr float kBossInitialDistanceFromCamera = 36.0f;
   const Vector3 cameraEye = GetMainCamera()->GetEye();
-  bossObj->GetTransform().translate = {
+  bossObj->SetPosition({
       cameraEye.x + forward.x * kBossInitialDistanceFromCamera,
       cameraEye.y + forward.y * kBossInitialDistanceFromCamera,
       cameraEye.z + forward.z * kBossInitialDistanceFromCamera
-  };
+  });
   // このステージのボスの種類(stages.json の "boss")から、モデル・大きさ・当たり判定の半径を決める
   const BossModelSpec &bossSpec = GetBossModelSpec(ResolveStage_().boss);
-  bossObj->GetTransform().scale = {bossSpec.scale, bossSpec.scale, bossSpec.scale};
+  bossObj->SetScale({bossSpec.scale, bossSpec.scale, bossSpec.scale});
   auto bossModelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
   bossModelComp->LoadModel(bossSpec.modelPath);
   bossModelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
@@ -967,15 +991,15 @@ void GameScene::SpawnBoss_() {
   bossObj->AddComponent(std::move(bossModelComp));
   bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  auto bossComp = std::make_unique<BossComponent>();
+  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView(), GetSceneQuery());
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
 
   bossObj->AddComponent(std::move(bossComp));
 
-  auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-  colliderComp->type = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = bossSpec.colliderRadius; // ボスなので大きめに
-  bossObj->AddComponent(std::move(colliderComp));
+  AbsoluteEngine::ColliderComponent::Settings colliderSettings;
+  colliderSettings.type = AbsoluteEngine::ColliderComponent::Type::Sphere;
+  colliderSettings.radius = bossSpec.colliderRadius; // ボスなので大きめに
+  bossObj->AddComponent(std::make_unique<AbsoluteEngine::ColliderComponent>(colliderSettings));
   bossObj->SetTag("Boss");
 
   AddRootObject(bossObj);
@@ -1014,7 +1038,7 @@ void GameScene::KillBossForDebug_() {
 }
 
 void GameScene::CheckKillBossShortcut_() {
-  if (!kDebugKillBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+  if (!kDebugKillBossEnabled || exhibition_.IsEnabled() || !GetInput()) {
     return;
   }
   // ボス戦の最中だけ受け付ける(道中や、演出・終了の要求の最中は何もしない。二重に倒さない)
@@ -1027,7 +1051,7 @@ void GameScene::CheckKillBossShortcut_() {
 }
 
 void GameScene::CheckSkipToBossShortcut_() {
-  if (!kDebugSkipToBossEnabled || ExhibitionMode::IsEnabled() || !GetInput()) {
+  if (!kDebugSkipToBossEnabled || exhibition_.IsEnabled() || !GetInput()) {
     return;
   }
   // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
@@ -1146,7 +1170,7 @@ void GameScene::UpdateDying_(float deltaTime) {
   if (GetInput()) {
       skipRequested = GetInput()->TriggerKey(kDeathSkipKey) || GetInput()->WasPadPressed(kDeathSkipPadButton);
   }
-  deathDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
+  deathDirector_.Update(deltaTime, !exhibition_.IsEnabled(), skipRequested);
 
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション)
   SetWorldTimeScale(deathDirector_.GetWorldTimeScale());
@@ -1205,13 +1229,15 @@ void GameScene::ReviveForDebug_() {
           pComp->Revive();
       }
       if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-          dissolve->enable = false;
+          AbsoluteEngine::DissolveComponent::Settings state = dissolve->GetSettings();
+          state.enable = false;
+          dissolve->SetSettings(state);
       }
   }
 }
 
 void GameScene::CheckDebugReviveShortcut_() {
-  if (!kDebugFlowShortcutEnabled || ExhibitionMode::IsEnabled() || !GetInput()) return;
+  if (!kDebugFlowShortcutEnabled || exhibition_.IsEnabled() || !GetInput()) return;
   if (GetInput()->TriggerKey(kDebugReviveKey)) {
       ReviveForDebug_();
   }
@@ -1220,17 +1246,19 @@ void GameScene::CheckDebugReviveShortcut_() {
 void GameScene::ApplyDeathPose_() {
   if (!playerObj_ || !deathDirector_.IsActive()) return;
   const PlayerDeathPose pose = deathDirector_.GetPlayerPose();
-  playerObj_->GetTransform().translate = pose.position;
-  playerObj_->GetTransform().rotate = pose.rotate;
+  playerObj_->SetPosition(pose.position);
+  playerObj_->SetRotation(pose.rotate);
 
   // 蝶の朽ち方(ディゾルブ)。ModelComponent が、毎フレームこの値を描画に渡す
   if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
       const PlayerDeathDissolve state = deathDirector_.GetDissolve();
-      dissolve->enable = state.enabled;
-      dissolve->threshold = state.threshold;
-      dissolve->edgeRange = state.edgeRange;
-      dissolve->edgeColor = state.edgeColor;
-      dissolve->emberAmount = state.emberAmount;
+      AbsoluteEngine::DissolveComponent::Settings settings = dissolve->GetSettings();
+      settings.enable = state.enabled;
+      settings.threshold = state.threshold;
+      settings.edgeRange = state.edgeRange;
+      settings.edgeColor = state.edgeColor;
+      settings.emberAmount = state.emberAmount;
+      dissolve->SetSettings(settings);
   }
 }
 
@@ -1288,12 +1316,12 @@ void GameScene::BeginClearing_() {
               playerMaxHp = pComp->GetMaxHp();
           }
       }
-      if (ExhibitionMode::IsEnabled()) {
+      if (exhibition_.IsEnabled()) {
           // 展示: ボス戦だけを通すので、実際の成績は低い。固定の成績(ランダムなランク)を、本物の評価に通して使う
-          clearResult_ = ExhibitionResultMaker::Make(ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+          clearResult_ = exhibition_.MakeResult(ResolveStage_().scoreTarget, playerMaxHp, gameData_.GetRatingCatalog().GetSettings());
       } else {
           clearResult_ = RunEvaluator::Evaluate(runStats_.GetStats(), scoreTracker_.GetScore(), scoreTracker_.GetKillCount(),
-                                                ResolveStage_().scoreTarget, playerMaxHp, RatingCatalog::GetInstance().GetSettings());
+                                                ResolveStage_().scoreTarget, playerMaxHp, gameData_.GetRatingCatalog().GetSettings());
       }
       const RunResult& r = *clearResult_;
       Logger::GetInstance().Log("[Rating] rank=%s total=%.1f | score=%.1f kill=%.1f damage=%.1f formation=%.1f multiLock=%.1f bossNoDamage=%.1f",
@@ -1314,7 +1342,7 @@ void GameScene::BeginClearing_() {
   // 次のステージを解放して、保存する(演出の途中でスキップされても、解放は取りこぼさない)。
   // ステージ選択で、鍵が外れる演出が、この解放のあと 1 回だけ出る
   if (nextLockedStage != nullptr) {
-      StageProgress::GetInstance().Unlock(nextLockedStage->id);
+      gameData_.GetStageProgress().Unlock(nextLockedStage->id);
   }
 
   // ボスの見た目の演出(外殻のひびと剥がれ)を始める。撃破されたボスは、消さずに残っている
@@ -1348,12 +1376,12 @@ const StageDefinition *GameScene::FindNextLockedStage_() const {
   const StageDefinition &current = ResolveStage_();
   // 演出の中心(ひび割れの形)が無いボスは、粒の出る場所と、島へ飛ぶ流れが作れないので、解放の演出は出さない
   if (GetBossModelSpec(current.boss).crackShape.cellSize <= 0.0f) return nullptr;
-  const auto &stages = StageCatalog::GetInstance().GetStages();
+  const auto &stages = gameData_.GetStageCatalog().GetStages();
   for (size_t i = 0; i + 1 < stages.size(); ++i) {
       if (stages[i].id == current.id) {
           const StageDefinition &next = stages[i + 1];
           // 次のステージが、まだロックされている(定義でも、保存でも)なら、解放する
-          return StageProgress::GetInstance().IsUnlocked(next) ? nullptr : &next;
+          return gameData_.GetStageProgress().IsUnlocked(next) ? nullptr : &next;
       }
   }
   return nullptr; // 最終ステージ(次が無い)、または一覧に無い
@@ -1364,7 +1392,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> GameScene::CreateBossShards_(const s
   // 欠片のモデルは、ボスの外殻と同じ位置・向き・大きさで置く(割る前と、組み立てた欠片が、同じ見た目になるように)。
   // 動き(骨の書き換え)は BossShatter が行うので、ここでは、置くだけ。アニメーションは再生しない
   auto shardsObj = std::make_shared<AbsoluteEngine::GameObject>("BossShards");
-  shardsObj->GetTransform() = boss->GetTransform();
+  shardsObj->SetTransform(boss->GetTransform());
   auto modelComp = std::make_unique<AbsoluteEngine::ModelComponent>();
   modelComp->LoadModel(bossSpec.shardsModelPath);
   modelComp->SetEnvironmentCoefficient(kBossEnvironmentCoefficient);
@@ -1379,7 +1407,7 @@ void GameScene::UpdateClearing_(float deltaTime) {
   if (GetInput()) {
       skipRequested = GetInput()->TriggerKey(kClearSkipKey) || GetInput()->WasPadPressed(kClearSkipPadButton);
   }
-  clearDirector_.Update(deltaTime, !ExhibitionMode::IsEnabled(), skipRequested);
+  clearDirector_.Update(deltaTime, !exhibition_.IsEnabled(), skipRequested);
 
   // 世界の時間の速さは、演出クラスが決める(ヒットストップで 0、そのあとスローモーション、最後に通常へ戻る)
   SetWorldTimeScale(clearDirector_.GetWorldTimeScale());
@@ -1433,7 +1461,7 @@ void GameScene::UpdateHud_() {
     status.lockRadius = lockOn.GetLockRadius(); // 強化で広がった値
     status.lockingMode = lockOn.IsLockingMode();
     status.cursorPos = pComp->GetCursorPos();
-    status.lockedPositions = lockOn.GetLockedScreenPositions(GetMainCamera());
+    status.lockedPositions = lockOn.GetLockedScreenPositions(GetScreenView());
     status.lockedCount = lockOn.GetLockedCount();
     status.lockMax = lockOn.GetMaxLockTargets();
   }
@@ -1497,7 +1525,7 @@ void GameScene::Update() {
   // 通常は 1 回。エディット中は、速くしない
   const int worldSteps = GetPlayMode() == PlayMode::Play ? CalcWorldSteps_() : 1;
   for (int i = 0; i < worldSteps; ++i) {
-      UpdateEditor();
+      UpdateWorld();
   }
 
   UpdateMouseCapture_();
@@ -1520,7 +1548,7 @@ void GameScene::Update() {
       }
 
       // 骨のデバッグ表示トグル（Bキー）
-      if (kDebugShortcutsAvailable && !ExhibitionMode::IsEnabled() && GetInput() && GetInput()->TriggerKey(DIK_B)) {
+      if (kDebugShortcutsAvailable && !exhibition_.IsEnabled() && GetInput() && GetInput()->TriggerKey(DIK_B)) {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
@@ -1531,7 +1559,7 @@ void GameScene::Update() {
 
       // 島のタレット: 自機(カメラ)がタレットの島へ近づいたら、島の上へ出す
       if (const auto *rail = FindRailCamera_()) {
-          islandTurrets_.Update(*this, stageIslands_, rail->GetProgress() * rail->GetTotalLength());
+          islandTurrets_.Update(GetComponentDeps(), stageIslands_, rail->GetProgress() * rail->GetTotalLength());
       }
 
       // パーティクルの更新（爆発エフェクト等）
@@ -1564,7 +1592,7 @@ void GameScene::Update() {
 
       if (StageStartDemoMode::kEnabled) {
           UpdateStageStartDemoFlow_(deltaTime);
-      } else if (ExhibitionMode::IsEnabled()) {
+      } else if (exhibition_.IsEnabled()) {
           UpdateExhibitionFlow_(deltaTime);
       } else {
           CheckDebugFlowShortcut_();
@@ -1575,7 +1603,8 @@ void GameScene::Update() {
       ApplyDeathPose_();
       // 崩壊の破片(解放、移動)。蝶の今のポーズ・位置を使うので、位置を決めたあとに進める
       if (deathDirector_.IsActive()) {
-          wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity());
+          const AbsoluteEngine::ModelComponent* playerModel = playerObj_ ? playerObj_->GetComponent<AbsoluteEngine::ModelComponent>() : nullptr;
+          wingShatter_.Update(deltaTime, deathDirector_.GetCrumbleProgress(), deathDirector_.GetPlayerVelocity(), playerModel);
           // 死亡カメラ(蝶の位置を追う)と、弾の停止(世界の更新で出た弾は、描かれる前にここで消す)
           if (playerObj_) {
               // 注視点は、本体と、解放された破片の重心との中間(破片が散っても、主役を見失わない)。
@@ -1726,9 +1755,9 @@ void GameScene::Draw() {
           continue;
       }
       const Vector3 originalScale = obj->GetTransform().scale;
-      obj->GetTransform().scale = {originalScale.x * deathScale, originalScale.y * deathScale, originalScale.z * deathScale};
+      obj->SetScale({originalScale.x * deathScale, originalScale.y * deathScale, originalScale.z * deathScale});
       obj->Draw();
-      obj->GetTransform().scale = originalScale;
+      obj->SetScale(originalScale);
   }
 
   // ボス撃破の光線(ひびの線から放射状に伸びる光の帯)。物体を描いたあとに描く
@@ -1818,7 +1847,7 @@ void GameScene::Draw() {
   // 展示モードの切り替えの案内。HUD を出さない間(演出の最中など)も、常に出す。
   // 雲を先に合成しておく(雲が、案内を隠さないように。HUD と同じ方法。すでに合成済みなら、何も起きない)
   renderer->FlushVolumeClouds();
-  ExhibitionHint::GetInstance().Draw();
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
 
   Matrix4x4 projInverse;
   if (isDebugCamera_) {
@@ -1954,9 +1983,9 @@ void GameScene::DrawEditorUI() {
 
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
     // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
-    for (const ItemDefinition& def : ItemCatalog::GetInstance().GetItems()) {
+    for (const ItemDefinition& def : gameData_.GetItemCatalog().GetItems()) {
         const PlayerUpgradeState& upgradeState = PlayerUpgradeState::Persistent();
-        const int maxStacks = ItemCatalog::GetInstance().GetUpgradeSettings().Get(def.effect).maxStacks;
+        const int maxStacks = gameData_.GetItemCatalog().GetUpgradeSettings().Get(def.effect).maxStacks;
         ImGui::Text("Upgrade %s: earned %d + inherited %.1f  (max %d)", def.id.c_str(), upgradeState.GetEarned(def.effect),
                     upgradeState.GetInherited(def.effect), maxStacks);
         ImGui::SameLine();

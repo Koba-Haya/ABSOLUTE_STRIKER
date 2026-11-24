@@ -1,7 +1,6 @@
 #include "SceneSerializer.h"
 #include <fstream>
 #include <iostream>
-#include "CpuTimer.h"
 #include "../../externals/nlohmann/json.hpp"
 #include "ComponentFactory.h"
 #include "ColliderComponent.h"
@@ -82,17 +81,16 @@ static json SerializeGameObject(const std::shared_ptr<GameObject>& obj, bool for
 }
 
 // JSON から GameObject をデシリアライズ
-static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
+static std::shared_ptr<GameObject> DeserializeGameObject(const json& j, const ComponentDeps& deps) {
   if (j.contains("prefabPath")) {
     std::string prefabPath = j["prefabPath"];
-    auto obj = SceneSerializer::LoadPrefab(prefabPath);
+    auto obj = SceneSerializer::LoadPrefab(prefabPath, deps);
     if (obj) {
       if (j.contains("transform")) {
         const auto& tJson = j["transform"];
-        Transform& t = obj->GetTransform();
-        t.translate = JsonToVector3(tJson["translate"]);
-        t.rotate = JsonToVector3(tJson["rotate"]);
-        t.scale = JsonToVector3(tJson["scale"]);
+        obj->SetPosition(JsonToVector3(tJson["translate"]));
+        obj->SetRotation(JsonToVector3(tJson["rotate"]));
+        obj->SetScale(JsonToVector3(tJson["scale"]));
       }
       
       // シーンファイル側のコンポーネント（オーバーライド）で上書きまたは追加
@@ -112,7 +110,7 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
           if (existingComp) {
               existingComp->Deserialize(cJson); // 既存なら設定を上書き（オーバーライド）
           } else {
-              auto comp = ComponentFactory::GetInstance().Create(typeName);
+              auto comp = ComponentFactory::GetInstance().Create(typeName, deps);
               if (comp) {
                   comp->Deserialize(cJson);
                   obj->AddComponent(std::move(comp)); // 無ければ追加
@@ -134,16 +132,15 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
 
   if (j.contains("transform")) {
     const auto& tJson = j["transform"];
-    Transform& t = obj->GetTransform();
-    t.translate = JsonToVector3(tJson["translate"]);
-    t.rotate = JsonToVector3(tJson["rotate"]);
-    t.scale = JsonToVector3(tJson["scale"]);
+    obj->SetPosition(JsonToVector3(tJson["translate"]));
+    obj->SetRotation(JsonToVector3(tJson["rotate"]));
+    obj->SetScale(JsonToVector3(tJson["scale"]));
   }
 
   if (j.contains("components") && j["components"].is_array()) {
     for (const auto& cJson : j["components"]) {
       std::string typeName = cJson.value("type", "");
-      auto comp = ComponentFactory::GetInstance().Create(typeName);
+      auto comp = ComponentFactory::GetInstance().Create(typeName, deps);
       if (comp) {
         comp->Deserialize(cJson);
         obj->AddComponent(std::move(comp));
@@ -153,7 +150,7 @@ static std::shared_ptr<GameObject> DeserializeGameObject(const json& j) {
 
   if (j.contains("children") && j["children"].is_array()) {
     for (const auto& childJson : j["children"]) {
-      auto childObj = DeserializeGameObject(childJson);
+      auto childObj = DeserializeGameObject(childJson, deps);
       if (childObj) {
         obj->AddChild(childObj);
       }
@@ -186,7 +183,7 @@ std::string SceneSerializer::SerializeToString(const std::vector<std::shared_ptr
   return j.dump(4);
 }
 
-bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
+bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::shared_ptr<GameObject>>& outRootObjects, const ComponentDeps& deps) {
   std::ifstream file(filepath);
   if (!file.is_open()) return false;
 
@@ -201,7 +198,7 @@ bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::
   outRootObjects.clear();
   if (j.contains("rootObjects") && j["rootObjects"].is_array()) {
     for (const auto& childJson : j["rootObjects"]) {
-      auto obj = DeserializeGameObject(childJson);
+      auto obj = DeserializeGameObject(childJson, deps);
       if (obj) {
         outRootObjects.push_back(obj);
       }
@@ -211,19 +208,19 @@ bool SceneSerializer::Deserialize(const std::string& filepath, std::vector<std::
   return true;
 }
 
-std::shared_ptr<GameObject> SceneSerializer::CopyGameObject(std::shared_ptr<GameObject> src) {
+std::shared_ptr<GameObject> SceneSerializer::CopyGameObject(std::shared_ptr<GameObject> src, const ComponentDeps& deps) {
   if (!src) return nullptr;
   json j = SerializeGameObject(src, true); // コピー時はフルシリアライズ
-  return DeserializeGameObject(j);
+  return DeserializeGameObject(j, deps);
 }
 
-bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects) {
+bool SceneSerializer::DeserializeFromString(const std::string& jsonString, std::vector<std::shared_ptr<GameObject>>& outRootObjects, const ComponentDeps& deps) {
   if (jsonString.empty()) return false;
   try {
     json j = json::parse(jsonString);
     if (j.contains("rootObjects") && j["rootObjects"].is_array()) {
       for (const auto& objJson : j["rootObjects"]) {
-        auto obj = DeserializeGameObject(objJson);
+        auto obj = DeserializeGameObject(objJson, deps);
         if (obj) {
           outRootObjects.push_back(obj);
         }
@@ -249,22 +246,19 @@ bool SceneSerializer::SavePrefab(const std::string& filepath, std::shared_ptr<Ga
   return false;
 }
 
-std::shared_ptr<GameObject> SceneSerializer::LoadPrefab(const std::string& filepath) {
-  // 停止の調査用: プレハブ 1 件の読み込み全体(ファイル読み込み・解析・オブジェクト生成)の合計を測る
-  CpuTimer::AccumScope prefabScope("LoadPrefab(all)");
+std::shared_ptr<GameObject> SceneSerializer::LoadPrefab(const std::string& filepath, const ComponentDeps& deps) {
   std::ifstream file(filepath);
   if (!file.is_open()) return nullptr;
 
   json j;
   try {
-    CpuTimer::AccumScope parseScope("LoadPrefab.fileParse");
     file >> j;
   } catch (const json::parse_error& e) {
     std::cerr << "JSON parse error: " << e.what() << std::endl;
     return nullptr;
   }
 
-  auto obj = DeserializeGameObject(j);
+  auto obj = DeserializeGameObject(j, deps);
   if (obj) {
     obj->SetPrefabPath(filepath);
   }

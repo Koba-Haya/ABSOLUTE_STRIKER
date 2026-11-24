@@ -177,7 +177,9 @@ public:
   // 核の位置(ワールド)。復活した蝶が現れる所
   Vector3 GetCorePosition() const { return core_.GetPosition(); }
 
-  GameOverAshSettings& GetSettings() { return settings_; }
+  // 設定の読み取りと、丸ごとの差し替え(調整 UI が、コピーを編集して SetSettings で戻す)。内部を非 const 参照で返さない
+  const GameOverAshSettings& GetSettings() const { return settings_; }
+  void SetSettings(const GameOverAshSettings& settings) { settings_ = settings; }
 
 private:
   // 今のカメラ(Renderer が持つ)から、目の位置と前方の向きを得る

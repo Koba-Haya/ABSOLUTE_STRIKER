@@ -38,12 +38,12 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateBulletBase(
     bulletObj->AddComponent(std::move(modelComp));
   }
 
-  auto colliderComp = std::make_unique<AbsoluteEngine::ColliderComponent>();
-  colliderComp->type   = AbsoluteEngine::ColliderComponent::Type::Sphere;
-  colliderComp->radius = radius;
-  bulletObj->AddComponent(std::move(colliderComp));
+  AbsoluteEngine::ColliderComponent::Settings colliderSettings;
+  colliderSettings.type   = AbsoluteEngine::ColliderComponent::Type::Sphere;
+  colliderSettings.radius = radius;
+  bulletObj->AddComponent(std::make_unique<AbsoluteEngine::ColliderComponent>(colliderSettings));
 
-  bulletObj->GetTransform().translate = position;
+  bulletObj->SetPosition(position);
   return bulletObj;
 }
 
@@ -65,7 +65,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerNormal(const BulletSpec&
   return CreateStraight(spec, "PlayerBullet", "PlayerBullet");
 }
 
-std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec) {
+std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec, AbsoluteEngine::ISpawner& spawner) {
   auto bulletObj = CreateBulletBase("PlayerHomingBullet", "PlayerBullet",
                                     spec.radius, spec.startPos, std::nullopt,
                                     /*withModel=*/false);
@@ -74,7 +74,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulle
   bulletObj->AddComponent(std::move(homingComp));
 
   // 軌跡の記録。弾の移動(HomingBulletComponent)のあとに Update されるよう、後から追加する
-  auto trailComp = std::make_unique<RibbonTrailComponent>();
+  auto trailComp = std::make_unique<RibbonTrailComponent>(spawner);
   trailComp->Initialize(MakeHomingTrailParams());
   bulletObj->AddComponent(std::move(trailComp));
   return bulletObj;
@@ -87,7 +87,7 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateEnemy(const BulletSpec& spec) 
   enemySpec.radius = spec.radius * kEnemyBulletScale;
 
   auto bulletObj = CreateStraight(enemySpec, "EnemyBullet", "EnemyBullet");
-  bulletObj->GetTransform().scale = { kEnemyBulletScale, kEnemyBulletScale, kEnemyBulletScale };
+  bulletObj->SetScale({ kEnemyBulletScale, kEnemyBulletScale, kEnemyBulletScale });
   return bulletObj;
 }
 

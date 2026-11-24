@@ -10,14 +10,14 @@ constexpr float kHitFlashDuration = 0.12f; // 被弾フラッシュの継続時�
 }
 
 void EnemyComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 被弾フラッシュの経過処理（生きている間の被弾リアクション）
     if (hitFlashTimer_ > 0.0f) {
         hitFlashTimer_ -= deltaTime;
         if (hitFlashTimer_ <= 0.0f) {
             hitFlashTimer_ = 0.0f;
-            if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+            if (auto* modelComp = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
                 modelComp->SetColor(colorBeforeFlash_);
             }
         }
@@ -30,27 +30,29 @@ void EnemyComponent::Update(float deltaTime) {
         // -----------------------------------------------------------------------
         if (!effectFired_ && onDestroyed) {
             effectFired_ = true;
-            onDestroyed(owner_->GetTransform().translate, destroyReason_);
+            onDestroyed(GetOwner()->GetTransform().translate, destroyReason_);
         }
 
         // ディゾルブアニメーションを進める
         dissolveTimer_ += deltaTime;
         float t = std::clamp(dissolveTimer_ / dissolveDuration_, 0.0f, 1.0f);
 
-        if (auto dissolveComp = owner_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-            auto& dissolve = *dissolveComp;
+        if (auto dissolveComp = GetOwner()->GetComponent<AbsoluteEngine::DissolveComponent>()) {
+            // 設定のコピーを編集して、SetSettings で戻す
+            AbsoluteEngine::DissolveComponent::Settings dissolve = dissolveComp->GetSettings();
             dissolve.enable = true;
             dissolve.threshold = t;
             dissolve.edgeRange = 0.05f;
             dissolve.edgeColor = { 1.0f, 0.3f, 0.0f }; // オレンジのエッジ
             dissolve.maskColor  = { 1.0f, 0.1f, 0.0f };
+            dissolveComp->SetSettings(dissolve);
 
             if (t >= 1.0f) {
-                owner_->Destroy();
+                GetOwner()->Destroy();
             }
         } else {
             // DissolveComponent がない場合は即時消滅
-            owner_->Destroy();
+            GetOwner()->Destroy();
         }
     }
 }
@@ -65,9 +67,9 @@ void EnemyComponent::OnHit(int damage, EnemyDestroyReason reason) {
         isActive_  = false;
         dissolveTimer_ = 0.0f;
         // コールバックは Update 内で 1 回だけ発火する（タイミング保証のため）
-    } else if (owner_) {
+    } else if (GetOwner()) {
         // 即死しなかった場合の被弾リアクション（タレット等、複数発耐える敵向け）
-        if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+        if (auto* modelComp = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
             if (hitFlashTimer_ <= 0.0f) {
                 colorBeforeFlash_ = modelComp->GetColor(); // 多重被弾で元の色を上書きしないよう最初の1回だけ保存
             }
@@ -91,7 +93,7 @@ void EnemyComponent::OnCollision(AbsoluteEngine::GameObject* other) {
 
     // タグ判定：自機弾が当たったらダメージを受ける
     // ロックオン弾(ホーミング弾)は、ロック対象にしか当たらない。ほかの敵は通り抜けさせる
-    if (other->GetTag() == "PlayerBullet" && HomingBulletComponent::CanHit(*other, owner_)) {
+    if (other->GetTag() == "PlayerBullet" && HomingBulletComponent::CanHit(*other, GetOwner())) {
         OnHit();
     }
 }

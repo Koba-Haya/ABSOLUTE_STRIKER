@@ -1,8 +1,11 @@
 #include "EnemyShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
 #include "TelegraphComponent.h"
 #include <cmath>
@@ -13,10 +16,10 @@ void EnemyShootComponent::OnSpawnedOnRail(const AbsoluteEngine::RailFrame& frame
 }
 
 void EnemyShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // --- 進行方向の動的追跡（マジックナンバーを使わずに向きを取得する）---
-    Vector3 currentPos = owner_->GetTransform().translate;
+    Vector3 currentPos = GetOwner()->GetTransform().translate;
     if (hasPrevPos_) {
         Vector3 delta = {
             currentPos.x - prevPos_.x,
@@ -33,53 +36,27 @@ void EnemyShootComponent::Update(float deltaTime) {
     hasPrevPos_ = true;
 
     // 島の陰に隠れているかを毎フレーム追う(隠れている間は撃たない。出てきてから少し待つ)
-    islandGate_.Update(currentPos, deltaTime);
+    islandGate_.Update(screen_, currentPos, deltaTime);
 
     // タイマー更新
     shootTimer_ += deltaTime;
     // 予備動作(針の光): 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph && telegraph->HoldFire(shootInterval_ - shootTimer_)) return;
     if (shootTimer_ < shootInterval_) return;
     shootTimer_ -= shootInterval_;
     if (telegraph) telegraph->End();
         
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
     // --- 画面内チェック（NDC ±1.2 マージン内にいる敵のみ発射を許可）---
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return;
-
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
-    Matrix4x4 vpMat   = Multiply(viewMat, projMat);
-
-    // 自身のワールド座標をクリップ空間に変換
-    float w = currentPos.x * vpMat.m[0][3] + currentPos.y * vpMat.m[1][3]
-            + currentPos.z * vpMat.m[2][3] + vpMat.m[3][3];
-    if (w <= 0.01f) return; // カメラの背後にいる場合は発射しない
-
-    float ndcX = (currentPos.x * vpMat.m[0][0] + currentPos.y * vpMat.m[1][0]
-               + currentPos.z * vpMat.m[2][0] + vpMat.m[3][0]) / w;
-    float ndcY = (currentPos.x * vpMat.m[0][1] + currentPos.y * vpMat.m[1][1]
-               + currentPos.z * vpMat.m[2][1] + vpMat.m[3][1]) / w;
-
-    // NDC ±1.2 の範囲外は発射しない（画面外ギリギリの敵も少し猶予を持たせる）
+    // カメラが無い、カメラの背後にいる、範囲外のときは発射しない（画面外ギリギリの敵も少し猶予を持たせる）
     constexpr float ndcMargin = 1.2f;
-    if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return;
+    if (!screen_.IsOnScreen(currentPos, ndcMargin)) return;
 
     // 島に隠れている(または、出てきたばかりの)敵は撃たない。隠れている間に来た発射の時刻は、捨てる
     if (!islandGate_.CanShoot()) return;
 
     // --- プレイヤーを探す ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
     // --- 視野角チェック（正面約30度以内のみ発射を許可）---
@@ -104,7 +81,7 @@ void EnemyShootComponent::Update(float deltaTime) {
     BulletSpec spec;
     spec.position = currentPos;
     spec.velocity = { toPlayer.x * kBulletSpeed, toPlayer.y * kBulletSpeed, toPlayer.z * kBulletSpeed };
-    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
+    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
 }
 
 

@@ -36,7 +36,7 @@ void RigidbodyComponent::AddForce(const Vector3& force) {
 }
 
 void RigidbodyComponent::Update(float deltaTime) {
-    if (isKinematic_ || !owner_) return;
+    if (isKinematic_ || !GetOwner()) return;
 
     if (useGravity_) {
         acceleration_.y += GRAVITY;
@@ -55,10 +55,7 @@ void RigidbodyComponent::Update(float deltaTime) {
     acceleration_ = {0.0f, 0.0f, 0.0f};
 
     // Transform に反映
-    auto& transform = owner_->GetTransform();
-    transform.translate.x += velocity_.x * deltaTime;
-    transform.translate.y += velocity_.y * deltaTime;
-    transform.translate.z += velocity_.z * deltaTime;
+    GetOwner()->Translate({velocity_.x * deltaTime, velocity_.y * deltaTime, velocity_.z * deltaTime});
 }
 
 void RigidbodyComponent::DrawInspectorUI() {

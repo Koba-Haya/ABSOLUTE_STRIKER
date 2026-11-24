@@ -1,11 +1,13 @@
 #include "PlayerComponent.h"
-#include "../../scene/ExhibitionMode.h"
 #include "Input.h"
 #include "GameCamera.h"
 #include <algorithm>
 #include <cmath>
 #include <random>
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/IPlayState.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 #include "AbsoluteEngine/scene/RigidbodyComponent.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
@@ -66,32 +68,28 @@ void PlayerComponent::Initialize() {
 }
 
 void PlayerComponent::Update(float deltaTime) {
-  if (!owner_) return;
+  if (!GetOwner()) return;
 
   // 蝶のアニメーションの切り替え(被弾のよろめきと、羽ばたきへの復帰)。入力やカメラの有無に関係なく進める
-  animator_.Update(owner_->GetComponent<AbsoluteEngine::ModelComponent>());
+  animator_.Update(GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>());
 
   // 死亡演出中は、位置と向きを PlayerDeathDirector が決めるので、追従・発射・ロックオンを行わない
   if (dying_) return;
-  auto scene  = BaseScene::GetActiveScene();
-  if (!scene) return;
-  auto* input  = scene->GetInput();
-  auto* camera = scene->GetMainCamera();
-  if (!input || !camera) return;
+  if (!screen_.HasCamera()) return;
 
   // 自機の RigidbodyComponent が存在する場合は重力を無効化する
   // （物理演算によって自機が落下するバグの解消）
-  if (auto rb = owner_->GetComponent<AbsoluteEngine::RigidbodyComponent>()) {
+  if (auto rb = GetOwner()->GetComponent<AbsoluteEngine::RigidbodyComponent>()) {
       rb->SetUseGravity(false);
       rb->SetKinematic(true); // 物理演算の一切を無効化して完全手動制御にする
   }
 
-  const bool isPlaying = scene->GetPlayMode() == PlayMode::Play;
+  const bool isPlaying = playState_.GetPlayMode() == PlayMode::Play;
 
   // マウスはPlayモードでカーソルを閉じ込めている間だけ照準に使う
-  // 展示中と、操作のロック中(ステージ開始演出)は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
-  const bool ignoreInput = ExhibitionMode::IsEnabled() || inputLocked_;
-  const PlayerInputState in = ignoreInput ? PlayerInputState{} : PlayerInput::Poll(*input, isPlaying && MouseCapture::IsActive());
+  // 操作のロック中(ステージ開始演出、展示中)は、キーボード・パッド・マウスのどれも受け付けない(何も操作していない状態にする)
+  const bool ignoreInput = inputLocked_;
+  const PlayerInputState in = ignoreInput ? PlayerInputState{} : PlayerInput::Poll(input_, isPlaying && MouseCapture::IsActive());
 
   MoveCursor_(in, deltaTime);
 
@@ -108,14 +106,14 @@ void PlayerComponent::Update(float deltaTime) {
   const float dodgeRollOffset = UpdateDodge_(in, moveDir, deltaTime, isPlaying);
 
   // カーソル方向の射線を1回だけ求め、自機の追従目標・弾道・レティクルで共用する
-  const Vector3 cursorRayDir = ReticleAim::CursorRayDirection(*camera, cursorPos_);
+  const Vector3 cursorRayDir = ReticleAim::CursorRayDirection(screen_, cursorPos_);
   camDirCached_ = cursorRayDir; // 弾の発射方向に直接使う（t.translateのLerp遅れの影響を受けない）
 
-  UpdateBodyTransform_(*camera, cursorRayDir, dodgeRollOffset, deltaTime);
+  UpdateBodyTransform_(cursorRayDir, dodgeRollOffset, deltaTime);
 
   // 発射基点は1フレーム内で1回だけ求め、レティクル配置と弾の発射で同じ値を使う
   const Vector3 muzzlePos = GetMuzzlePosition_();
-  UpdateReticles_(*camera, cursorRayDir, muzzlePos);
+  UpdateReticles_(cursorRayDir, muzzlePos);
 
   // ロックオン・弾発射はPlayMode::Playのときのみ処理する
   // （タイムラインのエディットモードプレビュー（レールカメラのシーク同期）でも
@@ -123,13 +121,13 @@ void PlayerComponent::Update(float deltaTime) {
   //   Playモードにしていないのにクリック/スペース入力で実弾発射が走ってしまう）
   if (!isPlaying) return;
 
-  lockon_.Update(deltaTime, in.fireHeld, camera, scene, cursorPos_);
+  lockon_.Update(deltaTime, in.fireHeld, screen_, query_, cursorPos_);
 
   if (shootCooldown_ > 0.0f) {
       shootCooldown_ -= deltaTime;
   }
 
-  UpdateFire_(in, scene, *camera, muzzlePos);
+  UpdateFire_(in, muzzlePos);
 }
 
 void PlayerComponent::MoveCursor_(const PlayerInputState& in, float deltaTime) {
@@ -186,7 +184,7 @@ float PlayerComponent::UpdateDodge_(const PlayerInputState& in, const Vector2& m
       for (int i = 0; i < 10; ++i) {
           Vector3 vel = { dodgeDist(dodgeRng), dodgeDist(dodgeRng), dodgeDist(dodgeRng) };
           ParticleManager::GetInstance()->Emit(
-              "default", owner_->GetTransform().translate, vel,
+              "default", GetOwner()->GetTransform().translate, vel,
               Vector3{ 0.4f, 0.4f, 0.4f }, Vector3{ 0, 0, 0 }, 0.25f,
               Vector4{ 0.4f, 0.8f, 1.0f, 1.0f });
       }
@@ -201,12 +199,12 @@ float PlayerComponent::UpdateDodge_(const PlayerInputState& in, const Vector2& m
 // 射影した Right/Up 成分を目標にして、Lerp で滑らかに追従する。
 // これによりカーソルが画面端にあれば自機も画面端まで移動でき、
 // cameraDistance_ を変更しても可動域が自動的に一致し続ける。
-void PlayerComponent::UpdateBodyTransform_(const GameCamera& camera, const Vector3& cursorRayDir,
+void PlayerComponent::UpdateBodyTransform_(const Vector3& cursorRayDir,
                                            float dodgeRollOffset, float deltaTime) {
-  const Vector3 eye     = camera.GetEye();
-  const Vector3 forward = camera.GetForward();
-  const Vector3 right   = camera.GetRight();
-  const Vector3 up      = camera.GetActualUp();
+  const Vector3 eye     = screen_.GetEye();
+  const Vector3 forward = screen_.GetForward();
+  const Vector3 right   = screen_.GetRight();
+  const Vector3 up      = screen_.GetActualUp();
 
   // 平面の中心（カメラ正面）と、カーソルのレイが指す点
   const Vector3 basePos = {
@@ -231,18 +229,17 @@ void PlayerComponent::UpdateBodyTransform_(const GameCamera& camera, const Vecto
   localPos_.y += (localTargetY - localPos_.y) * moveSpeed_ * deltaTime;
 
   // ワールド座標: Eye + Forward*Dist + Right*localX + Up*localY
-  auto& t = owner_->GetTransform();
-  t.translate = {
+  GetOwner()->SetPosition({
       basePos.x + right.x * localPos_.x + up.x * localPos_.y,
       basePos.y + right.y * localPos_.x + up.y * localPos_.y,
       basePos.z + right.z * localPos_.x + up.z * localPos_.y
-  };
+  });
 
   // 回転：カメラ向き（ヨー・ピッチ）＋バンク角（ロール・ピッチ追加）
   const float yaw   = std::atan2(forward.x, forward.z);
   const float xzLen = std::sqrt(forward.x * forward.x + forward.z * forward.z);
   const float pitch = std::atan2(-forward.y, xzLen);
-  t.rotate = { pitch + bankPitch_, yaw, bankRoll_ + dodgeRollOffset };
+  GetOwner()->SetRotation({ pitch + bankPitch_, yaw, bankRoll_ + dodgeRollOffset });
 }
 
 // 「照準点」を1つだけ決め、レティクルと弾の両方をそこから派生させる。
@@ -251,9 +248,9 @@ void PlayerComponent::UpdateBodyTransform_(const GameCamera& camera, const Vecto
 // 弾も M から A へ飛ぶため、近・中・遠のどのレティクルも弾道上にあり、
 // 自機の追従遅れや画面端でもレティクルと弾の方向が一致する。
 // 画面上の視差（近・中・遠が一列に並ぶ見た目）は HUD 側の WorldToScreen（透視変換）が処理する。
-void PlayerComponent::UpdateReticles_(const GameCamera& camera, const Vector3& cursorRayDir,
+void PlayerComponent::UpdateReticles_(const Vector3& cursorRayDir,
                                       const Vector3& muzzlePos) {
-  const Vector3 eye = camera.GetEye();
+  const Vector3 eye = screen_.GetEye();
   const Vector3 aimPoint = {
       eye.x + cursorRayDir.x * kAimDistance,
       eye.y + cursorRayDir.y * kAimDistance,
@@ -273,24 +270,23 @@ void PlayerComponent::UpdateReticles_(const GameCamera& camera, const Vector3& c
 
 Vector3 PlayerComponent::GetMuzzlePosition_() const {
   // 自機の中心を既定値にして、モデルに muzzle ボーン(頭の先)があれば、その「今の」ワールド位置にする
-  Vector3 muzzlePos = owner_->GetTransform().translate;
-  if (auto* modelComp = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+  Vector3 muzzlePos = GetOwner()->GetTransform().translate;
+  if (auto* modelComp = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
       modelComp->TryGetBoneWorldPosition(PlayerModel::kMuzzleBone, muzzlePos);
   }
   return muzzlePos;
 }
 
-void PlayerComponent::UpdateFire_(const PlayerInputState& in, BaseScene* scene,
-                                  const GameCamera& camera, const Vector3& muzzlePos) {
+void PlayerComponent::UpdateFire_(const PlayerInputState& in, const Vector3& muzzlePos) {
   if (!in.fireReleased) return;
 
   EmitMuzzleFlash_(muzzlePos);
 
   if (lockon_.IsLockingMode()) {
       // ロックオンモード → ホーミング弾（ベジェ曲線）を全ターゲットに発射
-      FireHomingBullets_(scene, camera, muzzlePos);
+      FireHomingBullets_(muzzlePos);
   } else {
-      FireNormalBullet_(scene, muzzlePos);
+      FireNormalBullet_(muzzlePos);
   }
   lockon_.Initialize();
 }
@@ -315,7 +311,7 @@ void PlayerComponent::EmitMuzzleFlash_(const Vector3& muzzlePos) const {
   }
 }
 
-void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& camera, const Vector3& muzzlePos) {
+void PlayerComponent::FireHomingBullets_(const Vector3& muzzlePos) {
   const auto& targets = lockon_.GetLockedTargets();
   if (targets.empty()) return;
 
@@ -323,7 +319,7 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
   std::uniform_real_distribution<float> sideDist(-kHomingSideOffsetMax, kHomingSideOffsetMax);
   std::uniform_real_distribution<float> upDist(kHomingUpOffsetMin, kHomingUpOffsetMax);
 
-  const Vector3 right = camera.GetRight();
+  const Vector3 right = screen_.GetRight();
 
   for (const auto& weakTarget : targets) {
       auto target = weakTarget.lock();
@@ -345,14 +341,14 @@ void PlayerComponent::FireHomingBullets_(BaseScene* scene, const GameCamera& cam
       spec.duration = kHomingBulletDuration;
       spec.radius   = kHomingBulletRadius;
       spec.target   = weakTarget;
-      scene->AddRootObject(BulletFactory::CreatePlayerHoming(spec));
+      spawner_.Spawn(BulletFactory::CreatePlayerHoming(spec, spawner_));
   }
 }
 
 // 通常弾：発射基点から「遠レティクル（= 照準点）」へ向けて発射する。
 // 遠レティクルは UpdateReticles_ で発射基点と同じ値から求めているため、
 // 近・中レティクルも必ずこの弾道上に載る。
-void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzlePos) {
+void PlayerComponent::FireNormalBullet_(const Vector3& muzzlePos) {
   if (shootCooldown_ > 0.0f) return;
   shootCooldown_ = kNormalShootInterval * fireIntervalScale_;
 
@@ -377,7 +373,7 @@ void PlayerComponent::FireNormalBullet_(BaseScene* scene, const Vector3& muzzleP
       aimDir.z * kNormalBulletSpeed
   };
   spec.radius = kNormalBulletRadius;
-  scene->AddRootObject(BulletFactory::CreatePlayerNormal(spec));
+  spawner_.Spawn(BulletFactory::CreatePlayerNormal(spec));
 }
 
 void PlayerComponent::Revive() {
@@ -385,8 +381,8 @@ void PlayerComponent::Revive() {
   dying_ = false;
   dodgeTimer_ = 0.0f;
   animator_.Reset();
-  if (owner_) {
-      if (auto* model = owner_->GetComponent<AbsoluteEngine::ModelComponent>()) {
+  if (GetOwner()) {
+      if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
           model->PlayAnimation(PlayerAnimation::kFlap, true);
       }
   }

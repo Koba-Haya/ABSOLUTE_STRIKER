@@ -6,9 +6,10 @@
 #include <algorithm>
 #include <cmath>
 
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../actor/Player/PlayerComponent.h"
+#include "../actor/Player/PlayerFinder.h"
 
 namespace {
 // 取得の演出のうち、「膨らむ」段階の割合(残りは、縮みながら吸い込まれる)
@@ -26,7 +27,8 @@ float Distance(const Vector3 &a, const Vector3 &b) {
 }
 } // namespace
 
-void ItemPickupComponent::Configure(const ItemPickupSettings &settings, float baseScale, std::function<void()> onCollected) {
+void ItemPickupComponent::Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, float baseScale, std::function<void()> onCollected) {
+  upgrade_ = upgrade;
   settings_ = settings;
   baseScale_ = baseScale;
   onCollected_ = std::move(onCollected);
@@ -35,15 +37,9 @@ void ItemPickupComponent::Configure(const ItemPickupSettings &settings, float ba
 std::shared_ptr<AbsoluteEngine::GameObject> ItemPickupComponent::FindPlayer_() {
   if (auto cached = player_.lock()) return cached;
 
-  BaseScene *scene = BaseScene::GetActiveScene();
-  if (!scene) return nullptr;
-  for (const auto &obj : scene->GetRootObjects()) {
-    if (obj && obj->GetComponent<PlayerComponent>()) {
-      player_ = obj;
-      return obj;
-    }
-  }
-  return nullptr;
+  auto found = PlayerFinder::FindPlayer(query_);
+  if (found) player_ = found;
+  return found;
 }
 
 void ItemPickupComponent::MoveToward_(const Vector3 &target, float speed, float deltaTime) {
@@ -58,19 +54,21 @@ void ItemPickupComponent::MoveToward_(const Vector3 &target, float speed, float 
 }
 
 void ItemPickupComponent::ApplyVisual_(float scale) {
-  auto &transform = owner_->GetTransform();
-  transform.translate = {basePosition_.x, basePosition_.y + std::sin(age_ * settings_.bobSpeed) * settings_.bobAmplitude,
-                         basePosition_.z};
-  transform.rotate.y = spinAngle_;
-  transform.scale = {scale, scale, scale};
+  GetOwner()->SetPosition({basePosition_.x, basePosition_.y + std::sin(age_ * settings_.bobSpeed) * settings_.bobAmplitude,
+                           basePosition_.z});
+  // 回転は Y 成分(自転)だけを変えたい。現在の値をコピーして Y だけ差し替え、SetRotation で戻す
+  Vector3 rotation = GetOwner()->GetTransform().rotate;
+  rotation.y = spinAngle_;
+  GetOwner()->SetRotation(rotation);
+  GetOwner()->SetScale({scale, scale, scale});
 }
 
 void ItemPickupComponent::Update(float deltaTime) {
-  if (!owner_) return;
+  if (!GetOwner()) return;
 
   // ゆれを除いた位置は、最初の Update で、出現した位置から決める
   if (!initialized_) {
-    basePosition_ = owner_->GetTransform().translate;
+    basePosition_ = GetOwner()->GetTransform().translate;
     initialized_ = true;
   }
   age_ += deltaTime;
@@ -83,7 +81,7 @@ void ItemPickupComponent::Update(float deltaTime) {
     collectTimer_ += deltaTime;
     const float t = std::clamp(collectTimer_ / settings_.collectSeconds, 0.0f, 1.0f);
     if (t >= 1.0f) {
-      owner_->Destroy();
+      GetOwner()->Destroy();
       return;
     }
     if (playerObj) {
@@ -98,7 +96,7 @@ void ItemPickupComponent::Update(float deltaTime) {
 
   // 取られなかったら、寿命で消える
   if (age_ >= settings_.lifetimeSeconds) {
-    owner_->Destroy();
+    GetOwner()->Destroy();
     return;
   }
 
@@ -109,7 +107,7 @@ void ItemPickupComponent::Update(float deltaTime) {
     const float distance = Distance(basePosition_, playerPos);
     // 吸い寄せ範囲: 基本の値に、強化(吸い寄せ範囲)を足す
     const float pullRadius = settings_.pullRadius + ItemEffectApplier::GetValue(ItemEffectKind::PullRadius, PlayerUpgradeState::Persistent(),
-                                                                                ItemCatalog::GetInstance().GetUpgradeSettings());
+                                                                                upgrade_);
     if (distance <= settings_.pickupRadius) {
       // 取得: 効果は、この瞬間に 1 回だけ出す
       collected_ = true;

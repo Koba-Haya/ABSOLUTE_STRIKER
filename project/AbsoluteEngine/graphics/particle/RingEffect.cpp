@@ -6,14 +6,7 @@
 #include "math/Method.h"
 
 RingEffect::RingEffect(std::shared_ptr<TextureResource> texture, const Vector3& position)
-    : texture_(std::move(texture)) {
-    transform_.translate = position;
-    transform_.scale = {1.0f, 1.0f, 1.0f};
-    transform_.rotate = {0.0f, 0.0f, 0.0f};
-    
-    lifetime_ = 0.5f; // 0.5秒で消滅
-    age_ = 0.0f;
-
+    : BaseEffect(kLifetime, position), texture_(std::move(texture)) {
     ringParams_.divide = 32;
     ringParams_.innerRadius = 0.0f;
     ringParams_.outerRadius = 1.0f;
@@ -24,14 +17,7 @@ RingEffect::RingEffect(std::shared_ptr<TextureResource> texture, const Vector3& 
     ring_.Initialize(Renderer::GetInstance()->GetDX()->GetDevice(), ringParams_);
 }
 
-void RingEffect::Update(float deltaTime, const Camera* camera) {
-    age_ += deltaTime;
-    if (age_ >= lifetime_) {
-        Kill();
-        return;
-    }
-
-    float t = age_ / lifetime_;
+void RingEffect::OnUpdate(float t, float /*deltaTime*/, const Camera* camera) {
     // 時間経過で拡大し、透明になる
     ringParams_.outerRadius = 1.0f + (maxOuterRadius_ - 1.0f) * t;
     alpha_ = 1.0f - t;
@@ -54,11 +40,12 @@ void RingEffect::ApplyTransform_(const Matrix4x4& viewMatrix, const Matrix4x4& p
     billBoardMat = Inverse(billBoardMat); // カメラの逆回転
 
     // 平行移動とスケールを適用
-    billBoardMat.m[3][0] = transform_.translate.x;
-    billBoardMat.m[3][1] = transform_.translate.y;
-    billBoardMat.m[3][2] = transform_.translate.z;
-    
-    Matrix4x4 scaleMat = MakeScaleMatrix(transform_.scale);
+    const Transform& transform = GetTransform();
+    billBoardMat.m[3][0] = transform.translate.x;
+    billBoardMat.m[3][1] = transform.translate.y;
+    billBoardMat.m[3][2] = transform.translate.z;
+
+    Matrix4x4 scaleMat = MakeScaleMatrix(transform.scale);
     Matrix4x4 worldMat = Multiply(scaleMat, billBoardMat);
 
     ring_.SetTransform(worldMat, viewMatrix, projMatrix);

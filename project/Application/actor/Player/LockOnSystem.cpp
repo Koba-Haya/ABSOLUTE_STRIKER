@@ -1,7 +1,7 @@
 #include "LockOnSystem.h"
-#include "GameCamera.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
 #include "Application/ScreenSize.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
@@ -28,11 +28,11 @@ void LockOnSystem::Initialize() {
     isLockingMode_ = false;
 }
 
-void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
-    if (!camera || !scene) return;
+void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos) {
+    if (!screen.HasCamera()) return;
 
     // 既に死んでいる・または破棄されている・島や雲に隠れた敵をロックオン対象から外す
-    const Vector3 eye = camera->GetEye();
+    const Vector3 eye = screen.GetEye();
     lockedTargets_.erase(std::remove_if(lockedTargets_.begin(), lockedTargets_.end(),
         [&eye](const std::weak_ptr<AbsoluteEngine::GameObject>& weak) {
             // weak_ptr.lock()で生存確認（破棄済みなら自動でtrue=除外）
@@ -56,7 +56,7 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, Ba
         if (holdTimer_ >= lockOnThreshold_) {
             isLockingMode_ = true;
             // 敵を検索してロックオン
-            SearchAndLockTargets(camera, scene, cursorPos);
+            SearchAndLockTargets(screen, query, cursorPos);
         }
     } else {
         // ボタンを離した瞬間はPlayerComponent側で発射の判定に使われるため
@@ -65,14 +65,14 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, GameCamera* camera, Ba
     }
 }
 
-void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, const Vector2& cursorPos) {
+void LockOnSystem::SearchAndLockTargets(const AbsoluteEngine::IScreenView& screen, const AbsoluteEngine::ISceneQuery& query, const Vector2& cursorPos) {
     if (GetLockedCount() >= maxLockTargets_) return; // 既に上限
 
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
+    Matrix4x4 viewMat = screen.GetViewMatrix();
+    Matrix4x4 projMat = screen.GetProjectionMatrix();
     Matrix4x4 vpMat = Multiply(viewMat, projMat);
 
-    const auto& objects = scene->GetRootObjects();
+    const auto& objects = query.Objects();
 
     // すでにロックオン弾(ホーミング弾)が飛んでいる敵は、対象にしない(1体の敵にロックオンは1回だけ)。
     // 撃ったあとは lockedTargets_ が空になるため、これがないと、弾の飛行中に同じ敵をもう一度ロックできてしまう
@@ -135,7 +135,7 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
             if (distSq <= lockRadius_ * lockRadius_) {
                 // カメラ(自機の視点)から敵までの線分が、島や雲に遮られているなら、対象にしない(見えない敵は狙えない)。
                 // 画面の判定を通ったものだけに行うので、遮蔽の問い合わせは、カーソルの近くの敵の数だけで済む
-                if (IsHiddenFromCamera(camera->GetEye(), worldPos)) continue;
+                if (IsHiddenFromCamera(screen.GetEye(), worldPos)) continue;
 
                 // shared_ptr → weak_ptr に変換して安全に保持
                 lockedTargets_.push_back(obj);
@@ -148,12 +148,12 @@ void LockOnSystem::SearchAndLockTargets(GameCamera* camera, BaseScene* scene, co
     }
 }
 
-std::vector<Vector2> LockOnSystem::GetLockedScreenPositions(GameCamera* camera) const {
+std::vector<Vector2> LockOnSystem::GetLockedScreenPositions(const AbsoluteEngine::IScreenView& screen) const {
     std::vector<Vector2> positions;
-    if (!camera) return positions;
+    if (!screen.HasCamera()) return positions;
 
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
+    Matrix4x4 viewMat = screen.GetViewMatrix();
+    Matrix4x4 projMat = screen.GetProjectionMatrix();
     Matrix4x4 vpMat = Multiply(viewMat, projMat);
 
     for (const auto& weak : lockedTargets_) {

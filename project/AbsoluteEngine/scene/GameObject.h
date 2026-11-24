@@ -20,8 +20,24 @@ public:
   void SetName(const std::string& name) { name_ = name; }
   const std::string& GetName() const { return name_; }
 
-  Transform& GetTransform() { return transform_; }
+  // --- Transform ---
+  // 読み取り専用。書き換えは、下の Set 系 / Translate を使う(書き込み口をこのクラスに集めるため)
   const Transform& GetTransform() const { return transform_; }
+
+  // 位置を設定する
+  void SetPosition(const Vector3& position) { transform_.translate = position; }
+  // 回転(ラジアン、オイラー角)を設定する
+  void SetRotation(const Vector3& rotation) { transform_.rotate = rotation; }
+  // 拡大率を設定する
+  void SetScale(const Vector3& scale) { transform_.scale = scale; }
+  // 位置・回転・拡大をまとめて設定する
+  void SetTransform(const Transform& transform) { transform_ = transform; }
+  // 現在の位置に delta を加える(押し戻しなど、差分で動かすとき用)
+  void Translate(const Vector3& delta) {
+    transform_.translate.x += delta.x;
+    transform_.translate.y += delta.y;
+    transform_.translate.z += delta.z;
+  }
 
   // 親子関係
   void AddChild(std::shared_ptr<GameObject> child);

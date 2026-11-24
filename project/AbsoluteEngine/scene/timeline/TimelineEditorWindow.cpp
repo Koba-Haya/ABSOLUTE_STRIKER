@@ -17,13 +17,14 @@
 
 namespace AbsoluteEngine {
 
-void TimelineEditorWindow::Draw(const std::string& timelineFilePath) {
+bool TimelineEditorWindow::Draw(const std::string& timelineFilePath) {
+    bool debugCameraToggled = false;
 #ifdef USE_IMGUI
-    if (!manager_) return;
+    if (!manager_) return false;
 
     ImGui::Begin("Timeline Editor");
 
-    DrawToolbar(timelineFilePath);
+    debugCameraToggled = DrawToolbar(timelineFilePath);
     // トップレベル（トラックのPushIDに包まれていない）のAddEventPopupを処理する
     // DrawTracks内の各トラックの"+"ボタンが開くポップアップとはIDスタックが異なるため独立して開閉できる
     DrawAddEventPopup();
@@ -34,6 +35,7 @@ void TimelineEditorWindow::Draw(const std::string& timelineFilePath) {
 
     ImGui::End();
 #endif
+    return debugCameraToggled;
 }
 
 #ifdef USE_IMGUI
@@ -51,41 +53,23 @@ unsigned int TimelineEditorWindow::GetTrackColor(size_t trackIndex) {
     return kPalette[trackIndex % kPaletteSize];
 }
 
-void TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
+bool TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
     (void)timelineFilePath; // Save/Loadボタン廃止（オートセーブに統一）によりファイルパスは直接使わない
+    bool debugCameraToggled = false; // Debug Camera の切り替えボタンが押されたか
 
-    const auto state = manager_->GetPlayState();
+    // --- 1行目: Debug Cameraトグル ---
+    // 再生・一時停止・停止のボタンは、ツールバー(EditorSession)の1つだけにそろえた。
+    // ここでは再生を操作しない。シークバーで時間を動かし、ツールバーの Play を押すと、その時間から再生される
 
-    // --- 1行目: 再生コントロール + Debug Cameraトグル ---
-    // ここでのPlay/Pause/StopはPlayModeを触らずタイムラインだけを動かす単体プレビュー用
-    // （ゲーム全体を再生する場合はBaseSceneのメインToolbarのPlayボタンを使う。そちらは内部で
-    //   TimelineManager::Play/Stopも連動して呼んでいる）
-    if (state != TimelinePlayState::Playing) {
-        if (ImGui::Button("Play")) {
-            manager_->Play();
-        }
-    } else {
-        if (ImGui::Button("Pause")) {
-            manager_->Pause();
-        }
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Stop")) {
-        manager_->Stop();
-    }
-
-    ImGui::SameLine();
-    ImGui::Separator();
-    ImGui::SameLine();
-
-    // Debug/Game カメラ切替トグル（GameScene側の重複UIを廃止しここに一本化）
-    if (debugCameraFlag_) {
-        const bool isDebugCamera = *debugCameraFlag_;
+    // Debug/Game カメラ切替トグル（GameScene側の重複UIを廃止しここに一本化）。
+    // 状態は書き換えず、押されたことだけを戻り値で伝える(切り替えるのは、シーン側)
+    if (debugCameraState_.has_value()) {
+        const bool isDebugCamera = *debugCameraState_;
         if (isDebugCamera) {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.6f, 1.0f, 1.0f));
         }
         if (ImGui::Button("Debug Camera (Free Camera)")) {
-            *debugCameraFlag_ = !*debugCameraFlag_;
+            debugCameraToggled = true;
         }
         if (isDebugCamera) {
             ImGui::PopStyleColor();
@@ -131,6 +115,8 @@ void TimelineEditorWindow::DrawToolbar(const std::string& timelineFilePath) {
         pendingEvent_.reset();
         ImGui::OpenPopup("AddEventPopup");
     }
+
+    return debugCameraToggled;
 }
 
 void TimelineEditorWindow::DrawSeekBar() {

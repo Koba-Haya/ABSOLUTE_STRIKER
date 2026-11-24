@@ -3,6 +3,8 @@
 #include "SceneIds.h"
 #include "../ScreenSize.h"
 #include "../exhibition/ExhibitionHint.h"
+#include "../exhibition/ExhibitionSession.h"
+#include "../GameData.h"
 #include "../stage/StageCatalog.h"
 #include "../stage/StageLaunchParams.h"
 #include "../stage/StageProgress.h"
@@ -73,21 +75,21 @@ void StageSelectScene::Initialize(const SceneServices &services) {
 
   // UI: 文字、カード、一覧のパネル、メニュー
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);
-  card_.Initialize(&font_);
+  card_.Initialize(&font_, gameData_.GetStageProgress());
   listPanel_.Initialize(&font_);
   listPanel_.SetTitle(kListTitle);
   menu_.Initialize(&font_);
 
   // メニューの項目は、ステージの一覧(StageCatalog)から作る。ロック中のステージは locked になる
-  const auto &stages = StageCatalog::GetInstance().GetStages();
+  const auto &stages = gameData_.GetStageCatalog().GetStages();
   std::vector<UiMenuList::Item> items;
   items.reserve(stages.size());
   for (const StageDefinition &stage : stages) {
-    items.push_back({stage.displayName, !StageProgress::GetInstance().IsUnlocked(stage)});
+    items.push_back({stage.displayName, !gameData_.GetStageProgress().IsUnlocked(stage)});
   }
   // 解放されたが、鍵が外れる演出を、まだ見せていないステージ(どのステージでも、解放のたびに 1 回だけ)。
   // 演出が終わるまでは、一覧の項目も、ロック中のままにする(演出の前に、見えてしまわないように)
-  unlockStageId_ = StageProgress::GetInstance().FindPendingUnlock();
+  unlockStageId_ = gameData_.GetStageProgress().FindPendingUnlock();
   int unlockIndex = -1;
   for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
     if (!unlockStageId_.empty() && stages[i].id == unlockStageId_) {
@@ -137,7 +139,7 @@ void StageSelectScene::SyncSelection_() {
   if (menu_.GetCursor() == shownCursor_) return;
   shownCursor_ = menu_.GetCursor();
 
-  const StageDefinition &stage = StageCatalog::GetInstance().GetStages()[shownCursor_];
+  const StageDefinition &stage = gameData_.GetStageCatalog().GetStages()[shownCursor_];
   card_.SetStage(&stage, shownCursor_ + 1); // ステージの番号は、一覧の並びで決まる(1 から)
   if (stage.id == unlockStageId_) {
     card_.PlayUnlockAnimation(); // 解放されたステージの、初めての表示: 鍵が外れる演出
@@ -151,7 +153,7 @@ void StageSelectScene::ApplyBackdrop_(const StageDefinition &stage) {
 
 void StageSelectScene::Update() {
   backdrop_.Update(kFrameDeltaSeconds);
-  if (ExhibitionMode::IsEnabled()) {
+  if (exhibition_.IsEnabled()) {
     UpdateExhibition_();
   } else {
     UpdateInput_();
@@ -163,7 +165,7 @@ void StageSelectScene::Update() {
 
 #ifdef USE_IMGUI
   // 開発用の一覧(補助。本番の画面は Draw のカードと一覧)。パネルと重ならないよう、画面の左上に出す
-  const auto &stages = StageCatalog::GetInstance().GetStages();
+  const auto &stages = gameData_.GetStageCatalog().GetStages();
   ImGui::SetNextWindowPos(ImVec2(kListWindowMargin, kListWindowMargin), ImGuiCond_Always);
   ImGui::SetNextWindowSize(ImVec2(kListWindowWidth, 0.0f));
   ImGui::Begin("Stage Select", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove);
@@ -175,7 +177,7 @@ void StageSelectScene::Update() {
 
   for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
     const StageDefinition &stage = stages[i];
-    const bool stageUnlocked = StageProgress::GetInstance().IsUnlocked(stage);
+    const bool stageUnlocked = gameData_.GetStageProgress().IsUnlocked(stage);
     const std::string label = stage.displayName + (stageUnlocked ? "" : "  [LOCKED]") + "##" + stage.id;
     if (!stageUnlocked) {
       ImGui::BeginDisabled();
@@ -204,7 +206,7 @@ void StageSelectScene::Draw() {
     // 一覧(選択、点滅、ロック表示は UiMenuList が担当する)
     menu_.Draw(listPanel_.GetBodyOrigin(), listPanel_.GetBodySize().x, listAlpha);
   }
-  ExhibitionHint::GetInstance().Draw();
+  exhibitionHint_.Draw(exhibition_.IsEnabled());
 
   // 操作の案内: 画面の下端の中央。一覧と一緒に現れる
   if (listAlpha > 0.0f) {
@@ -219,8 +221,8 @@ void StageSelectScene::Draw() {
 void StageSelectScene::UpdateUnlockAnimation_() {
   if (unlockStageId_.empty() || !card_.IsUnlockAnimationFinished()) return;
   // 演出が終わった: 見せたことを保存して(次からは出さない)、一覧の項目のロックを外す
-  StageProgress::GetInstance().MarkUnlockShown(unlockStageId_);
-  const auto &stages = StageCatalog::GetInstance().GetStages();
+  gameData_.GetStageProgress().MarkUnlockShown(unlockStageId_);
+  const auto &stages = gameData_.GetStageCatalog().GetStages();
   for (int i = 0; i < static_cast<int>(stages.size()); ++i) {
     if (stages[i].id == unlockStageId_) menu_.SetItemLocked(i, false);
   }
@@ -258,7 +260,7 @@ void StageSelectScene::UpdateInput_() {
 }
 
 void StageSelectScene::DecideCursorStage_() {
-  const StageDefinition &stage = StageCatalog::GetInstance().GetStages()[menu_.GetCursor()];
-  if (!StageProgress::GetInstance().IsUnlocked(stage)) return;
+  const StageDefinition &stage = gameData_.GetStageCatalog().GetStages()[menu_.GetCursor()];
+  if (!gameData_.GetStageProgress().IsUnlocked(stage)) return;
   RequestSceneChange(SceneId::Game, StageLaunchParams{stage.id});
 }

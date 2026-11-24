@@ -1,12 +1,10 @@
 #include "StraightMoveComponent.h"
 
 void StraightMoveComponent::Update(float deltaTime) {
-    if (owner_) {
+    if (GetOwner()) {
         // direction_ の向きに移動する(既定は Z 軸の手前方向 = マイナス方向)
-        auto& t = owner_->GetTransform();
-        t.translate.x += direction_.x * speed_ * deltaTime;
-        t.translate.y += direction_.y * speed_ * deltaTime;
-        t.translate.z += direction_.z * speed_ * deltaTime;
+        GetOwner()->Translate({direction_.x * speed_ * deltaTime, direction_.y * speed_ * deltaTime,
+                               direction_.z * speed_ * deltaTime});
     }
 }
 

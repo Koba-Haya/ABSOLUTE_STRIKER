@@ -6,6 +6,7 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
 }
 
 // 直進弾の生成パラメータ
@@ -30,11 +31,12 @@ struct HomingBulletSpec {
 };
 
 // 弾の GameObject（モデル・コライダー・弾コンポーネント）の組み立てを1箇所に集約する。
-// 戻り値のオブジェクトは呼び出し側が scene->AddRootObject() で登録すること。
+// 戻り値のオブジェクトは呼び出し側が ISpawner::Spawn() で登録すること。
 namespace BulletFactory {
 
 std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerNormal(const BulletSpec& spec);
-std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec);
+// spawner: 尾(RibbonTrailComponent)が、弾が消えるときに、尾をシーンへ残すために使う窓口。弾より長く生きること(シーンが持つ)
+std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec, AbsoluteEngine::ISpawner& spawner);
 std::shared_ptr<AbsoluteEngine::GameObject> CreateEnemy(const BulletSpec& spec);
 
 } // namespace BulletFactory

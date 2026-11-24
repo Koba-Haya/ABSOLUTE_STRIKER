@@ -25,16 +25,7 @@ std::filesystem::path GetSavePath() {
 }
 } // namespace
 
-InheritanceState::InheritanceState() {
-  Load_();
-}
-
-InheritanceState &InheritanceState::GetInstance() {
-  static InheritanceState instance;
-  return instance;
-}
-
-void InheritanceState::Load_() {
+void InheritanceState::Load() {
   generation_ = 0;
   inherited_.fill(0.0f);
   const std::filesystem::path path = GetSavePath();

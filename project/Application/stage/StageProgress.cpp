@@ -40,16 +40,7 @@ std::filesystem::path GetSavePath() {
 }
 } // namespace
 
-StageProgress::StageProgress() {
-  Load_();
-}
-
-StageProgress &StageProgress::GetInstance() {
-  static StageProgress instance;
-  return instance;
-}
-
-void StageProgress::Load_() {
+void StageProgress::Load() {
   entries_.clear();
   const std::filesystem::path path = GetSavePath();
   std::error_code ec;

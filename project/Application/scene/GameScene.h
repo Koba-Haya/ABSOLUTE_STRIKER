@@ -15,6 +15,7 @@
 #include "TextureResource.h"
 #include "Animation.h"
 #include "HitEffectSpawner.h"
+#include "../GameData.h"
 #include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
@@ -54,9 +55,18 @@ enum class GamePhase {
   GameOver  // 死亡演出が Cover へ入り、ゲームオーバーへの遷移を要求した(または、クリア・ゲームオーバーの要求を出した)
 };
 
+class ExhibitionHint;
+class GameData;
+class ExhibitionSession;
+
 class GameScene final : public BaseScene {
 public:
-  GameScene() = default;
+  // exhibition: 展示モードの状態(展示用の結果づくりで、状態が変わるので、const ではない。所有しない。シーンより長く生きること)
+  // exhibitionHint: 展示モードの切り替えの案内(描画に使う。所有しない)
+  // gameData: ゲームのデータ(定義の表と、進行・継承の保存データ。所有しない。シーンより長く生きること)
+  GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
+      : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData),
+        itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState()) {}
   ~GameScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -65,25 +75,29 @@ public:
   void Draw() override;
   void DrawEditorUI() override;
 
-  // AddRootObject をオーバーライドして EnemyComponent へのコールバックを自動注入する（タスクC）
-  // タイムライン経由でスポーンされた敵にも onDestroyed が登録されるようになる
-  void AddRootObject(std::shared_ptr<AbsoluteEngine::GameObject> obj) override;
-
 protected:
   // Debug Camera トグルがONの間だけ editorCamera_ の入力操作を許可する（タスクD）
   bool IsEditorCameraOperationEnabled() const override { return isDebugCamera_; }
 
-  // Timeline Editor内のDebug CameraトグルボタンにisDebugCamera_のアドレスを渡す
-  bool* GetDebugCameraFlag() override { return &isDebugCamera_; }
+  // Timeline Editor内のDebug Cameraトグルボタンの、表示用の状態と切り替え
+  std::optional<bool> GetDebugCameraState() const override { return isDebugCamera_; }
+  void SetDebugCameraEnabled(bool enabled) override { isDebugCamera_ = enabled; }
 
   // Draw() の描画カメラ分岐と一致させる（ギズモ/マウスピッキングが実際の見た目とズレないように）
   const Camera* GetEditorViewCamera() const override;
+
+  // エディタの Stop で、全オブジェクトが作り直されたあとに、自機へ実行時の設定をやり直す(基底の復元のあとに呼ばれる)。
+  // 作り直された自機は、JSON から作られるので、Initialize で行った見た目の設定(翼幅、照明、羽ばたきなど)や、強化の反映が失われているため
+  void RestoreScene() override;
 
   // シーンJSON とタイムラインJSON のファイル名の元になる名前。遊ぶステージの定義(StageDefinition::dataName)から決める。
   // 荷物なしで入ったときは、先頭のステージ(従来どおり "Game")になる
   std::string GetDataName() const override;
 
 private:
+  ExhibitionSession &exhibition_; // 展示モードの状態(所有しない)
+  ExhibitionHint &exhibitionHint_; // 展示モードの切り替えの案内(所有しない)
+  GameData &gameData_;             // ゲームのデータ(所有しない)
   // このシーンで遊ぶステージの定義を返す。荷物(StageLaunchParams)があればその ID のステージ、
   // 荷物が無い、または ID が一覧に無いときは、先頭のステージ。BaseScene::Initialize より前から呼ばれるので、毎回荷物から求める
   const StageDefinition &ResolveStage_() const;
@@ -99,6 +113,9 @@ private:
   // --- Update の各段階 ---
   // プレイヤーの GameObject を探す（ロード時などでポインタが切り替わった場合に対応）
   std::shared_ptr<AbsoluteEngine::GameObject> FindPlayerObject_() const;
+  // 自機のオブジェクトへ、実行時の見た目の設定(蝶のモデル、翼幅、ディゾルブ、照明モード、羽ばたき)を行う。
+  // 自機が作り直されるたび(Initialize と、エディタの Stop による復元)に必要なので、1 か所にまとめている
+  void SetupPlayerVisuals_();
   // ゲームプレイ中の描画カメラ（デバッグカメラ or レールカメラ）
   Camera* GetGameplayCamera_() const;
   // ワールド座標をスクリーン座標(UV 0〜1)に変換する

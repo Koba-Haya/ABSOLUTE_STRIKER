@@ -71,6 +71,7 @@ public:
   ~WingShatter();
 
   // 蝶のモデルから、破片への分け方を求め、破片の描画用のモデルを作る(シーンの開始時に 1 回。重いのでここで済ませる)。
+  // playerModel は、モデルのデータ(共有のリソース)を読むためだけに使い、保存しない(自機のオブジェクトが作り直されても、古い参照が残らないようにする)。
   // 翅の描画から消した三角形が、前の実行から残っていても、ここで元に戻す。蝶のモデルが無い・翅が見つからないときは false
   bool Initialize(AbsoluteEngine::ModelComponent* playerModel, const std::shared_ptr<TextureResource>& atlasTexture,
                   const std::shared_ptr<TextureResource>& dissolveMask, const WingShatterSettings& settings = {});
@@ -79,8 +80,9 @@ public:
   void Reset();
 
   // 毎フレーム(実時間)進める。
-  // crumbleProgress: 崩壊の進み具合(0 〜 1)。bodyVelocity: 蝶の今の速度(ワールド。破片が引き継ぐ)
-  void Update(float deltaTime, float crumbleProgress, const Vector3& bodyVelocity);
+  // crumbleProgress: 崩壊の進み具合(0 〜 1)。bodyVelocity: 蝶の今の速度(ワールド。破片が引き継ぐ)。
+  // playerModel: いまの自機のモデル(毎回、呼ぶ側が渡す。nullptr のときは、新しい破片を解放しない。動いている破片は、そのまま進める)
+  void Update(float deltaTime, float crumbleProgress, const Vector3& bodyVelocity, const AbsoluteEngine::ModelComponent* playerModel);
 
   // 破片を描く。dissolve は、蝶と同じディゾルブの状態(同じしきい値で朽ちる)
   void Draw(const PlayerDeathDissolve& dissolve);
@@ -115,12 +117,11 @@ private:
   };
 
   void BuildClusters_();
-  void Release_(Cluster& cluster, const Vector3& bodyVelocity);
+  void Release_(Cluster& cluster, const Vector3& bodyVelocity, const AbsoluteEngine::ModelComponent& playerModel);
   // 翅のメッシュの頂点 1 つの、いまのポーズでのワールド座標と法線(CPU のスキニング)
-  void SkinVertex_(uint32_t vertex, Vector3& position, Vector3& normal) const;
+  void SkinVertex_(const AbsoluteEngine::ModelComponent& playerModel, uint32_t vertex, Vector3& position, Vector3& normal) const;
   void ApplyHiddenTriangles_();
 
-  AbsoluteEngine::ModelComponent* playerModel_ = nullptr;
   ModelResource* modelResourceRaw_ = nullptr; // 蝶のモデル(翅の描画の三角形の番号を書き換える対象。持ち主は蝶の ModelInstance)
   const ModelData* modelData_ = nullptr;
   WingShatterSettings settings_;

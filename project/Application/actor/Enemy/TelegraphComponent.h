@@ -28,11 +28,15 @@
 
 namespace AbsoluteEngine {
 class GameObject;
+class ISpawner;
+class IScreenView;
 }
 
 class TelegraphComponent : public AbsoluteEngine::IComponent {
 public:
-    TelegraphComponent() = default;
+    // spawner: 光る玉を出すときに使う、オブジェクトを出す窓口。screen: 画面内かの判定に使う、画面の窓口。
+    // どちらも所有しない。このコンポーネントより長く生きること
+    TelegraphComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
     ~TelegraphComponent() override;
 
     void Update(float deltaTime) override;
@@ -60,6 +64,9 @@ public:
     bool HoldFire(float secondsUntilFire);
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 光る玉を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+
     enum class GlowMode {
         Muzzle, // 弾の出口に光る玉
         Body,   // 体全体の色を替える
@@ -75,6 +82,8 @@ private:
     void UpdateOrb_(float progress);
     // 体の震えを、いまの経過時間に合わせる
     void UpdateShake_();
+    // 持ち主の回転のうち、Z 成分だけを書き換える(X と Y は、そのまま残す)
+    void SetOwnerRotateZ_(float rotateZ);
 
     // ---- 設定(プレハブの JSON で調整できる) ----
     GlowMode glowMode_ = GlowMode::Muzzle;

@@ -82,15 +82,6 @@ const char *ItemCatalog::GetEffectName(ItemEffectKind kind) {
   return "unknown"; // 到達しない(表に無い種類は、列挙の追加忘れ)
 }
 
-ItemCatalog::ItemCatalog() {
-  Load_();
-}
-
-ItemCatalog &ItemCatalog::GetInstance() {
-  static ItemCatalog instance;
-  return instance;
-}
-
 const ItemDefinition *ItemCatalog::Find(const std::string &itemId) const {
   for (const auto &item : items_) {
     if (item.id == itemId) return &item;
@@ -98,7 +89,7 @@ const ItemDefinition *ItemCatalog::Find(const std::string &itemId) const {
   return nullptr;
 }
 
-void ItemCatalog::Load_() {
+void ItemCatalog::Load() {
   const std::filesystem::path path = AbsoluteEngine::AssetPath::Resolve(kCatalogPath);
   const std::string pathText = path.string();
 

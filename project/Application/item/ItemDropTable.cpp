@@ -22,15 +22,15 @@ constexpr const char *kKeyChance = "chance";
 }
 } // namespace
 
-ItemDropTable::ItemDropTable() : random_(std::random_device{}()) {
-  Load_();
+ItemDropTable::ItemDropTable(const ItemCatalog &catalog) : random_(std::random_device{}()) {
+  Load_(catalog);
 }
 
 float ItemDropTable::Next01_() {
   return std::uniform_real_distribution<float>(0.0f, 1.0f)(random_);
 }
 
-void ItemDropTable::Load_() {
+void ItemDropTable::Load_(const ItemCatalog &catalog) {
   const std::filesystem::path path = AbsoluteEngine::AssetPath::Resolve(kDropTablePath);
   const std::string pathText = path.string();
 
@@ -51,7 +51,6 @@ void ItemDropTable::Load_() {
     FailInvalid(pathText, std::string("\"") + kKeyDrops + "\" must be an array");
   }
 
-  const ItemCatalog &catalog = ItemCatalog::GetInstance();
   for (size_t i = 0; i < dropsIt->size(); ++i) {
     const nlohmann::json &entry = (*dropsIt)[i];
     const std::string where = "drops[" + std::to_string(i) + "]";

@@ -8,6 +8,7 @@
 #include "CommandManager.h"
 #include "../../externals/nlohmann/json.hpp"
 #include "../scene/LightNodeComponent.h"
+#include "../scene/SceneWorld.h"
 // タイムラインマネージャーとのインスペクタ連携（タスク15）
 #include "../scene/timeline/TimelineManager.h"
 
@@ -27,14 +28,14 @@ public:
   ~EditorUIManager() = default;
 
   // 毎フレームのUI描画
-  void DrawUI(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera = nullptr);
+  void DrawUI(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, EditorCamera* camera = nullptr);
 
   // エディタ用カメラの位置・回転を編集する入力欄を描画する（呼び出し側の ImGui ウィンドウの中に並べる）
   // 状態を持たないため static。USE_IMGUI が無いビルドでは何もしない
   static void DrawCameraControls(EditorCamera& camera);
 
   // Viewportへのドラッグ＆ドロップ受付（画像描画後に手動で呼ぶ）
-  void HandleViewportDragDrop(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void HandleViewportDragDrop(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
 
   // 現在選択されているオブジェクトを取得
   std::shared_ptr<GameObject> GetSelectedObject() const { return selectedObject_.lock(); }
@@ -56,20 +57,20 @@ public:
 
 private:
 #ifdef USE_IMGUI
-  void DrawMenuBar(std::vector<std::shared_ptr<GameObject>>& rootObjects);
+  void DrawMenuBar(SceneWorld& world);
   void DrawToolbar();
-  void DrawAssetBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawPrefabsBrowser(std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawHierarchy(std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawGameObjectNode(std::shared_ptr<GameObject> obj, std::vector<std::shared_ptr<GameObject>>& rootObjects);
-  void DrawInspector();
-  void DrawViewport(std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void DrawAssetBrowser(SceneWorld& world);
+  void DrawPrefabsBrowser(SceneWorld& world);
+  void DrawHierarchy(SceneWorld& world);
+  void DrawGameObjectNode(std::shared_ptr<GameObject> obj, SceneWorld& world);
+  void DrawInspector(SceneWorld& world);
+  void DrawViewport(SceneWorld& world, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void DrawPostProcessSettings();
-  void HandleShortcuts(std::vector<std::shared_ptr<GameObject>>& rootObjects, EditorCamera* camera);
+  void HandleShortcuts(SceneWorld& world, EditorCamera* camera);
   
-  void HandleMousePicking(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
+  void HandleMousePicking(const SceneWorld::ObjectList& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix);
   void CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT);
-  void DrawColliderDebug(const std::vector<std::shared_ptr<GameObject>>& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax);
+  void DrawColliderDebug(const SceneWorld::ObjectList& rootObjects, const Matrix4x4& viewMatrix, const Matrix4x4& projectionMatrix, const ImVec2& vMin, const ImVec2& vMax);
 
   // タイムラインイベント選択時のインスペクタ専用UI（タスク15）
   void DrawTimelineEventInspector();

@@ -1,5 +1,5 @@
 #include "HitEffectSpawner.h"
-#include "BaseScene.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "ParticleManager.h"
 #include "graphics/particle/EffectManager.h"
 #include "graphics/particle/RingEffect.h"
@@ -25,7 +25,7 @@ void HitEffectSpawner::Initialize() {
 
 // DevScene の実装を移植。
 // パーティクル + RingEffect + ExplosionLight の3段構えのエフェクト。
-void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
+void HitEffectSpawner::Spawn(AbsoluteEngine::ISpawner& spawner, const Vector3& pos) {
   // 1. 爆発パーティクル（explosion グループ）を散布
   for (int i = 0; i < 30; ++i) {
       float rX = ((rand() % 200) / 100.0f) - 1.0f;
@@ -44,13 +44,13 @@ void HitEffectSpawner::Spawn(BaseScene& scene, const Vector3& pos) {
 
   // 3. 爆発のポイントライト（寿命付き）を生成
   auto lightObj = std::make_shared<AbsoluteEngine::GameObject>("ExplosionLight");
-  lightObj->GetTransform().translate = pos;
-  auto lightNodeComp = std::make_unique<AbsoluteEngine::LightNodeComponent>();
-  lightNodeComp->type = AbsoluteEngine::LightNodeComponent::Type::Point;
-  lightNodeComp->color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光
-  lightNodeComp->radius = kExplosionLightRadius;
-  lightNodeComp->decay = 1.0f;
-  lightObj->AddComponent(std::move(lightNodeComp));
+  lightObj->SetPosition(pos);
+  AbsoluteEngine::LightNodeComponent::Settings lightSettings;
+  lightSettings.type = AbsoluteEngine::LightNodeComponent::Type::Point;
+  lightSettings.color = { 1.0f, 0.5f, 0.1f };  // オレンジ色の爆発光
+  lightSettings.radius = kExplosionLightRadius;
+  lightSettings.decay = 1.0f;
+  lightObj->AddComponent(std::make_unique<AbsoluteEngine::LightNodeComponent>(lightSettings));
   lightObj->AddComponent(std::make_unique<ExplosionLightComponent>(kExplosionLightLifeTime, kExplosionLightMaxIntensity));
-  scene.AddRootObject(lightObj);
+  spawner.Spawn(lightObj);
 }

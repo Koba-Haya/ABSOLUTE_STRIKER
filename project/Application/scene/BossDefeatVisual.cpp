@@ -181,11 +181,14 @@ void BossDefeatVisual::ApplyShell_(bool enable, float threshold) {
     enable = true;
     threshold = kThresholdAllGone;
   }
-  dissolve->enable = enable;
-  dissolve->threshold = threshold;
-  dissolve->edgeRange = settings_.edgeRange;
-  dissolve->edgeColor = settings_.edgeColor;
-  dissolve->emberAmount = settings_.emberAmount;
+  // 設定のコピーを編集して、SetSettings で戻す
+  AbsoluteEngine::DissolveComponent::Settings state = dissolve->GetSettings();
+  state.enable = enable;
+  state.threshold = threshold;
+  state.edgeRange = settings_.edgeRange;
+  state.edgeColor = settings_.edgeColor;
+  state.emberAmount = settings_.emberAmount;
+  dissolve->SetSettings(state);
 }
 
 bool BossDefeatVisual::UsesVoronoiCrack_() const {
@@ -195,7 +198,8 @@ bool BossDefeatVisual::UsesVoronoiCrack_() const {
 void BossDefeatVisual::ApplyCrack_(float reveal, float breakAmount) {
   auto *dissolve = shell_->GetComponent<AbsoluteEngine::DissolveComponent>();
   if (!dissolve) return;
-  ModelInstance::CrackParam &crack = dissolve->crack;
+  // ひび割れの設定のコピーを編集して、SetCrack で戻す
+  ModelInstance::CrackParam crack = dissolve->GetCrack();
   crack.enable = UsesVoronoiCrack_();
   crack.cellSize = crackShape_.cellSize;
   crack.lineWidth = settings_.crackLineWidth;
@@ -205,6 +209,7 @@ void BossDefeatVisual::ApplyCrack_(float reveal, float breakAmount) {
   crack.origin = {crackShape_.originX, crackShape_.originY, crackShape_.originZ};
   crack.spreadRadius = crackShape_.spreadRadius;
   crack.breakAmount = breakAmount;
+  dissolve->SetCrack(crack);
 }
 
 void BossDefeatVisual::EmitCellDust_(float previousBreak, float currentBreak, float secondsToRelease) {

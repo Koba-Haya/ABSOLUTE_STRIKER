@@ -13,10 +13,15 @@ public:
     CylinderEffect(std::shared_ptr<TextureResource> texture, const Vector3& position);
     ~CylinderEffect() override = default;
 
-    void Update(float deltaTime, const Camera* camera) override;
     void Draw() override;
 
+protected:
+    // 進行度 progress に応じて、上へ伸びて広がり、透明になる(寿命の管理は BaseEffect::Update が行う)
+    void OnUpdate(float progress, float deltaTime, const Camera* camera) override;
+
 private:
+    static constexpr float kLifetime = 0.8f; // 寿命(秒)
+
     Cylinder cylinder_;
     Cylinder::Params cylinderParams_{};
     std::shared_ptr<TextureResource> texture_;

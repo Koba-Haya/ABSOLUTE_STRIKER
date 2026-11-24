@@ -1,6 +1,7 @@
 #include "IslandTurretSpawner.h"
 
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ComponentDeps.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
@@ -21,7 +22,10 @@ constexpr float kCubeHalfExtent = 0.5f; // プレハブのモデル(cube.obj)の
 constexpr float kSpawnAhead = 300.0f;
 } // namespace
 
-void IslandTurretSpawner::Update(BaseScene &scene, const StageIslands &islands, float railDistance) {
+void IslandTurretSpawner::Update(const AbsoluteEngine::ComponentDeps &deps, const StageIslands &islands, float railDistance) {
+  // 出す窓口が無ければ、何も出せない(通常は、シーンが設定している)
+  if (deps.spawner == nullptr) return;
+
   const auto &slots = islands.GetTurretSlots();
   states_.resize(slots.size());
 
@@ -34,18 +38,18 @@ void IslandTurretSpawner::Update(BaseScene &scene, const StageIslands &islands, 
       continue;
     }
     if (state.spawned || slots[i].island == nullptr) continue;
-    state.spawned = SpawnTurret_(scene, *slots[i].island);
+    state.spawned = SpawnTurret_(deps, *slots[i].island);
   }
 }
 
-bool IslandTurretSpawner::SpawnTurret_(BaseScene &scene, const StageIsland &island) const {
+bool IslandTurretSpawner::SpawnTurret_(const AbsoluteEngine::ComponentDeps &deps, const StageIsland &island) const {
   // タイムラインの SpawnEvent と同じ手順: プレハブ ID をパスへ変えて読み、位置を決めて、シーンへ追加する
   const std::string path = AbsoluteEngine::PrefabRegistry::GetInstance().ResolveId(kTurretPrefabId);
   if (path.empty()) {
     std::cerr << "[IslandTurret] cannot resolve prefab id: " << kTurretPrefabId << std::endl;
     return false;
   }
-  auto turret = AbsoluteEngine::SceneSerializer::LoadPrefab(path);
+  auto turret = AbsoluteEngine::SceneSerializer::LoadPrefab(path, deps);
   if (!turret) {
     std::cerr << "[IslandTurret] failed to load prefab: " << path << std::endl;
     return false;
@@ -54,14 +58,17 @@ bool IslandTurretSpawner::SpawnTurret_(BaseScene &scene, const StageIsland &isla
   // 島の上面の頂点(原点から、rock の丘の高さ x 倍率)に、立方体の底が乗る高さへ置く。島は傾けていないので、真上に置ける
   const float halfSize = kCubeHalfExtent * kTurretScale;
   const float topY = island.GetPosition().y + StageIslandDefaults::kRockTopHeight * island.GetScale();
-  turret->GetTransform().translate = {island.GetPosition().x, topY + halfSize, island.GetPosition().z};
-  turret->GetTransform().scale = {kTurretScale, kTurretScale, kTurretScale};
+  turret->SetPosition({island.GetPosition().x, topY + halfSize, island.GetPosition().z});
+  turret->SetScale({kTurretScale, kTurretScale, kTurretScale});
 
   // 当たり判定は、倍率を見ない(AABB の半幅をそのまま使う)ので、見た目の大きさに合わせる
   if (auto *collider = turret->GetComponent<AbsoluteEngine::ColliderComponent>()) {
-    collider->size = {halfSize, halfSize, halfSize};
+    // 設定のコピーを編集して、SetSettings で戻す
+    AbsoluteEngine::ColliderComponent::Settings colliderSettings = collider->GetSettings();
+    colliderSettings.size = {halfSize, halfSize, halfSize};
+    collider->SetSettings(colliderSettings);
   }
 
-  scene.AddRootObject(turret);
+  deps.spawner->Spawn(turret);
   return true;
 }

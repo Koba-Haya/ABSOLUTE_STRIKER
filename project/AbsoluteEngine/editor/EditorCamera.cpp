@@ -5,7 +5,7 @@
 namespace AbsoluteEngine {
 
 void EditorCamera::Initialize() {
-    view_ = MakeIdentity4x4();
+    SetViewMatrix(MakeIdentity4x4());
 }
 
 void EditorCamera::Update(const Input& input) {
@@ -90,7 +90,7 @@ void EditorCamera::UpdateMatrix() {
     cameraPosition.z += shakeOffset_.z;
     Matrix4x4 translateMatrix = MakeTranslateMatrix(cameraPosition);
     Matrix4x4 worldMatrix = Multiply(matRot_, translateMatrix);
-    view_ = Inverse(worldMatrix);
+    SetViewMatrix(Inverse(worldMatrix));
 }
 
 void EditorCamera::FocusOn(const Vector3& targetPosition, float distance) {

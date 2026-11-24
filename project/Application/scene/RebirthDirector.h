@@ -259,7 +259,7 @@ public:
   // 翅が開きすぎる瞬間(バーストの始まりから、アニメの時刻 reviveOvershootSec に当たる時刻)に、1 回だけ true を返す(鱗粉の大バーストと地面の吹き飛びを出す合図)
   bool ConsumeBurst();
 
-  RebirthSettings &GetSettings() { return settings_; }
+  const RebirthSettings &GetSettings() const { return settings_; }
 
 #ifdef USE_IMGUI
   // 調整窓。「Start rebirth」が押されたら true を返す(シーンが Begin を呼ぶ)

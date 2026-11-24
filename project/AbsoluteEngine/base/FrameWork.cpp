@@ -3,7 +3,6 @@
 #include <mmsystem.h>
 #include <objbase.h>
 #include <string>
-#include "CpuTimer.h"
 #include "Logger.h"
 #include <algorithm>
 #include <cstdint>
@@ -166,7 +165,7 @@ void AbsoluteFrameWork::Run() {
 
 		// 1 フレームの CPU 時間の測定(停止の調査用。結果はログへ出る)。論理を進める回(描画する回)だけ測る
 		if (accumulator >= kStepSeconds - kStepSnapSeconds) {
-			CpuTimer::BeginFrame();
+			frameTimer_.BeginFrame();
 		}
 
 		// 論理を、時間がたまった分だけ進める
@@ -212,7 +211,7 @@ void AbsoluteFrameWork::Run() {
 		imgui_.Draw(dx_.GetCommandList());
 		dx_.PostDraw();
 
-		CpuTimer::EndFrame();
+		frameTimer_.EndFrame();
 
 		stepsLastFrame = steps;
 		statsSteps += steps;

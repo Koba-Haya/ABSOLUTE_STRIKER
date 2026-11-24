@@ -84,6 +84,9 @@
     <ClCompile Include="base\CpuTimer.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
+    <ClCompile Include="base\FrameTimer.cpp">
+      <Filter>engine\base</Filter>
+    </ClCompile>
     <ClCompile Include="base\EnginePath.cpp">
       <Filter>engine\base</Filter>
     </ClCompile>
@@ -237,6 +240,27 @@
     <ClCompile Include="scene\BaseScene.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\SceneWorld.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\SceneNavigator.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\MainCameraView.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\TimelineHost.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\EditorSession.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\TimelineSpawnPreview.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\SceneLights.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\SceneTransition.cpp" />
     <ClCompile Include="scene\SceneManager.cpp">
       <Filter>engine\scene</Filter>
@@ -290,6 +314,12 @@
     </ClInclude>
     <ClInclude Include="base\CpuTimer.h">
       <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\FrameTimer.h">
+      <Filter>engine\base</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SerialNumberIssuer.h">
+      <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="base\EnginePath.h">
       <Filter>engine\base</Filter>
@@ -466,6 +496,57 @@
       <Filter>engine\math</Filter>
     </ClInclude>
     <ClInclude Include="scene\BaseScene.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneWorld.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneNavigator.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ISceneChanger.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ComponentDeps.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ICameraRig.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\IScreenView.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\MainCameraView.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\IEditRecorder.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\IPlayState.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ISceneQuery.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\PlayModeState.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\ISpawner.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\TimelineHost.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\EditorSession.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\PlayMode.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\TimelineSpawnPreview.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\SceneLights.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\ISceneFactory.h">

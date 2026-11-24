@@ -107,7 +107,8 @@ std::string FormatWithCommas(int value) {
 }
 } // namespace
 
-void ResultTally::Initialize() {
+void ResultTally::Initialize(const RatingCatalog &rating) {
+  rating_ = &rating;
   font_.Initialize(kFontAtlasPath, kFontMetricsPath);
   rowsPanel_.Initialize(&font_);
   rowsPanel_.SetTitle(kRowsPanelTitle);
@@ -122,7 +123,7 @@ void ResultTally::SetVerticalRange(float top, float bottom) {
 }
 
 void ResultTally::BuildRows_() {
-  const RatingSettings &settings = RatingCatalog::GetInstance().GetSettings();
+  const RatingSettings &settings = rating_->GetSettings();
   const RunStats &stats = result_.stats;
   char text[kTextBufferSize];
   rows_.clear();

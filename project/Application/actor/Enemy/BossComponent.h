@@ -5,6 +5,12 @@
 #include <memory>
 #include <string>
 
+namespace AbsoluteEngine {
+class ISpawner;
+class IScreenView;
+class ISceneQuery;
+}
+
 // ボスの攻撃パターン。文字列比較ではなくenumで管理する
 // （先輩フィードバックで「AIの攻撃パターン選択を文字列比較で行っている」ことが
 //   ✕評価の実例として挙がっていたため、この作品では避ける）。
@@ -16,7 +22,10 @@ enum class BossPhase {
 
 class BossComponent : public AbsoluteEngine::IComponent {
 public:
-    BossComponent() = default;
+    // spawner: 弾を出す窓口。screen: カメラの位置と向き(ボスの位置の基準)を知る窓口。query: 自機を探す窓口。
+    // いずれも所有しない。このコンポーネントより長く生きること
+    BossComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
+        : spawner_(spawner), screen_(screen), query_(query) {}
     ~BossComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -36,6 +45,10 @@ public:
     BossPhase GetPhase() const { return phase_; }
 
 private:
+    AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
+    AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
+    AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
+
     void UpdatePhase();
     void UpdateAttack(float deltaTime);
     // カメラ(=レール)の前方に留まりつつ左右上下にゆっくり揺れる。自機の位置には影響されない。
@@ -43,7 +56,7 @@ private:
     void UpdateMovement(float deltaTime);
     // モデルのアニメーションを切り替える(待機 / 攻撃の予告 / 被弾)。優先度は、被弾 > 攻撃の予告 > 待機
     void UpdateAnimation();
-    // アクティブシーンから自機のGameObjectを探す（Fire*で使用）
+    // シーンから自機のGameObjectを探す（Fire*で使用）
     std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer() const;
 
     // 自機へ向かう単発弾を1発発射する

@@ -21,10 +21,14 @@
 #include <string>
 
 class RailCameraComponent;
+namespace AbsoluteEngine {
+class ISceneQuery;
+}
 
 class RailAnchorComponent : public AbsoluteEngine::IComponent {
 public:
-    RailAnchorComponent() = default;
+    // query: レールカメラを探す窓口(所有しない。このコンポーネントより長く生きること)
+    explicit RailAnchorComponent(AbsoluteEngine::ISceneQuery& query) : query_(query) {}
     ~RailAnchorComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -39,10 +43,12 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
 private:
+    AbsoluteEngine::ISceneQuery& query_; // レールカメラを探すために、シーンのオブジェクト一覧を調べる窓口
+
     // 現在のカメラのレール上の距離(弧長、ユニット)を返す。カメラが見つからなければ false
     bool GetCameraDistance_(float& outDistance) const;
 
-    // シーンの直下から、レールカメラを探す(出現時に1回だけ)
+    // シーンのオブジェクトから、レールカメラを探す(出現時に1回だけ)
     RailCameraComponent* FindRailCamera_() const;
 
     // ---- 設定(JSON で調整できる) ----

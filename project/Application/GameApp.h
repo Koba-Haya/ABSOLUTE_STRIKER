@@ -2,6 +2,8 @@
 #include "FrameWork.h"
 #include <memory>
 
+#include "AppServices.h"
+
 class SceneManager;
 
 class GameApp final : public AbsoluteFrameWork {
@@ -16,6 +18,8 @@ protected:
   void Draw() override;
 
 private:
+  // アプリの寿命を持つ部品の置き場。シーンの工場(SceneManager が持つ)より長く生きるよう、宣言を先にする
+  AppServices appServices_;
   std::unique_ptr<SceneManager> sceneManager_;
 
   // DockBuilder による初期レイアウト構築済みフラグ

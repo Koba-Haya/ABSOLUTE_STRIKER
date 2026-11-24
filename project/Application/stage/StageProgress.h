@@ -25,8 +25,9 @@
 
 class StageProgress {
 public:
-  // 唯一のインスタンス(初回の呼び出しで、保存ファイルを読む。無い、壊れているときは、空の進行で始める)
-  static StageProgress &GetInstance();
+  // 保存ファイルを読む(持ち主の GameData が、アプリの初期化で呼ぶ)。無い、壊れているときは、空の進行で始める。
+  // 以前は Singleton で、最初の GetInstance のときに読んでいた
+  void Load();
 
   // そのステージを遊べるか(定義の unlocked が true、または、保存で解放済み)
   bool IsUnlocked(const StageDefinition &stage) const;
@@ -55,8 +56,6 @@ public:
   void EndVolatile();
 
 private:
-  StageProgress();
-  void Load_();
   // 保存する。失敗したときは、ログに出して、続ける
   void Save_() const;
 

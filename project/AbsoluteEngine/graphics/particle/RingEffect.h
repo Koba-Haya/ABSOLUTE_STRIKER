@@ -14,10 +14,15 @@ public:
     RingEffect(std::shared_ptr<TextureResource> texture, const Vector3& position);
     ~RingEffect() override = default;
 
-    void Update(float deltaTime, const Camera* camera) override;
     void Draw() override;
 
+protected:
+    // 進行度 progress に応じて、拡大しながら透明になる(寿命の管理は BaseEffect::Update が行う)
+    void OnUpdate(float progress, float deltaTime, const Camera* camera) override;
+
 private:
+    static constexpr float kLifetime = 0.5f; // 寿命(秒)
+
     // 板の向きを、指定のカメラの行列に合わせて作り、描画に使う行列と色を設定する。
     // Update(更新時のカメラ)と、Draw(描画時の、いま Renderer が持つカメラ)の両方で呼ぶ。
     // 更新と描画の間に、カメラが動いたり、ずらされたりしても、リングが描画のカメラへ正しく向く

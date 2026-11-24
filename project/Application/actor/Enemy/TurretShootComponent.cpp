@@ -1,8 +1,11 @@
 #include "TurretShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
+#include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"
 #include "TelegraphComponent.h"
 #include "externals/nlohmann/json.hpp"
@@ -27,10 +30,10 @@ constexpr float kMinSpeedMargin = 0.0001f;
 } // namespace
 
 void TurretShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 島の陰に隠れているかを毎フレーム追う(島の上のタレットは、島の円柱より上にいるので、隠れない)
-    islandGate_.Update(owner_->GetTransform().translate, deltaTime);
+    islandGate_.Update(screen_, GetOwner()->GetTransform().translate, deltaTime);
 
     TrackPlayerVelocity(deltaTime);
 
@@ -54,7 +57,7 @@ void TurretShootComponent::Update(float deltaTime) {
     // 予備動作の最中は撃たない。撃てない状態になったら、光を消す
     Vector3 dir;
     const bool canFireNow = CanFire(dir);
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph) {
         if (!canFireNow) {
             telegraph->End();
@@ -76,44 +79,20 @@ void TurretShootComponent::Update(float deltaTime) {
 }
 
 bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
-    if (!owner_) return false;
+    if (!GetOwner()) return false;
 
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return false;
-
-    auto* camera = scene->GetMainCamera();
-    if (!camera) return false;
-
-    const Vector3 currentPos = owner_->GetTransform().translate;
+    const Vector3 currentPos = GetOwner()->GetTransform().translate;
 
     // --- 画面内チェック（NDC ±1.2 マージン内にいる場合のみ発射を許可）---
-    Matrix4x4 viewMat = camera->GetViewMatrix();
-    Matrix4x4 projMat = camera->GetProjectionMatrix();
-    Matrix4x4 vpMat   = Multiply(viewMat, projMat);
-
-    float w = currentPos.x * vpMat.m[0][3] + currentPos.y * vpMat.m[1][3]
-            + currentPos.z * vpMat.m[2][3] + vpMat.m[3][3];
-    if (w <= 0.01f) return false; // カメラの背後にいる場合は発射しない
-
-    float ndcX = (currentPos.x * vpMat.m[0][0] + currentPos.y * vpMat.m[1][0]
-               + currentPos.z * vpMat.m[2][0] + vpMat.m[3][0]) / w;
-    float ndcY = (currentPos.x * vpMat.m[0][1] + currentPos.y * vpMat.m[1][1]
-               + currentPos.z * vpMat.m[2][1] + vpMat.m[3][1]) / w;
-
+    // カメラが無い、カメラの背後にいる、範囲外のときは発射しない
     constexpr float ndcMargin = 1.2f;
-    if (ndcX < -ndcMargin || ndcX > ndcMargin || ndcY < -ndcMargin || ndcY > ndcMargin) return false;
+    if (!screen_.IsOnScreen(currentPos, ndcMargin)) return false;
 
     // 島に隠れている(または、出てきたばかりの)敵は撃たない。クールダウンは進んだままなので、待ち時間が過ぎたら撃てる
     if (!islandGate_.CanShoot()) return false;
 
     // --- プレイヤーを探す ---
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj = nullptr;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return false;
 
     // --- プレイヤー方向（タレットは非移動のため、進行方向ではなく毎回直接この方向を狙う）---
@@ -136,7 +115,7 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
     // 前方向と一致するため、それを基準に「自機への方向が進行方向寄りかどうか」で判定する。
     // 自機が接近中〜横に並ぶ間はtoPlayerが進行方向の逆〜直角寄りになり、
     // 通り過ぎると進行方向寄り（内積が大きく正）に転じる。
-    Vector3 forward = camera->GetForward();
+    Vector3 forward = screen_.GetForward();
     const float towardBehind = outToPlayerDir.x * forward.x + outToPlayerDir.y * forward.y + outToPlayerDir.z * forward.z;
     constexpr float kMaxForwardAlignment = 0.3f;
     if (towardBehind > kMaxForwardAlignment) return false;
@@ -153,15 +132,7 @@ bool TurretShootComponent::CanFire(Vector3& outToPlayerDir) const {
 }
 
 void TurretShootComponent::TrackPlayerVelocity(float deltaTime) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-    std::shared_ptr<AbsoluteEngine::GameObject> playerObj;
-    for (const auto& obj : scene->GetRootObjects()) {
-        if (obj && obj->GetComponent<PlayerComponent>()) {
-            playerObj = obj;
-            break;
-        }
-    }
+    const auto playerObj = PlayerFinder::FindPlayer(query_);
     if (!playerObj) return;
 
     const Vector3 pos = playerObj->GetTransform().translate;
@@ -201,13 +172,12 @@ bool TurretShootComponent::CalcLeadDirection(const Vector3& turretPos, const Vec
 }
 
 void TurretShootComponent::FireOneBullet(const Vector3& dir) {
-    auto scene = BaseScene::GetActiveScene();
-    if (!scene || !owner_) return;
+    if (!GetOwner()) return;
 
     BulletSpec spec;
-    spec.position = owner_->GetTransform().translate;
+    spec.position = GetOwner()->GetTransform().translate;
     spec.velocity = { dir.x * bulletSpeed_, dir.y * bulletSpeed_, dir.z * bulletSpeed_ };
-    scene->AddRootObject(BulletFactory::CreateEnemy(spec));
+    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
 }
 
 void TurretShootComponent::Serialize(nlohmann::json& j) const {

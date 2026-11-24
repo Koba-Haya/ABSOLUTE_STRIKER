@@ -20,7 +20,7 @@ void GameCamera::Update(const Input& /*input*/) {
 }
 
 void GameCamera::RecomputeView_() {
-    view_ = MakeLookAtMatrix(eye_, target_, up_);
+    SetViewMatrix(MakeLookAtMatrix(eye_, target_, up_));
 }
 
 Vector3 GameCamera::GetForward() const {

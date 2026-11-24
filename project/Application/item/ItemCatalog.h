@@ -10,7 +10,8 @@
 // 黙って進むと、アイテムが出ない原因が分からなくなるため)。
 class ItemCatalog {
 public:
-  static ItemCatalog &GetInstance();
+  // 読み込みは Load で明示的に行う(持ち主の GameData が、アプリの初期化で呼ぶ)。以前は Singleton で、最初の GetInstance のときに読んでいた
+  void Load();
 
   // id に対応する定義を返す。無ければ nullptr
   const ItemDefinition *Find(const std::string &itemId) const;
@@ -25,9 +26,6 @@ public:
   const ItemUpgradeSettings &GetUpgradeSettings() const { return upgrade_; }
 
 private:
-  ItemCatalog();
-  void Load_();
-
   std::vector<ItemDefinition> items_;
   ItemPickupSettings pickup_;
   ItemUpgradeSettings upgrade_;

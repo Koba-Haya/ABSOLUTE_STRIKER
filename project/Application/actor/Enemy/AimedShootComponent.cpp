@@ -1,9 +1,13 @@
 #include "AimedShootComponent.h"
-#include "AbsoluteEngine/scene/BaseScene.h"
+#include "AbsoluteEngine/scene/ISceneQuery.h"
+#include "AbsoluteEngine/scene/IScreenView.h"
+#include "AbsoluteEngine/scene/ISpawner.h"
+#include "AbsoluteEngine/scene/SerialNumberIssuer.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
+#include "../Player/PlayerFinder.h"
 #include "TelegraphComponent.h"
 #include "Method.h"
 #include <algorithm>
@@ -28,11 +32,12 @@ constexpr float kTwoPi = 6.28318530717959f;
 const Vector3 kWorldUp = { 0.0f, 1.0f, 0.0f };
 const Vector3 kWorldRight = { 1.0f, 0.0f, 0.0f };
 constexpr float kParallelThreshold = 0.99f;
-// 敵ごとに乱数の種を変えるための、増やしていく番号(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
-unsigned int g_nextSeed = 1;
 } // namespace
 
-AimedShootComponent::AimedShootComponent() : random_(g_nextSeed++) {}
+// 乱数の種は、通し番号の発行役から、敵ごとに 1 つもらう(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
+AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                                         AbsoluteEngine::SerialNumberIssuer& serials)
+    : spawner_(spawner), screen_(screen), query_(query), random_(static_cast<unsigned int>(serials.Issue())) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();
@@ -60,20 +65,17 @@ Vector3 AimedShootComponent::ApplyAimError_(const Vector3& dir) {
 }
 
 void AimedShootComponent::Update(float deltaTime) {
-    if (!owner_) return;
+    if (!GetOwner()) return;
 
     // 撃破されて消えていく途中の敵は撃たない(EnemyComponent が死亡状態のとき)
-    if (const auto* enemy = owner_->GetComponent<EnemyComponent>()) {
+    if (const auto* enemy = GetOwner()->GetComponent<EnemyComponent>()) {
         if (enemy->IsDead()) return;
     }
 
-    auto* scene = BaseScene::GetActiveScene();
-    if (!scene) return;
-
     // 画面外にいる間は、タイマーを進めない(入ってから firstShotDelay_ 待つ。出ている間に弾がたまらない)
-    const Vector3 myPos = owner_->GetTransform().translate;
-    islandGate_.Update(myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
-    if (!EnemyShootUtil::IsInsideScreen(*scene, myPos, screenMargin_)) return;
+    const Vector3 myPos = GetOwner()->GetTransform().translate;
+    islandGate_.Update(screen_, myPos, deltaTime); // 島の陰に隠れているかを毎フレーム追う
+    if (!screen_.IsOnScreen(myPos, screenMargin_)) return;
 
     // 島に隠れている(または、出てきたばかりの)間は撃たない。画面外と同じく、タイマーも進めない
     if (!islandGate_.CanShoot()) return;
@@ -90,7 +92,7 @@ void AimedShootComponent::Update(float deltaTime) {
     // ---- 予備動作(体の光) ----
     // 次に撃てるまでの秒数(最初の 1 発は、待ちの残り。以降は、間隔の残りと、弾が消えてからの間の残りの、長いほう)。
     // 撃つ時刻の手前から光り、撃つ時刻に終わる。予備動作の最中は撃たない
-    auto* telegraph = owner_->GetComponent<TelegraphComponent>();
+    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
     if (telegraph) {
         float secondsUntilFire = firstShotDelay_ - visibleTime_;
         if (hasShot_) {
@@ -112,7 +114,7 @@ void AimedShootComponent::Update(float deltaTime) {
     }
 
     // ---- 自機を狙う ----
-    const auto player = EnemyShootUtil::FindPlayer(*scene);
+    const auto player = PlayerFinder::FindPlayer(query_);
     if (!player) return;
     const Vector3 playerPos = player->GetTransform().translate;
     const Vector3 toPlayer = { playerPos.x - myPos.x, playerPos.y - myPos.y, playerPos.z - myPos.z };
@@ -125,7 +127,7 @@ void AimedShootComponent::Update(float deltaTime) {
     spec.velocity = { aimDir.x * bulletSpeed_, aimDir.y * bulletSpeed_, aimDir.z * bulletSpeed_ };
     auto bullet = BulletFactory::CreateEnemy(spec);
     lastBullet_ = bullet;
-    scene->AddRootObject(bullet);
+    spawner_.Spawn(bullet);
 
     if (telegraph) telegraph->End();
     hasShot_ = true;

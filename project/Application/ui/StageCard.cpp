@@ -57,8 +57,9 @@ float Saturate(float v) { return std::clamp(v, 0.0f, 1.0f); }
 StageCard::StageCard() = default;
 StageCard::~StageCard() = default;
 
-void StageCard::Initialize(BitmapFont *font) {
+void StageCard::Initialize(BitmapFont *font, const StageProgress &progress) {
   font_ = font;
+  progress_ = &progress;
   panel_.Initialize(font);
   panel_.SetTitle(kCardTitle);
   rects_.Initialize();
@@ -105,7 +106,7 @@ float StageCard::GetUnlockElapsed_() const {
 }
 
 void StageCard::DrawContent_(float alpha) {
-  const bool unlocked = StageProgress::GetInstance().IsUnlocked(*stage_);
+  const bool unlocked = progress_->IsUnlocked(*stage_);
   // 鍵の演出の最中(始まるのを待つ間を含む)は、解放済みでも、解放の瞬間まで、ロック中の表示のまま
   const bool animating = unlocked && (unlockState_ == UnlockState::Waiting || unlockState_ == UnlockState::Playing);
   const float t = unlockState_ == UnlockState::Playing ? GetUnlockElapsed_() : 0.0f;
