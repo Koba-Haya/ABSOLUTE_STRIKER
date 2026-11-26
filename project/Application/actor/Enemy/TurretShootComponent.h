@@ -31,11 +31,11 @@ class ISceneQuery;
 class TurretShootComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているか、カメラの前方向を知る窓口。query: 自機を探す窓口。
-    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。
+    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。bulletPools: 弾の種類ごとの置き場所(シーンが持つ)。
     // いずれも所有しない。このコンポーネントより長く生きること
     TurretShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                         const BulletCatalog& bullets)
-        : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets) {}
+                         const BulletCatalog& bullets, EnemyBulletPools& bulletPools)
+        : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets, bulletPools) {}
     ~TurretShootComponent() override = default;
 
     void Update(float deltaTime) override;

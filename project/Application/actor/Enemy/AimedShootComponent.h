@@ -38,10 +38,10 @@ class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
     // serials: 狙いのばらつきの乱数の種を、敵ごとに変えるための通し番号の発行役(同じ敵の並びなら、毎回同じ種になる)。
-    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。
+    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。bulletPools: 弾の種類ごとの置き場所(シーンが持つ)。
     // いずれも所有しない(serials は種を決めるときに 1 回使うだけ)。このコンポーネントより長く生きること
     AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                        AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets);
+                        AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets, EnemyBulletPools& bulletPools);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;

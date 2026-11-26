@@ -35,8 +35,9 @@ constexpr float kParallelThreshold = 0.99f;
 
 // 乱数の種は、通し番号の発行役から、敵ごとに 1 つもらう(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
 AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                                         AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets)
-    : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets), random_(static_cast<unsigned int>(serials.Issue())) {}
+                                         AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets,
+                                         EnemyBulletPools& bulletPools)
+    : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets, bulletPools), random_(static_cast<unsigned int>(serials.Issue())) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();

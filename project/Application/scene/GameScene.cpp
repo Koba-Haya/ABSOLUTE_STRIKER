@@ -82,14 +82,26 @@
 #include "Application/occlusion/OcclusionWorld.h"
 
 namespace {
-// 部品を作る関数の中で、型で引く表(ServiceTable)から、弾の定義の表を取り出す。
-// 登録されていない(GameScene 以外のシーンで、弾を撃つ部品(自機、敵の射撃部品)を作ろうとした)ときは、理由をログに出して nullptr
-const BulletCatalog *FindBulletCatalog(const AbsoluteEngine::ComponentDeps &deps, const char *componentName) {
-  const BulletCatalog *catalog = deps.services->Find<const BulletCatalog>();
-  if (!catalog) {
-    Logger::GetInstance().Log("[GameScene] BulletCatalog is not registered in this scene. cannot create %s", componentName);
+// 部品を作る関数の中で、型で引く表(ServiceTable)から、型 T で登録された物(弾の定義の表、敵の弾の置き場所など)を取り出す。
+// 登録されていない(GameScene 以外のシーンで、弾を撃つ部品(自機、ボス、敵の射撃部品)を作ろうとした)ときは、理由をログに出して nullptr。
+// serviceName / componentName: ログに出す、探した物の名前と、作ろうとした部品の名前
+template <typename T>
+T *FindService(const AbsoluteEngine::ComponentDeps &deps, const char *serviceName, const char *componentName) {
+  T *service = deps.services->Find<T>();
+  if (!service) {
+    Logger::GetInstance().Log("[GameScene] %s is not registered in this scene. cannot create %s", serviceName, componentName);
   }
-  return catalog;
+  return service;
+}
+
+// 弾の定義の表を取り出す(上の FindService の、よく使う形)
+const BulletCatalog *FindBulletCatalog(const AbsoluteEngine::ComponentDeps &deps, const char *componentName) {
+  return FindService<const BulletCatalog>(deps, "BulletCatalog", componentName);
+}
+
+// 敵の弾の、種類ごとの置き場所を取り出す
+EnemyBulletPools *FindEnemyBulletPools(const AbsoluteEngine::ComponentDeps &deps, const char *componentName) {
+  return FindService<EnemyBulletPools>(deps, "EnemyBulletPools", componentName);
 }
 
 // ゲームのカメラの投影(画角・ニア・ファー)
@@ -237,6 +249,8 @@ GameScene::GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHi
   // 弾を撃つ部品(自機、敵の射撃部品)は、弾の定義の表を、生成の関数の中で、この表から受け取る。
   // 読み取り専用(const)で登録する。GameData はアプリの寿命なので、このシーンより長く生きる
   GetServiceTable().Register<const BulletCatalog>(gameData_.GetBulletCatalog());
+  // 敵の弾の置き場所は、借りるたびに中身が変わるので、書き換えできる形で登録する。このシーンのメンバなので、シーンと同じ寿命
+  GetServiceTable().Register<EnemyBulletPools>(enemyBulletPools_);
 }
 
 void GameScene::Initialize(const SceneServices &services) {
@@ -345,16 +359,18 @@ void GameScene::Initialize(const SceneServices &services) {
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("EnemyShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
       const BulletCatalog* bullets = FindBulletCatalog(deps, "EnemyShootComponent");
-      if (!bullets) return nullptr;
-      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *bullets);
+      EnemyBulletPools* pools = FindEnemyBulletPools(deps, "EnemyShootComponent");
+      if (!bullets || !pools) return nullptr;
+      return std::make_unique<EnemyShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *bullets, *pools);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("RailAnchorComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
       return std::make_unique<RailAnchorComponent>(*deps.sceneQuery);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("AimedShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
       const BulletCatalog* bullets = FindBulletCatalog(deps, "AimedShootComponent");
-      if (!bullets) return nullptr;
-      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.serialNumbers, *bullets);
+      EnemyBulletPools* pools = FindEnemyBulletPools(deps, "AimedShootComponent");
+      if (!bullets || !pools) return nullptr;
+      return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.serialNumbers, *bullets, *pools);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
       const BulletCatalog* bullets = FindBulletCatalog(deps, "BossComponent");
@@ -363,8 +379,9 @@ void GameScene::Initialize(const SceneServices &services) {
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TurretShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
       const BulletCatalog* bullets = FindBulletCatalog(deps, "TurretShootComponent");
-      if (!bullets) return nullptr;
-      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *bullets);
+      EnemyBulletPools* pools = FindEnemyBulletPools(deps, "TurretShootComponent");
+      if (!bullets || !pools) return nullptr;
+      return std::make_unique<TurretShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *bullets, *pools);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("ChargeOnApproachComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
       return std::make_unique<ChargeOnApproachComponent>(*deps.screen, *deps.sceneQuery);

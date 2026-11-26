@@ -17,19 +17,22 @@
       "id": "BeeBullet",
       "model": "resources/app/bullet/bullet.obj",
       "scale": 0.5,
-      "radius": 0.25
+      "radius": 0.25,
+      "prewarm": 12
     },
     {
       "id": "SpiderBullet",
       "model": "resources/app/bullet/bullet.obj",
       "scale": 0.5,
-      "radius": 0.25
+      "radius": 0.25,
+      "prewarm": 9
     },
     {
       "id": "CrosserBullet",
       "model": "resources/app/bullet/bullet.obj",
       "scale": 0.5,
-      "radius": 0.25
+      "radius": 0.25,
+      "prewarm": 4
     }
   ]
 }

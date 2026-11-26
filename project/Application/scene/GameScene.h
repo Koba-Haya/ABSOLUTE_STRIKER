@@ -9,6 +9,7 @@
 #include "../actor/Player/PlayerComponent.h"
 #include "../actor/Bullet/BulletComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
+#include "../actor/Enemy/EnemyBulletPools.h"
 #include "../hud/GameHUD.h"
 #include "../hud/HudStatusView.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
@@ -273,6 +274,10 @@ private:
   RunStatsTracker runStats_;       // リザルトの評価の元になる、成績の数字(出現・撃破、被ダメージ、時間など)
   ScoreTracker scoreTracker_;      // スコア・撃破数・編隊の残数
   ItemSystem itemSystem_;          // ドロップアイテム(敵を倒したときの出現、取得、強化)
+  // 敵の弾の、種類ごとの置き場所(Object Pool)。敵は出入りが激しいので、敵より長く生きるシーンが持ち、同じ種類の敵の全員で共有する。
+  // 敵の射撃部品へは、型で引く表(ServiceTable)を通して渡す。シーンの終わりには、オブジェクトの一覧(基底の BaseScene が持つ)より先に消える。
+  // そのあとに手放された弾は、置き場所へ戻らずに普通に削除される(GameObjectPool がそう作られている)
+  EnemyBulletPools enemyBulletPools_;
 
   float time_ = 0.0f;
 

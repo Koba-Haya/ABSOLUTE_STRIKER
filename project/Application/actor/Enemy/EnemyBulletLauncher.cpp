@@ -1,11 +1,13 @@
 #include "EnemyBulletLauncher.h"
 
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/GameObjectPool.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "Logger.h"
 #include "../Bullet/BulletBuilder.h"
 #include "../Bullet/BulletCatalog.h"
 #include "../Bullet/BulletTag.h"
+#include "EnemyBulletPools.h"
 
 #ifdef USE_IMGUI
 #include <imgui.h>
@@ -21,8 +23,8 @@ std::shared_ptr<AbsoluteEngine::GameObject> EnemyBulletLauncher::Fire(AbsoluteEn
   const BulletDefinition *def = ResolveDefinition_();
   if (!def) return nullptr;
 
-  // 定義から組み立てて、今回の位置と速度を入れて出す
-  std::shared_ptr<AbsoluteEngine::GameObject> bullet = BulletBuilder::Build(*def, BulletTag::kEnemy);
+  // この種類の置き場所から借りる(空きが無ければ、定義から組み立てる)。今回の位置と速度を入れてから出す
+  std::shared_ptr<AbsoluteEngine::GameObject> bullet = BulletBuilder::AcquireOrBuild(pools_.Get(def->id), *def, BulletTag::kEnemy);
   BulletBuilder::Launch(*bullet, position, velocity);
   spawner.Spawn(bullet);
   return bullet;
@@ -62,6 +64,16 @@ void EnemyBulletLauncher::SetBulletId_(const std::string &bulletId) {
   if (bulletId == bulletId_) return;
   bulletId_ = bulletId;
   reportedMissing_ = false;
+
+  // この種類の置き場所を初めて使うなら、前もって弾を入れる(同じ種類の敵の 2 体目以降は、すでにあるので何もしない)。
+  // 定義が無い id は、ここでは何もしない(撃つときに ResolveDefinition_ が理由を出す)
+  const BulletDefinition *def = catalog_.Find(bulletId_);
+  if (!def) return;
+  bool created = false;
+  AbsoluteEngine::GameObjectPool &pool = pools_.Get(def->id, &created);
+  if (created) {
+    BulletBuilder::Prewarm(pool, *def, BulletTag::kEnemy);
+  }
 }
 
 const BulletDefinition *EnemyBulletLauncher::ResolveDefinition_() {
