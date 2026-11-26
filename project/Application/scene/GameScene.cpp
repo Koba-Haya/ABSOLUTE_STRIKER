@@ -53,7 +53,7 @@
 #include "CloudImpactDebugUi.h"
 #include "ScaleDustDebugUi.h"
 #include "GameIntroDirector.h"
-#include "StageStartDirector.h"
+#include "opening/StageStartPose.h"
 #include "StageNamePath.h"
 #include "StageImpactEffects.h"
 #include "SpeedStreaks.h"
@@ -98,21 +98,8 @@ constexpr const char *kPuffTexturePath = "resources/app/title/puff.png";
 // 自機がここを突き破る。画像の「STAGE 1」の文字の中心あたり(y は画像の上から約 1/4)
 constexpr Vector2 kStageNameImpactPoint{0.0f, 0.12f};
 
-// ステージ名の板の透明度を、ステージ開始演出の段階から決める。
-// 引く間に現れ、保つ間と戻る間(割れるまで)は見えたまま。割れたあとの破片の薄れ方は、破片側が決める
-// phase: 今の段階。progress: 段階の中での進み具合(0 〜 1)
-float CalcStageNameAlpha(StageStartPhase phase, float progress) {
-  switch (phase) {
-  case StageStartPhase::PullBack:
-    return progress;
-  case StageStartPhase::Hold:
-  case StageStartPhase::Return:
-    return 1.0f;
-  case StageStartPhase::Idle:
-  default:
-    return 0.0f;
-  }
-}
+// 開幕の演出が終わったときの、ステージ名の板の透明度(消す)。段階ごとの透明度は、開幕の演出の状態クラスが決める
+constexpr float kStageNameHiddenAlpha = 0.0f;
 
 // 0 〜 1 を、始まりと終わりがなめらかな S 字(smoothstep)に変える(板が弧を描くときの、動き出しと着地をなめらかにする)
 float SmoothStep01(float t) {
@@ -127,6 +114,8 @@ constexpr const char *kImpactFlashModelPath = "resources/app/title/flash.obj";
 
 // 板が突き破られる位置を決めるとき、「戻る」の始まりから板を割るまでに進む距離を、何個に区切って足し合わせるか
 constexpr int kBreakTravelSamples = 64;
+// 俯瞰の度合いの最大(俯瞰を保つ段階のカメラのずれ。板の弧の始点を、前もって求めるのに使う)
+constexpr float kStageStartFullBlend = 1.0f;
 
 // 描画の間だけ、カメラに俯瞰のずれを重ね、スコープを抜けたら元の位置・向き・画角へ戻す(差し替えの仕組みは ScopedCameraOverride)。
 // ゲームの進行(自機の位置、敵、弾)に使うカメラの位置は変えず、見せるだけのずれにする
@@ -141,7 +130,7 @@ private:
     Vector3 offsetEye{0.0f, 0.0f, 0.0f};
     Vector3 offsetTarget{0.0f, 0.0f, 1.0f};
     if (camera != nullptr) {
-      StageStartDirector::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), offsetEye, offsetTarget);
+      StageStartMath::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), offsetEye, offsetTarget);
     }
     return ScopedCameraOverride(camera, offsetEye, offsetTarget, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
                                 kGameCameraFar);
@@ -550,10 +539,8 @@ void GameScene::Finalize() {
 }
 
 void GameScene::BeginIntro_() {
-  // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは通常どおり始める)
-  introActive_ = IsSceneTransitioning();
-  if (!introActive_ || GetMainCamera() == nullptr) {
-    introActive_ = false;
+  // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは、開幕の演出なしで、通常どおり始める)
+  if (!IsSceneTransitioning() || GetMainCamera() == nullptr) {
     return;
   }
 
@@ -571,6 +558,13 @@ void GameScene::BeginIntro_() {
   if (const auto *rail = FindRailCamera_()) {
     introRailSpeed_ = rail->GetSpeed();
   }
+
+  // 開幕の演出を、イントロから始める(以降の段階は、状態クラスが決める)
+  opening_.Start(stageStartSettings_);
+}
+
+bool GameScene::IsTransitionRevealing() const {
+  return IsSceneTransitioning();
 }
 
 RailCameraComponent *GameScene::FindRailCamera_() const {
@@ -582,13 +576,8 @@ RailCameraComponent *GameScene::FindRailCamera_() const {
   return nullptr;
 }
 
-void GameScene::UpdateIntro_(float deltaTime) {
-  // 覆いが晴れ終わったら、助走を終えて通常の更新へ戻る
-  if (!IsSceneTransitioning()) {
-    FinishIntro_();
-    return;
-  }
-
+void GameScene::ApplyIntroPose() {
+  // 覆いが晴れ終わったかの判定と、イントロを終えるのは、IntroState が行う
   const GameIntroPose pose = GameIntroDirector::Evaluate(
       GetTransitionRevealProgress(), introRailSpeed_, GetTransitionRevealSeconds());
 
@@ -612,7 +601,7 @@ void GameScene::UpdateIntro_(float deltaTime) {
     rotation.x -= pose.pitchUp;
     playerObj_->SetRotation(rotation);
   }
-  UpdatePlayerModelOnly_(deltaTime);
+  // 自機のアニメーションは、世界が止まっている段階の共通の処理として、Update が進める
 }
 
 void GameScene::UpdatePlayerModelOnly_(float deltaTime) {
@@ -624,33 +613,40 @@ void GameScene::UpdatePlayerModelOnly_(float deltaTime) {
   }
 }
 
-void GameScene::UpdateStageStart_(float deltaTime) {
-  stageStart_.Update(deltaTime);
-
-  // 世界が止まっている間(俯瞰へ引く・保つ)は、自機のアニメーションだけ進める。
-  // 世界が動く「戻る」段階では、通常の更新が自機のモデルも進める
-  if (!stageStart_.IsWorldRunning()) {
-    UpdatePlayerModelOnly_(deltaTime);
-  }
-
-  // ステージ名の板: 段階に合わせて出し入れし、板を割る時刻になったら割る。
-  // 割れる瞬間(自機が板に触れた瞬間)に、操作のロックを解く
-  stageNameBoard_.SetAlpha(CalcStageNameAlpha(stageStart_.GetPhase(), stageStart_.GetPhaseProgress()));
-  if (stageStart_.HasReachedBreak() && !stageNameBoard_.IsBroken()) {
-    stageNameBoard_.Break();
-    // 突き破った瞬間の衝撃(白いフラッシュ)
-    stageImpact_.Trigger(stageImpactSettings_);
-    SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
-  }
+void GameScene::ShowStageNameInFrontOfView(const StageStartPose &pose, float alpha) {
+  stageNameBoard_.SetAlpha(alpha);
   // 割れるまでは、板を段階に合わせた位置へ動かす(割れたあとの破片は、割れた位置から、自分の動きで飛ぶ)
   if (!stageNameBoard_.IsBroken()) {
-    stageNameBoard_.Place(CalcStageNamePosition_(), stageNameForward_, stageNameBoardSettings_);
+    stageNameBoard_.Place(CalcStageNameFrontPosition_(pose), stageNameForward_, stageNameBoardSettings_);
   }
+}
 
-  // 演出が終わったら、割れていなくても(板が読み込めなかったときなど)、必ず操作を戻す
-  if (!stageStart_.IsActive()) {
-    SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
+void GameScene::MoveStageNameAlongArc(float returnElapsedSeconds, float alpha) {
+  stageNameBoard_.SetAlpha(alpha);
+  if (!stageNameBoard_.IsBroken()) {
+    stageNameBoard_.Place(CalcStageNameArcPosition_(returnElapsedSeconds), stageNameForward_, stageNameBoardSettings_);
   }
+}
+
+void GameScene::BreakStageName() {
+  // 割れる瞬間(自機が板に触れた瞬間)に、操作のロックを解く。板が読み込めず、すでに割れた扱いのときは、何もしない
+  if (stageNameBoard_.IsBroken()) {
+    return;
+  }
+  stageNameBoard_.Break();
+  // 突き破った瞬間の衝撃(白いフラッシュ)
+  stageImpact_.Trigger(stageImpactSettings_);
+  SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
+}
+
+void GameScene::FinishOpening() {
+  // 板を消す。割れていなければ(板が読み込めなかったときなど)、竜が触れる位置へ置いて終える
+  stageNameBoard_.SetAlpha(kStageNameHiddenAlpha);
+  if (!stageNameBoard_.IsBroken()) {
+    stageNameBoard_.Place(stageNameAnchor_, stageNameForward_, stageNameBoardSettings_);
+  }
+  // 演出が終わったら、割れていなくても、必ず操作を戻す
+  SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
 }
 
 void GameScene::PlaceStageNameBoard_() {
@@ -671,7 +667,7 @@ void GameScene::PlaceStageNameBoard_() {
     float travel = 0.0f;
     for (int i = 0; i < kBreakTravelSamples; ++i) {
       const float returnSeconds = (static_cast<float>(i) + 0.5f) * sampleSeconds;
-      travel += rail->GetSpeed() * WorldSpeedScale_(stageStart_.BoostAt(returnSeconds)) * sampleSeconds;
+      travel += rail->GetSpeed() * WorldSpeedScale_(StageStartMath::BoostAt(stageStartSettings_, returnSeconds)) * sampleSeconds;
     }
     const float progress = rail->GetProgress() + travel / rail->GetTotalLength();
     rail->GetPointAndForward(progress, cameraPosition, forward);
@@ -686,11 +682,13 @@ void GameScene::PlaceStageNameBoard_() {
   // 俯瞰を保つ間の位置: 俯瞰のカメラが、最終的にある位置の正面(画面の上寄り)。ここから弧を描いて、上の位置へ着く
   Vector3 holdEye{0.0f, 0.0f, 0.0f};
   Vector3 holdTarget{0.0f, 0.0f, 1.0f};
-  StageStartDirector::ApplyPose(stageStart_.GetHoldPose(), introBaseEye_, introBaseTarget_, holdEye, holdTarget);
+  StageStartMath::ApplyPose(StageStartMath::MakePose(stageStartSettings_, kStageStartFullBlend), introBaseEye_, introBaseTarget_, holdEye,
+                            holdTarget);
   stageNameHoldPosition_ = StageNamePath::InFrontOfCamera(holdEye, holdTarget, stageNameBoardSettings_.holdDistance,
                                                           stageNameBoardSettings_.holdAngle);
 
-  stageNameBoard_.Place(CalcStageNamePosition_(), stageNameForward_, stageNameBoardSettings_);
+  // 最初の位置: 俯瞰へ引き始める瞬間(ずれなし)のカメラの正面
+  stageNameBoard_.Place(CalcStageNameFrontPosition_(StageStartPose{}), stageNameForward_, stageNameBoardSettings_);
 }
 
 float GameScene::WorldSpeedScale_(float boost) const {
@@ -700,7 +698,7 @@ float GameScene::WorldSpeedScale_(float boost) const {
 int GameScene::CalcWorldSteps_() {
   // 速さの倍率を足し合わせ、整数の部分だけ今フレームの更新回数にして、小数の部分は次のフレームへ持ち越す。
   // 倍率が 1 のときは、毎フレームちょうど 1 回になる。2.5 のときは、2 回と 3 回が交互に来て、平均 2.5 回になる
-  worldStepAccumulator_ += WorldSpeedScale_(stageStart_.GetBoost());
+  worldStepAccumulator_ += WorldSpeedScale_(opening_.GetBoost());
   const int steps = static_cast<int>(std::floor(worldStepAccumulator_));
   worldStepAccumulator_ -= static_cast<float>(steps);
   return steps;
@@ -708,50 +706,43 @@ int GameScene::CalcWorldSteps_() {
 
 StageStartPose GameScene::GetStageStartViewPose_() const {
   // 俯瞰のカメラのずれに、ブーストによる画角の広がりを重ねる(速く進むほど、画角が広がって、速さが強く見える)
-  StageStartPose pose = stageStart_.GetPose();
-  pose.fovScale *= 1.0f + (stageStartSettings_.boostFovScale - 1.0f) * stageStart_.GetBoost();
+  StageStartPose pose = opening_.GetPose();
+  pose.fovScale *= 1.0f + (stageStartSettings_.boostFovScale - 1.0f) * opening_.GetBoost();
   return pose;
 }
 
-Vector3 GameScene::CalcStageNamePosition_() const {
-  switch (stageStart_.GetPhase()) {
-  case StageStartPhase::PullBack:
-  case StageStartPhase::Hold: {
-    // 俯瞰へ引く間は、引いていくカメラ(スタート位置のカメラに、今のずれを重ねたもの)の正面に、貼り付いたように付いてくる。
-    // 俯瞰を保つ間は、カメラが止まるので、ワールドの同じ位置に留まる
-    Vector3 eye{0.0f, 0.0f, 0.0f};
-    Vector3 target{0.0f, 0.0f, 1.0f};
-    StageStartDirector::ApplyPose(stageStart_.GetPose(), introBaseEye_, introBaseTarget_, eye, target);
-    return StageNamePath::InFrontOfCamera(eye, target, stageNameBoardSettings_.holdDistance, stageNameBoardSettings_.holdAngle);
-  }
-  case StageStartPhase::Return: {
-    // 竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。竜が触れる時刻より前に着く
-    const float duration = std::min(stageNameBoardSettings_.arcSeconds, stageStartSettings_.breakSeconds);
-    const float u = duration > 0.0f ? stageStart_.GetReturnElapsedSeconds() / duration : 1.0f;
-    const float s = SmoothStep01(u);
+Vector3 GameScene::CalcStageNameFrontPosition_(const StageStartPose &pose) const {
+  // 俯瞰へ引く間は、引いていくカメラ(スタート位置のカメラに、今のずれを重ねたもの)の正面に、貼り付いたように付いてくる。
+  // 俯瞰を保つ間は、カメラが止まるので、ワールドの同じ位置に留まる
+  Vector3 eye{0.0f, 0.0f, 0.0f};
+  Vector3 target{0.0f, 0.0f, 1.0f};
+  StageStartMath::ApplyPose(pose, introBaseEye_, introBaseTarget_, eye, target);
+  return StageNamePath::InFrontOfCamera(eye, target, stageNameBoardSettings_.holdDistance, stageNameBoardSettings_.holdAngle);
+}
 
-    // 始点から終点への直線(弦)の上の点に、弧の高さを足す
-    const Vector3 chord = StageNamePath::ChordPoint(stageNameHoldPosition_, stageNameAnchor_, s);
-    float lift = StageNamePath::ArcLift(stageNameBoardSettings_.arcHeight, s);
+Vector3 GameScene::CalcStageNameArcPosition_(float returnElapsedSeconds) const {
+  // 竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。竜が触れる時刻より前に着く
+  const float duration = std::min(stageNameBoardSettings_.arcSeconds, stageStartSettings_.breakSeconds);
+  const float u = duration > 0.0f ? returnElapsedSeconds / duration : 1.0f;
+  const float s = SmoothStep01(u);
 
-    // 板の上端が画面の上端を超えないよう、持ち上げる高さを抑える。
-    // カメラは、戻る間に下がり、画角も変わるので、固定の高さでは画面の外へ出てしまう。
-    // 画面に映るカメラ(今のカメラに、今の俯瞰のずれを重ねたもの)で、毎フレーム確かめる
-    if (const auto *camera = GetMainCamera()) {
-      const StageStartPose pose = GetStageStartViewPose_();
-      Vector3 viewEye{0.0f, 0.0f, 0.0f};
-      Vector3 viewTarget{0.0f, 0.0f, 1.0f};
-      StageStartDirector::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), viewEye, viewTarget);
-      const float maxLift = StageNamePath::MaxLiftInView(chord, stageNameBoard_.HeightAboveImpact(stageNameBoardSettings_), viewEye,
-                                                         viewTarget, kGameCameraFovY * pose.fovScale, stageNameBoardSettings_.screenLimit);
-      lift = std::min(lift, maxLift);
-    }
-    return {chord.x, chord.y + lift, chord.z};
+  // 始点から終点への直線(弦)の上の点に、弧の高さを足す
+  const Vector3 chord = StageNamePath::ChordPoint(stageNameHoldPosition_, stageNameAnchor_, s);
+  float lift = StageNamePath::ArcLift(stageNameBoardSettings_.arcHeight, s);
+
+  // 板の上端が画面の上端を超えないよう、持ち上げる高さを抑える。
+  // カメラは、戻る間に下がり、画角も変わるので、固定の高さでは画面の外へ出てしまう。
+  // 画面に映るカメラ(今のカメラに、今の俯瞰のずれを重ねたもの)で、毎フレーム確かめる
+  if (const auto *camera = GetMainCamera()) {
+    const StageStartPose pose = GetStageStartViewPose_();
+    Vector3 viewEye{0.0f, 0.0f, 0.0f};
+    Vector3 viewTarget{0.0f, 0.0f, 1.0f};
+    StageStartMath::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), viewEye, viewTarget);
+    const float maxLift = StageNamePath::MaxLiftInView(chord, stageNameBoard_.HeightAboveImpact(stageNameBoardSettings_), viewEye,
+                                                       viewTarget, kGameCameraFovY * pose.fovScale, stageNameBoardSettings_.screenLimit);
+    lift = std::min(lift, maxLift);
   }
-  case StageStartPhase::Idle:
-  default:
-    return stageNameAnchor_;
-  }
+  return {chord.x, chord.y + lift, chord.z};
 }
 
 void GameScene::SetPlayerInputLocked_(bool locked) {
@@ -764,8 +755,7 @@ void GameScene::SetPlayerInputLocked_(bool locked) {
   }
 }
 
-void GameScene::FinishIntro_() {
-  introActive_ = false;
+void GameScene::FinishIntro() {
   if (auto *camera = GetMainCamera()) {
     camera->SetEye(introBaseEye_);
     camera->SetTarget(introBaseTarget_);
@@ -776,8 +766,7 @@ void GameScene::FinishIntro_() {
     playerObj_->SetRotation(introBasePlayerRotation_);
   }
 
-  // イントロが終わったら、ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)へ続ける。基準の位置は、いま戻したスタート位置
-  stageStart_.Begin(stageStartSettings_);
+  // このあと、IntroState が、俯瞰へ引く段階(PullBackState)へ進める。俯瞰のずれの基準は、いま戻したスタート位置
 
   // ステージ名の板を、自機が衝撃点を通る位置へ置く(割れ方の準備は、重いので、シーンを作るときに済ませてある)
   PlaceStageNameBoard_();
@@ -912,8 +901,7 @@ void GameScene::ResetRun_() {
   flow_.Start(std::make_unique<InProgressState>(), *this);
 
   // 開幕の演出(イントロ、スタート演出)の途中で止めたときに、次の Play で、世界が止まったままにならないようにする
-  introActive_ = false;
-  stageStart_ = StageStartDirector{};
+  opening_.Stop();
   worldStepAccumulator_ = 0.0f;
 
   // 死亡演出と、それに付いて動くもの(カメラ、雲の着地の反応、翅の破片)
@@ -965,7 +953,7 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
   // ボス撃破の演出中は、HP 1 の赤い枠などが演出の見栄えを損なうので、ポストエフェクトを止める(止めるかは、状態が決める)
   state.suppressAll = flow_.SuppressesPostEffects();
   // ステージ開始演出の加速(ブースト)の間、画面にブラーを掛ける。ブラーの中心は、画面の中心(自機のいる辺り)
-  state.speedBlur = stageStart_.GetBoost();
+  state.speedBlur = opening_.GetBoost();
   if (playerObj_) {
       if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
           state.hasPlayer     = true;
@@ -1171,7 +1159,7 @@ void GameScene::CheckSkipToBossShortcut_() {
     return;
   }
   // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
-  if (!flow_.IsAdvancingRoute() || stageStart_.IsActive()) {
+  if (!flow_.IsAdvancingRoute() || opening_.IsActive()) {
     return;
   }
   if (GetInput()->TriggerKey(kDebugSkipToBossKey)) {
@@ -1190,8 +1178,8 @@ void GameScene::UpdateExhibitionFlow_(float deltaTime) {
   if (!flow_.IsPlayable()) {
     return;
   }
-  // スタート演出の最中は数えない(終わってから数える)
-  if (stageStart_.IsActive()) {
+  // 開幕の演出の最中は数えない(終わってから数える)
+  if (opening_.IsActive()) {
     return;
   }
   exhibitionHoldTimer_ += deltaTime;
@@ -1210,7 +1198,7 @@ void GameScene::UpdateExhibitionFlow_(float deltaTime) {
 
 void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
   // 演出の最中は数えない。終了の要求を出している間も何もしない(二重に要求しない)
-  if (stageStart_.IsActive() || stageStartDemoReturnRequested_) {
+  if (opening_.IsActive() || stageStartDemoReturnRequested_) {
     return;
   }
   if (!flow_.IsPlayable()) {
@@ -1554,20 +1542,13 @@ void GameScene::Update() {
 
   playerObj_ = FindPlayerObject_();
 
-  // イントロ(画面遷移の覆いが晴れる間)は、世界の進行を止め、見た目だけの助走を動かす。
-  // 晴れ終わった(UpdateIntro_ が終了した)フレームから、通常の更新に入る
-  if (introActive_) {
-      UpdateIntro_(deltaTime);
-      if (introActive_) {
-          return;
-      }
-  }
-
-  // ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)。
-  // 俯瞰へ引く・保つ間は、世界の進行を止める。「戻る」段階からは、世界(レール・敵・自機)を動かすので、通常の更新へ進む
-  if (stageStart_.IsActive()) {
-      UpdateStageStart_(deltaTime);
-      if (stageStart_.IsActive() && !stageStart_.IsWorldRunning()) {
+  // 開幕の演出(イントロ -> 俯瞰へ引く -> 保つ -> 戻りながら板を突き破る)。段階の切り替えと、段階ごとの見た目は、状態クラスが決める。
+  // 世界が止まる段階(イントロ、俯瞰へ引く・保つ)では、自機のアニメーションだけを進めて、世界の更新はしない。
+  // 「戻る」段階からは、世界(レール・敵・自機)を動かすので、通常の更新へ進む(自機のアニメーションも、通常の更新が進める)
+  if (opening_.IsActive()) {
+      opening_.Update(*this, deltaTime);
+      if (opening_.IsActive() && !opening_.IsWorldRunning()) {
+          UpdatePlayerModelOnly_(deltaTime);
           return;
       }
   }
@@ -1711,9 +1692,9 @@ void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
   renderer->BeginRenderScene();
 
-  // ステージ開始演出の間は、俯瞰のカメラのずれを、描画の間だけ重ねる(この関数を抜けるとき、元のカメラへ戻る)。
-  // デバッグカメラで見ているときは、ずらさない
-  const ScopedStageStartCameraOffset stageStartView(stageStart_.IsActive() && !isDebugCamera_ ? GetMainCamera() : nullptr,
+  // 俯瞰へ引く・保つ・戻る段階の間は、俯瞰のカメラのずれを、描画の間だけ重ねる(この関数を抜けるとき、元のカメラへ戻る)。
+  // イントロはカメラを実際に動かすので、重ねない(重ねるかは、状態が答える)。デバッグカメラで見ているときは、ずらさない
+  const ScopedStageStartCameraOffset stageStartView(opening_.AppliesViewOffset() && !isDebugCamera_ ? GetMainCamera() : nullptr,
                                                     GetStageStartViewPose_());
 
   // 死亡演出のカメラ(蝶を中心にした回り込み・急降下)。描画の間だけ差し替える。デバッグカメラのときは、差し替えない
@@ -1855,7 +1836,7 @@ void GameScene::Draw() {
       if (const auto *camera = GetMainCamera()) {
           const Vector3 flowAxis = Normalize({introBaseTarget_.x - introBaseEye_.x, introBaseTarget_.y - introBaseEye_.y,
                                               introBaseTarget_.z - introBaseEye_.z});
-          speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, stageStart_.GetBoost(), speedStreakSettings_);
+          speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, opening_.GetBoost(), speedStreakSettings_);
           stageImpact_.DrawFlash(renderer, camera->GetEye(), camera->GetTarget());
           bossDefeatVisual_.DrawFlash(camera->GetEye(), camera->GetTarget());
       }
@@ -1895,10 +1876,10 @@ void GameScene::Draw() {
   }
   ParticleManager::GetInstance()->Draw(BlendMode::Alpha, false, ParticleDrawFilter::AfterCloudsOnly);
 
-  // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
-  // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない
+  // HUD等の2Dスプライト描画(開幕の演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない。
+  // 画面遷移の覆いが晴れる助走(イントロ)の間も、開幕の演出の一部なので、同じく出さない)
   // ボス撃破の演出の間(clearDirector_)も、出さない(演出の邪魔になるため。スコア、進行バー、レティクルのすべて)
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive() &&
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !opening_.IsActive() && !deathDirector_.IsActive() &&
       !clearDirector_.IsActive()) {
       // 雲は通常 EndRenderScene で描かれるため、先に描いた HUD が雲に隠れてしまう。
       // HUD を描く前に雲を合成しておく(GameOverBackdrop::ResolveClouds と同じ方法)。以降の 2D は、深度なしのパイプラインで描かれる

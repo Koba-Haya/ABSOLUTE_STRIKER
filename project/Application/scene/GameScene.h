@@ -32,7 +32,8 @@
 #include "ScoreTracker.h"
 #include "../result/RunStatsTracker.h"
 #include "../result/RunResult.h"
-#include "StageStartDirector.h"
+#include "opening/OpeningSequence.h"
+#include "opening/IOpeningActions.h"
 #include "StageNameBoard.h"
 #include "StageImpactEffects.h"
 #include "SpeedStreaks.h"
@@ -54,10 +55,10 @@ class ExhibitionHint;
 class GameData;
 class ExhibitionSession;
 
-// IGameFlowActions は private で継承する: ゲームの進行の状態クラス(gameflow/)へ渡す窓口を、このクラスが実装する。
-// private にしたので、窓口として渡せるのは GameScene 自身だけ(外から GameScene を IGameFlowActions として扱えない)。
+// IGameFlowActions / IOpeningActions は private で継承する: ゲームの進行の状態クラス(gameflow/)と、開幕の演出の状態クラス(opening/)へ渡す窓口を、
+// このクラスが実装する。private にしたので、窓口として渡せるのは GameScene 自身だけ(外から GameScene を窓口として扱えない)。
 // ボスの BossComponent が IBossActions を private で継承しているのと同じ形
-class GameScene final : public BaseScene, private IGameFlowActions {
+class GameScene final : public BaseScene, private IGameFlowActions, private IOpeningActions {
 public:
   // exhibition: 展示モードの状態(展示用の結果づくりで、状態が変わるので、const ではない。所有しない。シーンより長く生きること)
   // exhibitionHint: 展示モードの切り替えの案内(描画に使う。所有しない)
@@ -183,24 +184,30 @@ private:
   // 開発用: 出ているボスの誘導弾の玉を、ロックオン弾で撃つ(撃ち落としの確認用。4 キー)
   void ShootOrbsForDebug_();
   void UpdateHud_();
-  // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
-  // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する
+  // --- 開幕の演出(イントロ -> 俯瞰へ引く -> 保つ -> 戻りながら板を突き破る)。進み方は OpeningSequence と状態クラス(opening/)が決める ---
+  // 覆いの中で始まったときだけ、開幕の演出を始める。助走の基準になる位置(カメラ・自機)をここで記録する
   void BeginIntro_();
+
+  // --- 開幕の演出の状態クラスへの窓口(IOpeningActions の実装。意味は IOpeningActions.h を参照) ---
+  bool IsTransitionRevealing() const override;
   // 覆いが晴れる進み具合に合わせて、カメラと自機を進行方向の後ろから進め、画角を落ち着かせる。
   // レール進行・敵・当たり判定は更新しない(晴れ終わるまで、ゲームの進行度は動かない)
-  void UpdateIntro_(float deltaTime);
-  // イントロを終える。カメラと自機を、基準の位置と画角へ正確に戻す
-  void FinishIntro_();
-  // --- ステージ開始演出(イントロのあと、プレイが始まるまで。俯瞰へ引き、戻りながら自機がステージ名の板を突き破る) ---
-  // 時間を進め、ステージ名の板の出し入れ、板を割る時刻の判定、操作のロック解除を行う。
-  // カメラの俯瞰のずれは、ここでは変えない(描画の間だけ Draw が重ねる)。
-  // 俯瞰へ引く・保つ間(世界は止まる)の自機のアニメーションも、ここで進める
-  void UpdateStageStart_(float deltaTime);
+  void ApplyIntroPose() override;
+  // カメラと自機を、基準の位置と画角へ正確に戻し、ステージ名の板を置き、板を割るまで操作をロックする
+  void FinishIntro() override;
+  void ShowStageNameInFrontOfView(const StageStartPose &pose, float alpha) override;
+  void MoveStageNameAlongArc(float returnElapsedSeconds, float alpha) override;
+  void BreakStageName() override;
+  void FinishOpening() override;
+
   // ステージ名の板の通り道を決め、最初の位置へ置く。
   // 通り道: 俯瞰のカメラの正面(画面の上寄り) -> 竜の上を弧を描いて飛び越える -> 竜が板を割る時刻に通る、レール上の位置の前
   void PlaceStageNameBoard_();
-  // 今の段階での、板の衝撃点の位置(ワールド)。俯瞰へ引く・保つ間はカメラの正面、戻る間は弧の上、着いたあとは竜の前
-  Vector3 CalcStageNamePosition_() const;
+  // 俯瞰へ引く・保つ段階の、板の衝撃点の位置(ワールド)。スタート位置のカメラに pose のずれを重ねたカメラの正面(画面の上寄り)
+  Vector3 CalcStageNameFrontPosition_(const StageStartPose &pose) const;
+  // 戻る段階の、板の衝撃点の位置(ワールド)。竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。
+  // returnElapsedSeconds: 戻る段階の始まりからの経過(秒)
+  Vector3 CalcStageNameArcPosition_(float returnElapsedSeconds) const;
   // レールカメラのコンポーネントを探す(無ければ nullptr)
   RailCameraComponent *FindRailCamera_() const;
   // ブースト量(0 〜 1)から、世界の速さの倍率(1 以上)を求める
@@ -270,16 +277,17 @@ private:
 
   float time_ = 0.0f;
 
-  // イントロの状態
-  bool introActive_ = false;
+  // 開幕の演出の進行(イントロ、俯瞰へ引く、保つ、戻る)。演出をしていないときは IsActive が false
+  OpeningSequence opening_;
+
+  // イントロの基準(スタート位置)
   Vector3 introBaseEye_{0.0f, 0.0f, 0.0f};    // 助走の基準(スタート位置)のカメラの位置
   Vector3 introBaseTarget_{0.0f, 0.0f, 1.0f}; // 同じく注視点
   Vector3 introBasePlayerPosition_{0.0f, 0.0f, 0.0f};
   Vector3 introBasePlayerRotation_{0.0f, 0.0f, 0.0f}; // 助走の基準の、自機の向き(昇りの機首上げの前の値)
   float introRailSpeed_ = 0.0f;               // 助走の速さに使う、レールの進む速さ
 
-  // ステージ開始演出の状態。カメラの基準は、上のイントロの基準(introBaseEye_ など)と共通
-  StageStartDirector stageStart_;
+  // ステージ開始演出の設定と、ステージ名の板。カメラの基準は、上のイントロの基準(introBaseEye_ など)と共通
   StageStartSettings stageStartSettings_; // このステージの設定(ステージが増えたら、ステージごとの値へ差し替える)
   StageNameBoard stageNameBoard_;          // ステージ名の板(俯瞰の間、自機の前に出す)
   StageNameStyle stageNameStyle_ = StageNameStyle::Clouds; // ステージ名の見せ方(ステージごとの素材へ差し替える)
