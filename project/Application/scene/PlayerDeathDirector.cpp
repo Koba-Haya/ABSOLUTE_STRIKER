@@ -1,13 +1,14 @@
 #include "PlayerDeathDirector.h"
+#include "death/DeathCoverPhase.h"
+#include "death/DeathHitStopPhase.h"
+#include "death/DeathPhaseMath.h"
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace {
-// 0 〜 1 の値を、なめらかに(両端でゆっくり)変える
-float SmoothStep(float t) {
-  t = std::clamp(t, 0.0f, 1.0f);
-  return t * t * (3.0f - 2.0f * t);
-}
+// 演出が始まっていないときの、世界の時間の速さ(通常)
+constexpr float kNormalTimeScale = 1.0f;
 } // namespace
 
 void PlayerDeathDirector::Begin(const PlayerDeathSettings& settings, const PlayerDeathStart& start) {
@@ -15,20 +16,18 @@ void PlayerDeathDirector::Begin(const PlayerDeathSettings& settings, const Playe
   settings_ = settings;
   start_ = start;
   elapsed_ = 0.0f;
-  coverStartPending_ = false;
-  crumbleStartPending_ = false;
-  EnterPhase_(PlayerDeathPhase::HitStop);
+  signals_ = DeathPhaseSignals{};
+  ChangeTo_(std::make_unique<DeathHitStopPhase>(0.0f));
 }
 
 void PlayerDeathDirector::Reset() {
-  phase_ = PlayerDeathPhase::Idle;
+  phase_.reset();
   elapsed_ = 0.0f;
-  phaseElapsed_ = 0.0f;
-  coverStartPending_ = false;
-  crumbleStartPending_ = false;
+  signals_ = DeathPhaseSignals{};
 }
 
 float PlayerDeathDirector::GetPhaseEndTime(PlayerDeathPhase phase) const {
+  // 外(死亡カメラのキーフレーム)が、段階の終わる時刻を、設定の表から前もって求めるための計算(今の段階には関係しない)
   float end = settings_.hitStopSeconds;
   if (phase == PlayerDeathPhase::HitStop) return end;
   end += settings_.crumbleSeconds;
@@ -38,20 +37,10 @@ float PlayerDeathDirector::GetPhaseEndTime(PlayerDeathPhase phase) const {
   return end + settings_.impactSeconds;
 }
 
-void PlayerDeathDirector::EnterPhase_(PlayerDeathPhase phase) {
-  phase_ = phase;
-  phaseElapsed_ = 0.0f;
-  if (phase == PlayerDeathPhase::Crumble) crumbleStartPending_ = true;
-  if (phase == PlayerDeathPhase::Cover) coverStartPending_ = true;
-}
-
-float PlayerDeathDirector::PhaseLength_(PlayerDeathPhase phase) const {
-  switch (phase) {
-  case PlayerDeathPhase::HitStop: return settings_.hitStopSeconds;
-  case PlayerDeathPhase::Crumble: return settings_.crumbleSeconds;
-  case PlayerDeathPhase::Fall: return settings_.fallSeconds;
-  case PlayerDeathPhase::Impact: return settings_.impactSeconds;
-  default: return 0.0f; // Idle / Cover は、時間で終わらない
+void PlayerDeathDirector::ChangeTo_(std::unique_ptr<IDeathPhase> next) {
+  phase_ = std::move(next);
+  if (phase_) {
+    phase_->Enter(signals_);
   }
 }
 
@@ -60,45 +49,29 @@ void PlayerDeathDirector::Update(float deltaTime, bool canSkip, bool skipRequest
 
   elapsed_ += deltaTime;
 
-  // スキップ: 猶予を過ぎていれば、Cover(遷移を要求する段階)へ直接飛ぶ
-  if (canSkip && skipRequested && elapsed_ >= settings_.skipGuardSeconds && phase_ != PlayerDeathPhase::Cover) {
-    // 途中の段階を飛ばしても、崩壊の開始の合図は 1 回出す(自機をきりもみへ切り替えるため)
-    if (phase_ == PlayerDeathPhase::HitStop) crumbleStartPending_ = true;
-    EnterPhase_(PlayerDeathPhase::Cover);
+  // スキップ: 猶予を過ぎていれば、画面を覆う段階(遷移を要求する段階)へ直接飛ぶ。受け付けるかは、今の段階が答える。
+  // 飛ばされる段階が、飛ばしても出すべき合図を立てる(ヒットストップなら、崩壊の始まり)
+  if (canSkip && skipRequested && elapsed_ >= settings_.skipGuardSeconds && phase_->CanSkip()) {
+    phase_->OnSkipped(signals_);
+    ChangeTo_(std::make_unique<DeathCoverPhase>());
     return;
   }
 
-  phaseElapsed_ += deltaTime;
-
-  // 時間で終わるサブフェーズを、順に進める(1 フレームで複数を越えても、余りを次へ持ち越す)
-  while (phase_ != PlayerDeathPhase::Cover) {
-    const float length = PhaseLength_(phase_);
-    if (phaseElapsed_ < length) break;
-    phaseElapsed_ -= length;
-    switch (phase_) {
-    case PlayerDeathPhase::HitStop: EnterPhase_(PlayerDeathPhase::Crumble); break;
-    case PlayerDeathPhase::Crumble: EnterPhase_(PlayerDeathPhase::Fall); break;
-    case PlayerDeathPhase::Fall: EnterPhase_(PlayerDeathPhase::Impact); break;
-    case PlayerDeathPhase::Impact: EnterPhase_(PlayerDeathPhase::Cover); break;
-    default: return;
-    }
+  // 今の段階の時間を進める。次の段階が返されたら切り替え、切り替えた段階を時間 0 でもう一度進める
+  // (1 フレームで複数の段階を越えても、余りを次へ持ち越す)
+  std::unique_ptr<IDeathPhase> next = phase_->Advance(settings_, deltaTime);
+  for (int i = 0; next && i < kMaxTransitionsPerFrame; ++i) {
+    ChangeTo_(std::move(next));
+    next = phase_->Advance(settings_, 0.0f);
   }
 }
 
 float PlayerDeathDirector::GetPhaseProgress() const {
-  if (phase_ == PlayerDeathPhase::Idle) return 0.0f;
-  if (phase_ == PlayerDeathPhase::Cover) return 1.0f;
-  const float length = PhaseLength_(phase_);
-  return length > 0.0f ? std::clamp(phaseElapsed_ / length, 0.0f, 1.0f) : 1.0f;
+  return phase_ ? phase_->GetProgress(settings_) : 0.0f;
 }
 
 float PlayerDeathDirector::GetWorldTimeScale() const {
-  if (!IsActive()) return 1.0f;
-  if (phase_ == PlayerDeathPhase::HitStop) return 0.0f;
-  // ヒットストップが終わってから、スローモーションの速さへ、なめらかに移る
-  const float sinceStop = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
-  const float ramp = settings_.slowMotionRampSeconds > 0.0f ? sinceStop / settings_.slowMotionRampSeconds : 1.0f;
-  return settings_.slowMotionScale * SmoothStep(ramp);
+  return phase_ ? phase_->GetWorldTimeScale(settings_, elapsed_) : kNormalTimeScale;
 }
 
 PlayerDeathPose PlayerDeathDirector::GetPlayerPose() const {
@@ -123,7 +96,7 @@ PlayerDeathPose PlayerDeathDirector::GetPlayerPose() const {
                    start_.position.z + start_.forward.z * forwardDistance};
 
   // 機首が、だんだん下を向く(Transform の x まわりの正の回転が、機首を下げる向き)
-  const float nose = settings_.noseDropSeconds > 0.0f ? SmoothStep(t / settings_.noseDropSeconds) : 1.0f;
+  const float nose = settings_.noseDropSeconds > 0.0f ? DeathPhaseMath::SmoothStep(t / settings_.noseDropSeconds) : 1.0f;
   pose.rotate.x += settings_.noseDropRadians * nose;
   return pose;
 }
@@ -169,14 +142,14 @@ float PlayerDeathDirector::FallSpeed_(float t) const {
 }
 
 float PlayerDeathDirector::GetCrumbleProgress() const {
-  if (!IsActive() || phase_ == PlayerDeathPhase::HitStop) return 0.0f;
+  if (!HasCrumbleBegun_()) return 0.0f; // 始まっていない、またはヒットストップの間
   const float t = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
   return std::clamp(t / LandingTime_(), 0.0f, 1.0f);
 }
 
 PlayerDeathDissolve PlayerDeathDirector::GetDissolve() const {
   PlayerDeathDissolve dissolve;
-  if (!IsActive() || phase_ == PlayerDeathPhase::HitStop) return dissolve;
+  if (!HasCrumbleBegun_()) return dissolve; // 始まっていない、またはヒットストップの間は無効
 
   // ディゾルブの進み具合: 崩壊の始まりから、着地のあと kDissolveTailSeconds 秒後まで(胴は着地まで残り、沈みながら消える)
   const float t = std::max(0.0f, elapsed_ - settings_.hitStopSeconds);
@@ -192,13 +165,13 @@ PlayerDeathDissolve PlayerDeathDirector::GetDissolve() const {
 }
 
 bool PlayerDeathDirector::ConsumeCoverStart() {
-  const bool pending = coverStartPending_;
-  coverStartPending_ = false;
+  const bool pending = signals_.coverStarted;
+  signals_.coverStarted = false;
   return pending;
 }
 
 bool PlayerDeathDirector::ConsumeCrumbleStart() {
-  const bool pending = crumbleStartPending_;
-  crumbleStartPending_ = false;
+  const bool pending = signals_.crumbleStarted;
+  signals_.crumbleStarted = false;
   return pending;
 }
