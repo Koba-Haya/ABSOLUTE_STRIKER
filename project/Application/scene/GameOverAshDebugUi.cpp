@@ -59,11 +59,11 @@ void Draw(GameOverAsh &ash) {
 
   ImGui::SeparatorText("State");
   ImGui::Text("Phase: %s  Gather progress: %.2f", PhaseName(ash.GetPhase()), ash.GetGatherProgress());
-  if (ImGui::Button("Drifting")) ash.SetPhase(GameOverAshPhase::Drifting);
+  if (ImGui::Button("Drifting")) ash.SetPhaseForDebug(GameOverAshPhase::Drifting);
   ImGui::SameLine();
-  if (ImGui::Button("Gathering")) ash.SetPhase(GameOverAshPhase::Gathering);
+  if (ImGui::Button("Gathering")) ash.SetPhaseForDebug(GameOverAshPhase::Gathering);
   ImGui::SameLine();
-  if (ImGui::Button("Glowing")) ash.SetPhase(GameOverAshPhase::Glowing);
+  if (ImGui::Button("Glowing")) ash.SetPhaseForDebug(GameOverAshPhase::Glowing);
   ImGui::SameLine();
   if (ImGui::Button("Auto")) ash.ClearPhaseOverride();
   // 値は ash が持つ(画面をまたいで残る static を持たない)

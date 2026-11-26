@@ -3,16 +3,20 @@
 #include "ScaleDust.h"
 #include "Vector.h"
 #include "graphics/particle/GPUParticle.h"
+#include "ash/AshDriftingState.h"
+#include "ash/GameOverAshPhase.h"
+#include "ash/IAshState.h"
+#include <memory>
 
 // ゲームオーバー画面の灰(鱗粉)の流れ: 雲の中を漂い、巣の島へ集まり、橙の小さな光(熾火の核)が灯る。
 // 不死鳥が灰から復活する場面を参考にした演出で、死亡の崩壊(PlayerDeathDust)が散らした灰の続き。
 //
-// 状態(GameOverAshPhase):
-//   Drifting  : 漂い。カメラの前方の広い範囲に、灰がゆっくり漂う
-//   Gathering : 集まり。巣へ向かう収束(ばね)と渦で、灰が巣へ集まり、核が少しずつ強くなる
-//   Glowing   : 灯り。灰は巣のまわりを回り、核がゆっくり脈打つ
-// 状態は、ゲームオーバー画面の時間(降下が始まってからの秒)で自動で進む。外から SetPhase で指示してもよい
-// (リトライの復活の演出が、この状態を進める)。
+// 段階(State パターン。段階の状態クラスは ash/ にある。基底は IAshState):
+//   AshDriftingState  : 漂い。カメラの前方の広い範囲に、灰がゆっくり漂う
+//   AshGatheringState : 集まり。巣へ向かう収束(ばね)と渦で、灰が巣へ集まり、核が少しずつ強くなる
+//   AshGlowingState   : 灯り。灰は巣のまわりを回り、核がゆっくり脈打つ
+// 段階は、ゲームオーバー画面の時間(降下が始まってからの秒)で自動で進む。次の段階は、段階のクラス自身が決める。
+// リトライの復活の演出は、RequestGather で「集まり始めて」と頼む(受けるかは、今の段階が決める)。
 //
 // クラスを分けた理由: ScaleDust は「粒の発生源と動き」だけ、EmberCore は「核の光」だけを持つ。このクラスは、
 // ゲームオーバー画面の台本(いつ、どこへ、どれだけ)を決めて、その 2 つへ指示を出す役目。画面(GameOverScene)には何も書き込まない。
@@ -48,12 +52,6 @@ struct GameOverAshGroundBlast {
   float sizeMax = 0.25f;
   Vector3 startColor{0.50f, 0.38f, 0.26f};   // 土の色
   Vector3 endColor{0.40f, 0.38f, 0.36f};     // 灰の色
-};
-
-enum class GameOverAshPhase {
-  Drifting,
-  Gathering,
-  Glowing,
 };
 
 namespace GameOverAshDefaults {
@@ -133,14 +131,22 @@ public:
   // 外から状態を指示していない間は、この秒で状態が自動で進む
   void Update(float deltaTime, float settledSeconds);
 
-  // --- 外から状態を進めるための口(復活の演出が使う) ---
+  // --- 外から段階を進めるための口(復活の演出が使う) ---
 
-  // 状態を指示する。以後、自動で漂い -> 集まり へは進まない(集まりが終われば灯りへは進む)。
+  // 「集まり始めて」と頼む。漂っているときだけ受けて、集まりの最初から始める(すでに集まっている・灯っているときは何もしない)。
+  // 受けたら、以後、降下の時間による自動の行き来(漂い <-> 集まり)をしない(集まりが終われば灯りへは進む)
+  void RequestGather();
+
+  // --- デバッグ用(調整画面) ---
+
+  // 段階を直接指定する(段階の順番を無視できる、確認専用の入口)。以後、自動の行き来をしない。
   // Gathering は集まりの最初から、Glowing は集まりきった状態から始まる
-  void SetPhase(GameOverAshPhase phase);
+  void SetPhaseForDebug(GameOverAshPhase phase);
   // 自動の進行へ戻す(指示を解く)
   void ClearPhaseOverride();
-  GameOverAshPhase GetPhase() const { return phase_; }
+
+  // 今の段階の名札(表示用)
+  GameOverAshPhase GetPhase() const { return state_->GetPhase(); }
   // 集まりの進み(0 〜 1。Glowing は 1)
   float GetGatherProgress() const;
   // 集まりが進む速さの倍率(1 で通常。上げると、早く集まりきる)
@@ -184,14 +190,19 @@ public:
 private:
   // 今のカメラ(Renderer が持つ)から、目の位置と前方の向きを得る
   void GetCamera_(Vector3& eye, Vector3& forward) const;
-  void EnterPhase_(GameOverAshPhase phase);
+  // 集まりきるまでの長さ(秒。0 で割らない下限を当てた値)
+  float GatherLength_() const;
+  // 段階を 1 フレーム進める。段階が次を返したら切り替え、切り替えた段階を、集まりの時間 0 でもう一度進める
+  void UpdateState_(float deltaTime, float settledSeconds);
+
+  // 1 フレームに切り替える回数の上限(段階の数。万一の無限ループを防ぐ)
+  static constexpr int kMaxTransitionsPerFrame = 3;
 
   GameOverAshSettings settings_;
   ScaleDust dust_;
   EmberCore core_;
   Vector3 nestCenter_{0.0f, 0.0f, 0.0f};
-  GameOverAshPhase phase_ = GameOverAshPhase::Drifting;
-  float gatherClock_ = 0.0f;        // 集まりが始まってからの秒(速さの倍率が掛かる)
+  std::unique_ptr<IAshState> state_ = std::make_unique<AshDriftingState>(); // 今の段階(最初は漂い)
   float gatherSpeedScale_ = 1.0f;
   float coreBoost_ = 0.0f;
   Vector3 followPosition_{0.0f, 0.0f, 0.0f}; // 核の追従先(SetCoreFollow)
@@ -205,7 +216,7 @@ private:
   int groundStage_ = 0;                       // 0 = なし、1 = 次の Update を待つ、2 = 次の Update で出す
   float coreSizeScale_ = 1.0f;                // 核の大きさの倍率
   float convergeScale_ = 1.0f;                // 灰の収束の強さの倍率
-  bool phaseOverridden_ = false;    // 外から状態を指示されている間 true(自動で漂いから集まりへ進まない)
+  bool phaseOverridden_ = false;    // 外から段階を頼まれた・指示された間 true(降下の時間で、自動で漂いと集まりを行き来しない)
   float glowTime_ = 0.0f;           // ちらつきの時刻(秒)
   float gatherEase_ = 0.0f;         // 集まりの進み(なめらか。0 〜 1)。熱を帯びる量に使う
   uint32_t frameCount_ = 0;         // Initialize からのフレーム数(最初の数フレームの粒の全消去に使う)

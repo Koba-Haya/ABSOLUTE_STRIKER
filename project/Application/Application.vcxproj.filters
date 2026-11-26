@@ -141,6 +141,9 @@
     <ClCompile Include="scene\PlayerDeathDust.cpp" />
     <ClCompile Include="scene\ScaleDustDebugUi.cpp" />
     <ClCompile Include="scene\EmberCore.cpp" />
+    <ClCompile Include="scene\ash\AshDriftingState.cpp" />
+    <ClCompile Include="scene\ash\AshGatheringState.cpp" />
+    <ClCompile Include="scene\ash\AshGlowingState.cpp" />
     <ClCompile Include="scene\GameOverAsh.cpp" />
     <ClCompile Include="scene\GameOverAshDebugUi.cpp" />
     <ClCompile Include="scene\DeathCameraDirector.cpp" />
@@ -338,6 +341,11 @@
     <ClInclude Include="scene\ScaleDustDebugUi.h" />
     <ClInclude Include="scene\EmberCore.h" />
     <ClInclude Include="scene\GameOverAsh.h" />
+    <ClInclude Include="scene\ash\GameOverAshPhase.h" />
+    <ClInclude Include="scene\ash\IAshState.h" />
+    <ClInclude Include="scene\ash\AshDriftingState.h" />
+    <ClInclude Include="scene\ash\AshGatheringState.h" />
+    <ClInclude Include="scene\ash\AshGlowingState.h" />
     <ClInclude Include="scene\GameOverAshDebugUi.h" />
     <ClInclude Include="scene\DeathCameraDirector.h" />
     <ClInclude Include="scene\ScopedCameraOverride.h" />
