@@ -221,6 +221,11 @@
     <ClCompile Include="item\ItemSystem.cpp" />
     <ClCompile Include="item\PlayerUpgradeState.cpp" />
     <ClCompile Include="actor\Enemy\TelegraphComponent.cpp" />
+    <ClCompile Include="scene\gameflow\GameFlow.cpp" />
+    <ClCompile Include="scene\gameflow\InProgressState.cpp" />
+    <ClCompile Include="scene\gameflow\BossBattleState.cpp" />
+    <ClCompile Include="scene\gameflow\DyingState.cpp" />
+    <ClCompile Include="scene\gameflow\ClearingState.cpp" />
     <ClCompile Include="actor\Enemy\MuzzleOrbGlow.cpp" />
     <ClCompile Include="actor\Enemy\BodyTintGlow.cpp" />
     <ClCompile Include="actor\Enemy\RamAttackComponent.cpp" />
@@ -480,6 +485,14 @@
     <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />
     <ClInclude Include="scene\GameScene.h" />
+    <ClInclude Include="scene\gameflow\IGameFlowActions.h" />
+    <ClInclude Include="scene\gameflow\IGameFlowState.h" />
+    <ClInclude Include="scene\gameflow\GameFlow.h" />
+    <ClInclude Include="scene\gameflow\InProgressState.h" />
+    <ClInclude Include="scene\gameflow\BossBattleState.h" />
+    <ClInclude Include="scene\gameflow\DyingState.h" />
+    <ClInclude Include="scene\gameflow\ClearingState.h" />
+    <ClInclude Include="scene\gameflow\LeavingState.h" />
     <ClInclude Include="scene\SceneFactory.h" />
     <ClInclude Include="scene\SceneTransitionTable.h" />
     <ClInclude Include="scene\SceneIds.h" />

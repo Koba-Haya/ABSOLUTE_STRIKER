@@ -376,17 +376,6 @@ void PlayerComponent::FireNormalBullet_(const Vector3& muzzlePos) {
   spawner_.Spawn(BulletFactory::CreatePlayerNormal(spec));
 }
 
-void PlayerComponent::Revive() {
-  hp_ = maxHp_;
-  dying_ = false;
-  dodgeTimer_ = 0.0f;
-  animator_.Reset();
-  if (GetOwner()) {
-      if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
-          model->PlayAnimation(PlayerAnimation::kFlap, true);
-      }
-  }
-}
 
 void PlayerComponent::SetMaxHp(int maxHp) {
   maxHp = (std::max)(maxHp, 1);

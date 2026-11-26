@@ -64,16 +64,21 @@ void BossExplosion::Initialize(const char *modelPath) {
   flash_.Initialize(BossExplosionDefaults::kFlashModelPath);
 }
 
-void BossExplosion::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, const BossCrackShape &crackShape,
-                          const BossExplosionSettings &settings) {
-  shell_ = std::move(shell);
-  crackShape_ = crackShape;
-  settings_ = settings;
+void BossExplosion::Reset() {
+  shell_.reset();
   coreAlpha_ = 0.0f;
   haloAlpha_ = 0.0f;
   shockwaveAlpha_.fill(0.0f);
   flashFired_ = false;
   phase_ = 0.0f;
+}
+
+void BossExplosion::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, const BossCrackShape &crackShape,
+                          const BossExplosionSettings &settings) {
+  Reset(); // 濃さ、フラッシュ、位相を、前の演出から持ち越さない
+  shell_ = std::move(shell);
+  crackShape_ = crackShape;
+  settings_ = settings;
   // 変わらない見た目(縁の鋭さ、ハロの落ち方、リングの細さと中心の色)は、ここで 1 回だけ設定する。濃さと大きさは、毎フレーム変える
   if (ready_) {
     core_.SetShininess(settings_.rimPower);

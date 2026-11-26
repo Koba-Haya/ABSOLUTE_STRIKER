@@ -130,6 +130,10 @@ public:
   // 粒に掛けた力(溜める力、解き放つ力)を外す。シーンの終わりに呼ぶ(力は、GPU パーティクルの共有の枠なので、次のシーンに残さない)
   void Shutdown();
 
+  // 演出を、始まる前の状態へ戻す(IsActive が false になり、光線・爆破の球は描かれなくなる)。粒に掛けた力も外す。
+  // Begin の始めと、エディタの Stop(プレイの状態を最初へ戻すとき)に呼ぶ。Initialize で読み込んだモデルは残す
+  void Reset();
+
 private:
   // 爆破の球の中心(体の中心のワールド位置。体の動きに付いてくる)を求める。求められなければ false
   bool ComputeBurstCenter_(Vector3 &center) const;
