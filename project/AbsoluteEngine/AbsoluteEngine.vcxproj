@@ -190,7 +190,7 @@
     <ClCompile Include="scene\MainCameraView.cpp" />
     <ClCompile Include="scene\TimelineHost.cpp" />
     <ClCompile Include="scene\EditorSession.cpp" />
-    <ClCompile Include="scene\TimelineSpawnPreview.cpp" />
+    <ClCompile Include="scene\TimelineEventPreview.cpp" />
     <ClCompile Include="scene\SceneLights.cpp" />
     <ClCompile Include="scene\CollisionManager.cpp" />
     <ClCompile Include="scene\collision\SphereShape.cpp" />
@@ -209,6 +209,7 @@
     <!-- タイムラインシステム -->
     <ClCompile Include="scene\timeline\PrefabRegistry.cpp" />
     <ClCompile Include="scene\timeline\SpawnEvent.cpp" />
+    <ClCompile Include="scene\timeline\SpawnTimelineEvent.cpp" />
     <ClCompile Include="scene\timeline\RailSpawnPoint.cpp" />
     <ClCompile Include="scene\timeline\TimelineTrack.cpp" />
     <ClCompile Include="scene\timeline\TimelineManager.cpp" />
@@ -309,7 +310,7 @@
     <ClInclude Include="scene\TimelineHost.h" />
     <ClInclude Include="scene\EditorSession.h" />
     <ClInclude Include="scene\PlayMode.h" />
-    <ClInclude Include="scene\TimelineSpawnPreview.h" />
+    <ClInclude Include="scene\TimelineEventPreview.h" />
     <ClInclude Include="scene\SceneLights.h" />
     <ClInclude Include="scene\CollisionManager.h" />
     <ClInclude Include="scene\collision\CollisionShape.h" />
@@ -337,6 +338,7 @@
     <ClInclude Include="scene\timeline\ITimelineEvent.h" />
     <ClInclude Include="scene\timeline\PrefabRegistry.h" />
     <ClInclude Include="scene\timeline\SpawnEvent.h" />
+    <ClInclude Include="scene\timeline\SpawnTimelineEvent.h" />
     <ClInclude Include="scene\timeline\RailSpawnPoint.h" />
     <ClInclude Include="scene\timeline\TimelineFireContext.h" />
     <ClInclude Include="scene\timeline\TimelineEventFactory.h" />

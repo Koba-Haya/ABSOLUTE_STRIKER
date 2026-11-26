@@ -270,7 +270,7 @@
     <ClCompile Include="scene\EditorSession.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
-    <ClCompile Include="scene\TimelineSpawnPreview.cpp">
+    <ClCompile Include="scene\TimelineEventPreview.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
     <ClCompile Include="scene\SceneLights.cpp">
@@ -306,6 +306,9 @@
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
     <ClCompile Include="scene\timeline\SpawnEvent.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\SpawnTimelineEvent.cpp">
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
     <ClCompile Include="scene\timeline\RailSpawnPoint.cpp">
@@ -577,7 +580,7 @@
     <ClInclude Include="scene\PlayMode.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
-    <ClInclude Include="scene\TimelineSpawnPreview.h">
+    <ClInclude Include="scene\TimelineEventPreview.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\SceneLights.h">
@@ -638,6 +641,9 @@
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\SpawnEvent.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\SpawnTimelineEvent.h">
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\RailSpawnPoint.h">

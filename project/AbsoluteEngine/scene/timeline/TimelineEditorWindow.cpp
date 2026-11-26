@@ -471,7 +471,8 @@ void TimelineEditorWindow::DrawAddEventPopup() {
     if (!pendingEvent_ || selectedEventTypeIndex_ != prevTypeIndex) {
         pendingEvent_ = TimelineEventFactory::GetInstance().Create(eventTypeNames[static_cast<size_t>(selectedEventTypeIndex_)]);
         if (pendingEvent_) {
-            pendingEvent_->SetSpawnAnchorRail(manager_->ComputeSpawnAnchorRail());
+            // 既定の置き場所(カメラの前方)を伝える。使うかどうかは、イベントの種類が決める(エディタは種類を知らない)
+            pendingEvent_->OnCreatedInEditor(manager_->ComputeSpawnAnchorRail());
         }
     }
 
