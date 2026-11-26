@@ -2,6 +2,8 @@
 #include "GameOverAsh.h"
 
 #include "Method.h"
+#include "ash/AshGatheringState.h"
+#include "ash/AshGlowingState.h"
 #include "Renderer.h"
 #include "graphics/particle/GPUParticleManager.h"
 
@@ -51,8 +53,7 @@ void GameOverAsh::Initialize(const Vector3& nestCenter) {
   frameCount_ = 0;
   glowTime_ = 0.0f;
   gatherEase_ = 0.0f;
-  phase_ = GameOverAshPhase::Drifting;
-  gatherClock_ = 0.0f;
+  state_ = std::make_unique<AshDriftingState>();
   gatherSpeedScale_ = 1.0f;
   coreBoost_ = 0.0f;
   phaseOverridden_ = false;
@@ -73,27 +74,58 @@ void GameOverAsh::GetCamera_(Vector3& eye, Vector3& forward) const {
   forward = Normalize(Vector3{world.m[2][0], world.m[2][1], world.m[2][2]});
 }
 
-void GameOverAsh::EnterPhase_(GameOverAshPhase phase) {
-  phase_ = phase;
-  if (phase == GameOverAshPhase::Drifting) {
-    gatherClock_ = 0.0f;
-  } else if (phase == GameOverAshPhase::Gathering) {
-    gatherClock_ = 0.0f;
-  } else {
-    gatherClock_ = std::max(settings_.gatherSeconds, GameOverAshDefaults::kMinGatherSeconds);
+float GameOverAsh::GatherLength_() const {
+  return std::max(settings_.gatherSeconds, GameOverAshDefaults::kMinGatherSeconds);
+}
+
+void GameOverAsh::RequestGather() {
+  // 受けるかは、今の段階が決める(漂いだけが受ける)。受けたときだけ、自動の行き来を止める
+  std::unique_ptr<IAshState> next = state_->OnGatherRequested();
+  if (next) {
+    phaseOverridden_ = true;
+    state_ = std::move(next);
   }
 }
 
-void GameOverAsh::SetPhase(GameOverAshPhase phase) {
+void GameOverAsh::SetPhaseForDebug(GameOverAshPhase phase) {
+  // 確認専用の入口: 名札から段階を作る(段階の種類で分けるのは、ここだけ)
   phaseOverridden_ = true;
-  EnterPhase_(phase);
+  switch (phase) {
+  case GameOverAshPhase::Gathering:
+    state_ = std::make_unique<AshGatheringState>(0.0f); // 集まりの最初から
+    break;
+  case GameOverAshPhase::Glowing:
+    state_ = std::make_unique<AshGlowingState>(); // 集まりきった状態から
+    break;
+  case GameOverAshPhase::Drifting:
+  default:
+    state_ = std::make_unique<AshDriftingState>();
+    break;
+  }
 }
 
 void GameOverAsh::ClearPhaseOverride() { phaseOverridden_ = false; }
 
 float GameOverAsh::GetGatherProgress() const {
-  const float length = std::max(settings_.gatherSeconds, GameOverAshDefaults::kMinGatherSeconds);
-  return std::clamp(gatherClock_ / length, 0.0f, 1.0f);
+  return state_->GetGatherProgress(GatherLength_());
+}
+
+void GameOverAsh::UpdateState_(float deltaTime, float settledSeconds) {
+  AshStateContext context;
+  context.gatherDeltaSeconds = deltaTime * std::max(gatherSpeedScale_, 0.0f);
+  context.gatherLengthSeconds = GatherLength_();
+  context.settledSeconds = settledSeconds;
+  context.gatherStartSeconds = settings_.gatherStartSeconds;
+  context.autoAdvance = !phaseOverridden_;
+
+  // 切り替えた段階は、集まりの時間 0 でもう一度進める(このフレームの時間は、生成時に渡し済み)。
+  // 集まり始めたフレームに、集まりきって灯りへ進む場合も、以前と同じく同じフレームで進む
+  std::unique_ptr<IAshState> next = state_->Update(context);
+  context.gatherDeltaSeconds = 0.0f;
+  for (int i = 0; next && i < kMaxTransitionsPerFrame; ++i) {
+    state_ = std::move(next);
+    next = state_->Update(context);
+  }
 }
 
 void GameOverAsh::DrawGlow() {
@@ -119,23 +151,10 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
     GPUParticleManager::GetInstance()->ClearAllParticles();
   }
 
-  // 1. 状態の進行。外から指示されていなければ、降下が始まってからの秒で、漂いから集まりへ進む
-  if (!phaseOverridden_) {
-    // settledSeconds が 0 の間は、まだ降下が始まっていない(遷移が晴れきっていない)ので、開始時刻が 0 でも漂いのまま
-    if (settledSeconds <= 0.0f || settledSeconds < settings_.gatherStartSeconds) {
-      if (phase_ != GameOverAshPhase::Drifting) EnterPhase_(GameOverAshPhase::Drifting); // 降下のやり直しなど
-    } else if (phase_ == GameOverAshPhase::Drifting) {
-      EnterPhase_(GameOverAshPhase::Gathering);
-    }
-  }
-  if (phase_ != GameOverAshPhase::Drifting) {
-    gatherClock_ += deltaTime * std::max(gatherSpeedScale_, 0.0f);
-    if (phase_ == GameOverAshPhase::Gathering && GetGatherProgress() >= 1.0f) {
-      phase_ = GameOverAshPhase::Glowing;
-    }
-  }
-  const float gather = phase_ == GameOverAshPhase::Drifting ? 0.0f : Smooth(GetGatherProgress());
-  const bool glowing = phase_ == GameOverAshPhase::Glowing;
+  // 1. 段階の進行。次の段階は、段階のクラスが決める(降下の時間で漂いから集まりへ、集まりきったら灯りへ)
+  UpdateState_(deltaTime, settledSeconds);
+  const float gather = state_->IsConverging() ? Smooth(GetGatherProgress()) : 0.0f;
+  const bool glowing = state_->IsGlowing();
   gatherEase_ = gather;
   glowTime_ += deltaTime;
 
@@ -163,7 +182,7 @@ void GameOverAsh::Update(float deltaTime, float settledSeconds) {
 
   // 5. 核: 集まった量(集まりの進み)に応じて強くなり、灯りの間は脈打つ。外からの boost を足す
   const float coreProgress = Smooth((GetGatherProgress() - settings_.coreEaseStart) / std::max(1.0f - settings_.coreEaseStart, GameOverAshDefaults::kMinGatherSeconds));
-  const float intensity = (phase_ == GameOverAshPhase::Drifting ? 0.0f : settings_.coreIntensity * coreProgress) + coreBoost_;
+  const float intensity = (state_->IsConverging() ? settings_.coreIntensity * coreProgress : 0.0f) + coreBoost_;
   EmberCoreSettings coreLook = settings_.core;
   coreLook.size *= std::max(coreSizeScale_, 0.0f); // 溜めで光を圧縮する
   core_.SetSettings(coreLook);

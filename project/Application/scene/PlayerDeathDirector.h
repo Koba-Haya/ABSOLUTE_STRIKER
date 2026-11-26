@@ -2,7 +2,7 @@
 #include "Vector.h"
 
 // 自機の死亡演出(HP が 0 になってから、ゲームオーバー画面への遷移を要求するまで)の、時間の進行と自機の位置・向きを決めるクラス。
-// StageStartDirector と同じ作り: カメラ・自機・世界は直接動かさない。シーンが Update で時間を進め、
+// 開幕の演出(OpeningSequence)と同じ作り: カメラ・自機・世界は直接動かさない。シーンが Update で時間を進め、
 // 世界の時間の速さ(GetWorldTimeScale)と自機の位置・向き(GetPlayerPose)を受け取って反映する。
 //
 // 流れ(サブフェーズ。あとのステップの演出は、各サブフェーズに載せる):
@@ -13,83 +13,15 @@
 //   Cover   : 霧と水滴で覆う。ここで遷移を要求し、遷移の覆いが画面を覆う(遷移そのものは SceneManager が進める)。
 //             スキップは、ここへ直接飛ぶ
 // 実時間(1 フレームの長さ)で進める。世界だけを、GetWorldTimeScale でゆっくりにする。
+//
+// State パターン: 今の段階を、段階のクラス(death/ の DeathHitStopPhase など。基底は IDeathPhase)で 1 つ持つ。
+// 次の段階、段階の長さ、世界の時間の速さ、崩壊が始まっているか、スキップで出す合図は、段階のクラスが決める。
+// 自機の落下の動き・崩壊の進み具合・ディゾルブは、段階をまたいで続く時間の関数なので、このクラスが計算する。
+// GetPhase が返す PlayerDeathPhase は「今どの段階か」を外へ見せる名札で、このクラスの判断には使わない。
 
-// 演出の長さ・動きの設定。ステージごとに変わりうる値なので、コードに埋め込まず、まとめて持つ
-namespace PlayerDeathDefaults {
-// 各サブフェーズの長さ(秒)。Cover は、遷移の覆い(約 2 秒)が担うので、ここでは長さを持たない。
-// 全体: HitStop + Crumble + Fall + Impact + 遷移の覆い で、6 秒以内にする
-constexpr float kHitStopSeconds = 0.12f;
-constexpr float kCrumbleSeconds = 1.2f;
-constexpr float kFallSeconds = 1.8f;
-constexpr float kImpactSeconds = 0.6f;
-
-// ヒットストップのあとの、世界の時間の速さ(1 で通常、0 で停止)と、そこへ向かう時間(秒)
-constexpr float kSlowMotionScale = 0.3f;
-constexpr float kSlowMotionRampSeconds = 0.25f;
-
-// 蝶のディゾルブ(朽ちる)。マスク(butterfly_dissolve_mask.png)の値が、しきい値以下の所から消える。
-// マスクは、翅の外側ほど小さく、胴が最も大きい(0.95)ので、しきい値を 0 から終わりの値まで上げると、翅の外側から内側へ、最後に胴が朽ちる
-// しきい値は、崩壊の始まり(ヒットストップの終わり)から、着地を過ぎて kDissolveTailSeconds 秒後まで、線形に上げる。
-// 翅(マスク 0.10〜0.80)は着地の少し手前までに朽ち、胴(マスク 0.95)は着地まで残って、雲に沈みながら消える
-constexpr float kDissolveStartThreshold = 0.0f;   // 崩壊の始まり(何も消えない)
-constexpr float kDissolveEndThreshold = 1.0f;     // 崩壊の終わり(胴まで、すべて消える)
-constexpr float kDissolveTailSeconds = 0.6f;      // 着地のあと、しきい値が終わりの値へ届くまでの時間(秒)
-constexpr float kDissolveEdgeRange = 0.12f;       // 縁の光る帯の幅(しきい値の単位。熾火は灰 -> 赤 -> 橙と色が変わるので、やや広く取る)
-constexpr float kDissolveEdgeColorR = 1.00f;      // 縁の色(熾火の橙。帯の中で、外縁の灰と暗い赤へつながる)
-constexpr float kDissolveEdgeColorG = 0.42f;
-constexpr float kDissolveEdgeColorB = 0.08f;
-constexpr float kDissolveEmberAmount = 1.0f;      // 縁を熾火で光らせる強さ(0 で従来の「縁の色へ混ぜるだけ」)
-
-// デバッグ用: true の間、死亡の位置と向きを動かさない(蝶は、死んだ場所に留まって朽ちる)。
-// 崩壊(ディゾルブと破片)だけを、その場で見たいときに使う(通常は false。落下する)
-constexpr bool kDebugHoldPlayerPosition = false;
-
-// スキップを受け付け始めるまでの猶予(秒)。0 で、すぐ受け付ける
-constexpr float kSkipGuardSeconds = 0.5f;
-
-// 自機の落下の動き。前へ進む勢い(レールの速さに掛ける割合。時間とともに減る)、着地する高さ、機首が下がる量。
-// 落下は、「ヒットストップのあと、崩壊と落下の終わりに、雲の上面(kLandingHeight)へちょうど着く」ように、着く時刻から逆算する
-// (落ち始めはゆっくりで、だんだん速くなる放物線)。着いたあとは、その速さのまま、雲の中へ沈みながら減速する
-constexpr float kForwardSpeedScale = 0.8f;      // 死亡の瞬間の、前へ進む勢い(レールの速さの割合)
-constexpr float kForwardDecayPerSecond = 1.2f;  // 前へ進む勢いが減る速さ(1 秒あたりの指数的な減衰率)
-constexpr float kLandingHeight = -24.0f;        // 着地する高さ(ワールド y)。雲の上面。シーンが、雲の設定の値で上書きする
-constexpr float kSinkDecayPerSecond = 2.0f;     // 雲へ沈んだあと、沈む速さが減る速さ(1 秒あたりの減衰率)
-constexpr float kNoseDropRadians = 0.9f;        // 機首が下がる最大の角度(ラジアン)
-constexpr float kNoseDropSeconds = 1.5f;        // 機首が下がりきるまでの時間(秒)
-} // namespace PlayerDeathDefaults
-
-struct PlayerDeathSettings {
-  float hitStopSeconds = PlayerDeathDefaults::kHitStopSeconds;
-  float crumbleSeconds = PlayerDeathDefaults::kCrumbleSeconds;
-  float fallSeconds = PlayerDeathDefaults::kFallSeconds;
-  float impactSeconds = PlayerDeathDefaults::kImpactSeconds;
-  float dissolveStartThreshold = PlayerDeathDefaults::kDissolveStartThreshold;
-  float dissolveEndThreshold = PlayerDeathDefaults::kDissolveEndThreshold;
-  float dissolveTailSeconds = PlayerDeathDefaults::kDissolveTailSeconds;
-  float dissolveEdgeRange = PlayerDeathDefaults::kDissolveEdgeRange;
-  Vector3 dissolveEdgeColor{PlayerDeathDefaults::kDissolveEdgeColorR, PlayerDeathDefaults::kDissolveEdgeColorG,
-                            PlayerDeathDefaults::kDissolveEdgeColorB};
-  float dissolveEmberAmount = PlayerDeathDefaults::kDissolveEmberAmount;
-  bool debugHoldPlayerPosition = PlayerDeathDefaults::kDebugHoldPlayerPosition;
-  float slowMotionScale = PlayerDeathDefaults::kSlowMotionScale;
-  float slowMotionRampSeconds = PlayerDeathDefaults::kSlowMotionRampSeconds;
-  float skipGuardSeconds = PlayerDeathDefaults::kSkipGuardSeconds;
-  float forwardSpeedScale = PlayerDeathDefaults::kForwardSpeedScale;
-  float forwardDecayPerSecond = PlayerDeathDefaults::kForwardDecayPerSecond;
-  float landingHeight = PlayerDeathDefaults::kLandingHeight;
-  float sinkDecayPerSecond = PlayerDeathDefaults::kSinkDecayPerSecond;
-  float noseDropRadians = PlayerDeathDefaults::kNoseDropRadians;
-  float noseDropSeconds = PlayerDeathDefaults::kNoseDropSeconds;
-};
-
-enum class PlayerDeathPhase {
-  Idle,     // 始まっていない
-  HitStop,
-  Crumble,
-  Fall,
-  Impact,
-  Cover
-};
+#include "death/PlayerDeathTypes.h"
+#include "death/IDeathPhase.h"
+#include <memory>
 
 // 死亡の瞬間の自機の状態(位置・向き・進んでいた向きと速さ)。落下の動きの出発点になる
 struct PlayerDeathStart {
@@ -121,7 +53,7 @@ public:
   // 演出を始める(死亡の瞬間に 1 回呼ぶ)。すでに始まっていれば何もしない
   void Begin(const PlayerDeathSettings& settings, const PlayerDeathStart& start);
 
-  // 演出を最初の状態へ戻す(デバッグの蘇生)
+  // 演出を最初の状態へ戻す(エディタの Stop で、プレイの状態を最初へ戻すとき)
   void Reset();
 
   // 各サブフェーズが終わる時刻(Begin からの実時間。秒)。カメラのキーフレームの時刻に使う。Cover は、Impact の終わりと同じ
@@ -132,8 +64,9 @@ public:
   // 展示中は canSkip を false にして渡す
   void Update(float deltaTime, bool canSkip, bool skipRequested);
 
-  bool IsActive() const { return phase_ != PlayerDeathPhase::Idle; }
-  PlayerDeathPhase GetPhase() const { return phase_; }
+  bool IsActive() const { return phase_ != nullptr; }
+  // 今の段階の名札。始まっていなければ Idle
+  PlayerDeathPhase GetPhase() const { return phase_ ? phase_->GetPhase() : PlayerDeathPhase::Idle; }
   // Begin からの実時間の経過(秒)
   float GetElapsed() const { return elapsed_; }
   // 今のサブフェーズの中での進み具合(0 〜 1)。Cover は 1
@@ -163,18 +96,21 @@ public:
   bool ConsumeCrumbleStart();
 
 private:
-  void EnterPhase_(PlayerDeathPhase phase);
+  // next へ切り替え、Enter を呼ぶ(段階が立てた合図を受け取る)
+  void ChangeTo_(std::unique_ptr<IDeathPhase> next);
+  // 蝶の崩壊が始まっているか(演出の最中で、ヒットストップが終わっている)
+  bool HasCrumbleBegun_() const { return phase_ && phase_->HasCrumbleBegun(); }
   // 落下(ヒットストップのあとの時間 t での、落ちた距離と、落ちる速さ)
   float LandingTime_() const;
   float FallDistance_(float t) const;
   float FallSpeed_(float t) const;
-  float PhaseLength_(PlayerDeathPhase phase) const;
+
+  // 1 フレームに切り替える回数の上限(段階の数。段階は戻らないので、これを超えることはない。万一の無限ループを防ぐ)
+  static constexpr int kMaxTransitionsPerFrame = 5;
 
   PlayerDeathSettings settings_;
   PlayerDeathStart start_;
-  PlayerDeathPhase phase_ = PlayerDeathPhase::Idle;
-  float elapsed_ = 0.0f;      // Begin からの実時間
-  float phaseElapsed_ = 0.0f; // 今のサブフェーズに入ってからの実時間
-  bool coverStartPending_ = false;
-  bool crumbleStartPending_ = false;
+  std::unique_ptr<IDeathPhase> phase_; // 今の段階(始まっていなければ nullptr)
+  float elapsed_ = 0.0f;               // Begin からの実時間
+  DeathPhaseSignals signals_;          // 段階が立てた合図(崩壊の始まり、Cover に入った)。Consume で 1 回だけ外へ渡す
 };

@@ -79,20 +79,16 @@ private:
     void Stagger() override { hitRequested_ = true; }
     void ApplyBlastDamage(int damage) override;
     void SetShieldView(const BossShieldView& view) override { shieldView_ = view; }
-    void FinishShield(BossPhase nextPhase) override {
-        phase_ = nextPhase;
-        shieldActive_ = false;
-    }
+    void BeginShield(BossPhase nextPhase) override;
+    void FinishShield(BossPhase nextPhase) override { phase_ = nextPhase; }
 
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
 
-    // HP から、入るべきフェーズを求める。いまのフェーズより進むときは、すぐには進めず、シールドの状態を始める
+    // HP から、入るべきフェーズを求める。いまのフェーズより進むときは、すぐには進めず、今の状態へ「境目を切った」と伝える
+    // (シールドを張るかは、状態が決める。シールドが終わると、FinishShield がフェーズを進める)
     void UpdatePhase();
-    // 次のフェーズの境目で、シールドを始める。ボスの HP を、境目の値へ戻して(一度に境目を大きく越えた分を、無かったことにする)、
-    // シールドの状態を予約する。nextPhase: シールドが終わったときに進めるフェーズ
-    void StartShield_(BossPhase nextPhase);
     // 予約された状態があれば、今の状態を Exit して切り替え、Enter を呼ぶ。最初の 1 回は、待機の状態を作る
     void ApplyPendingState();
     // カメラ(=レール)の前方に留まりつつ左右上下にゆっくり揺れる。自機の位置には影響されない。
@@ -116,7 +112,6 @@ private:
 
     BossPhase phase_ = BossPhase::Phase1;
     float baseColliderRadius_ = -1.0f; // 当たり判定の元の半径(最初の UpdateColliderForShield_ で覚える。負なら、まだ)
-    bool shieldActive_ = false;  // シールドの最中か(始めてから、FinishShield まで)。この間は、フェーズの判定を止める
     BossShieldView shieldView_;  // シールドの今の状態(状態クラスが更新する)
 
     // 今の状態と、次に切り替える状態(切り替えは、状態の Update が終わったあとに行う)

@@ -32,12 +32,15 @@
 #include "ScoreTracker.h"
 #include "../result/RunStatsTracker.h"
 #include "../result/RunResult.h"
-#include "StageStartDirector.h"
+#include "opening/OpeningSequence.h"
+#include "opening/IOpeningActions.h"
 #include "StageNameBoard.h"
 #include "StageImpactEffects.h"
 #include "SpeedStreaks.h"
 #include "StageIslands.h"
 #include "IslandTurretSpawner.h"
+#include "gameflow/GameFlow.h"
+#include "gameflow/IGameFlowActions.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -48,20 +51,14 @@ struct BossModelSpec;
 class ModelResource;
 class TextureResource;
 
-enum class GamePhase {
-  InProgress,
-  Boss,
-  Dying,    // 自機の HP が 0 になって、死亡演出(PlayerDeathDirector)を進めている間
-  Clearing, // ボスを撃破して、撃破演出(ClearDirector)を進めている間
-  Clear,    // 撃破演出が Cover へ入り、クリアへの遷移を要求した(またはデバッグで直接要求した)
-  GameOver  // 死亡演出が Cover へ入り、ゲームオーバーへの遷移を要求した(または、クリア・ゲームオーバーの要求を出した)
-};
-
 class ExhibitionHint;
 class GameData;
 class ExhibitionSession;
 
-class GameScene final : public BaseScene {
+// IGameFlowActions / IOpeningActions は private で継承する: ゲームの進行の状態クラス(gameflow/)と、開幕の演出の状態クラス(opening/)へ渡す窓口を、
+// このクラスが実装する。private にしたので、窓口として渡せるのは GameScene 自身だけ(外から GameScene を窓口として扱えない)。
+// ボスの BossComponent が IBossActions を private で継承しているのと同じ形
+class GameScene final : public BaseScene, private IGameFlowActions, private IOpeningActions {
 public:
   // exhibition: 展示モードの状態(展示用の結果づくりで、状態が変わるので、const ではない。所有しない。シーンより長く生きること)
   // exhibitionHint: 展示モードの切り替えの案内(描画に使う。所有しない)
@@ -89,7 +86,8 @@ protected:
   const Camera* GetEditorViewCamera() const override;
 
   // エディタの Stop で、全オブジェクトが作り直されたあとに、自機へ実行時の設定をやり直す(基底の復元のあとに呼ばれる)。
-  // 作り直された自機は、JSON から作られるので、Initialize で行った見た目の設定(翼幅、照明、羽ばたきなど)や、強化の反映が失われているため
+  // 作り直された自機は、JSON から作られるので、Initialize で行った見た目の設定(翼幅、照明、羽ばたきなど)や、強化の反映が失われているため。
+  // あわせて、1 回のプレイの状態(進行、演出、スコア)を最初へ戻す(ResetRun_)
   void RestoreScene() override;
 
   // シーンJSON とタイムラインJSON のファイル名の元になる名前。遊ぶステージの定義(StageDefinition::dataName)から決める。
@@ -112,6 +110,11 @@ private:
   // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
   void RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
 
+  // 1 回のプレイの状態(ゲームの進行、開幕の演出、死亡演出と撃破演出、世界の時間の速さ、ポストエフェクト、スコアと成績、
+  // 展示の自動進行)を、最初へ戻す。エディタの Stop(RestoreScene)から呼ぶ。
+  // 戻さないもの: 強化(PlayerUpgradeState。RestoreScene が新しい自機へ反映し直す)と、撃破演出の始まりで保存したステージの解放(保存データ)
+  void ResetRun_();
+
   // --- Update の各段階 ---
   // プレイヤーの GameObject を探す（ロード時などでポインタが切り替わった場合に対応）
   std::shared_ptr<AbsoluteEngine::GameObject> FindPlayerObject_() const;
@@ -127,76 +130,84 @@ private:
   void UpdateMouseCapture_();
   // 寿命切れの爆発ライトと、プレイヤーより十分後方の敵を削除する
   void RemoveExpiredObjects_();
-  void SpawnBoss_();
-  // プレイヤー死亡 / ボス撃破でシーン遷移を要求する
-  void CheckGameEnd_();
+
+  // --- ゲームの進行の状態クラスへの窓口(IGameFlowActions の実装。意味は IGameFlowActions.h を参照) ---
+  bool IsPlayerDead() const override;
+  bool HasRouteReachedEnd() const override;
+  bool IsBossDefeated() const override;
+  void SpawnBoss() override;
+  // 死亡演出を始める(DyingState に入ったとき)。入力・発射・ロックオンを止め、演出クラスに、死亡の瞬間の自機の状態を渡す
+  void BeginDeathDirection() override;
+  bool ConsumeDeathCover() override;
+  // ボス撃破の演出を始める(ClearingState に入ったとき)。操作をロックして自機を無敵にし、演出クラスを始める。
+  // ボスは消さない(撃破演出が、ボスの姿を使う)
+  void BeginClearDirection() override;
+  bool ConsumeClearCover() override;
+  void RequestGameOverScene() override;
+  void RequestClearScene() override;
+
   // クリア / ゲームオーバーのシーンへの切り替えを要求する。遊んでいるステージの荷物(StageLaunchParams)をつけるので、
   // 次のシーンは、同じステージのリトライと、ステージ選択へ戻ったときの選択位置を決められる
   void RequestResultScene_(const std::string &sceneId);
-  // 死亡演出を始める(HP が 0 になったとき、または、デバッグのショートカットから)。入力・発射・ロックオンを止め、
-  // 演出クラスに、死亡の瞬間の自機の状態を渡す
-  void BeginDying_();
-  // 死亡演出を 1 フレーム進める(実時間)。スキップの入力、世界の時間の速さの反映、遷移の要求を行う
+  // 死亡演出を 1 フレーム進める(実時間)。スキップの入力と、世界の時間の速さの反映を行う。
+  // 画面が覆われたかの判定と、ゲームオーバーへの切り替えは、状態クラス(DyingState)が行う
   void UpdateDying_(float deltaTime);
   // 死亡演出が決めた位置・向きを、自機へ反映する
   void ApplyDeathPose_();
   // 演出(死亡演出、撃破演出)の間、飛んでいる弾(自機のも敵のも)をすべて消す。新しく出た弾も、描かれる前に消す(当たり判定も描画も止まる)
   void RemoveBulletsDuringCutscene_();
-  // ボス撃破の演出を始める(ボスの HP が 0 になったとき)。操作をロックして自機を無敵にし、演出クラスを始める。
-  // ボスは消さない(撃破演出が、ボスの姿を使う)
-  void BeginClearing_();
   // 撃破演出の、欠片のモデルのオブジェクトを作って、シーンへ足す(ボスと同じ位置・向き・大きさ)。戻り値は、作ったオブジェクト
   std::shared_ptr<AbsoluteEngine::GameObject> CreateBossShards_(const std::shared_ptr<AbsoluteEngine::GameObject>& boss,
                                                                  const BossModelSpec& bossSpec);
-  // 撃破演出を 1 フレーム進める(実時間)。スキップの入力、世界の時間の速さの反映、クリアへの遷移の要求を行う
+  // 撃破演出を 1 フレーム進める(実時間)。スキップの入力、世界の時間の速さの反映、ボスと次の島の見た目の更新を行う。
+  // 画面が覆われたかの判定と、クリアへの切り替えは、状態クラス(ClearingState)が行う
   void UpdateClearing_(float deltaTime);
   // 死亡演出の間、敵(Enemy / Boss。距離に関係なく全部)を描く大きさの倍率を返す(1 = 通常、0 = 描かない)。
   // 死亡の瞬間から短い時間で 1 -> 0 へ縮める。敵以外と、死亡演出でないときは 1。蝶の崩壊を見やすくするため
   float GetEnemyDrawScaleDuringDeath_(const AbsoluteEngine::GameObject& obj) const;
-  // デバッグ用: 死亡演出を中止して、蘇生する(Dying 中だけ。Cover で遷移を要求したあとは、できない)
-  void ReviveForDebug_();
-  void CheckDebugReviveShortcut_();
-  // 自機に致命傷を与える(デバッグのショートカットと、展示の自動死亡が使う。本物の死亡処理と同じ経路を通る)
-  void KillPlayer_();
   // 展示: スタート演出のあと、道中を飛ばしてボス戦へ入り、ボスをすぐ倒す(以降の撃破演出とクリア画面への遷移は、本番と同じ。操作は受け付けない)
   void UpdateExhibitionFlow_(float deltaTime);
   // スタート演出のデモ: 演出が終わってから一定時間後に、タイトルへ戻る遷移を要求する(操作は受け付けない)
   void UpdateStageStartDemoFlow_(float deltaTime);
-  // 開発用: プレイせずに、タイトル -> ゲーム -> クリア / ゲームオーバー -> タイトルの流れを確認するためのショートカット
-  void CheckDebugFlowShortcut_();
   // 開発用: 道中を飛ばして、ボス戦へ入るショートカット(撃破演出の確認や録画のため)
   void CheckSkipToBossShortcut_();
   // 道中を飛ばして、ボス戦へ入る(開発用のキー 8 と、展示モードの自動進行が使う)
   void SkipToBoss_();
   // 開発用: ボス戦の最中に、ボスを一撃で倒すショートカット(撃破演出の確認や録画のため)
   void CheckKillBossShortcut_();
-  // 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckDebugFlowShortcut_ と CheckKillBossShortcut_ と、展示の自動進行が使う)
+  // 場にいるボスの HP を 0 にする(本物の撃破の経路。CheckKillBossShortcut_ と、展示の自動進行が使う)
   void KillBossForDebug_();
   // 開発用: ボスの HP を、次のフェーズの境目まで減らす(シールドの確認用。6 キー)
   void DamageBossToNextPhaseForDebug_();
-  // 開発用: 自機の HP を 0 にする(死亡演出の確認用。5 キー)
+  // 開発用: 自機の HP を 0 にする(死亡演出の確認用。5 キーと、Death Director の調整窓のボタン)。本物の被弾と同じ経路を通る
   void KillPlayerForDebug_();
   // 開発用: 出ているボスの誘導弾の玉を、ロックオン弾で撃つ(撃ち落としの確認用。4 キー)
   void ShootOrbsForDebug_();
   void UpdateHud_();
-  // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
-  // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する
+  // --- 開幕の演出(イントロ -> 俯瞰へ引く -> 保つ -> 戻りながら板を突き破る)。進み方は OpeningSequence と状態クラス(opening/)が決める ---
+  // 覆いの中で始まったときだけ、開幕の演出を始める。助走の基準になる位置(カメラ・自機)をここで記録する
   void BeginIntro_();
+
+  // --- 開幕の演出の状態クラスへの窓口(IOpeningActions の実装。意味は IOpeningActions.h を参照) ---
+  bool IsTransitionRevealing() const override;
   // 覆いが晴れる進み具合に合わせて、カメラと自機を進行方向の後ろから進め、画角を落ち着かせる。
   // レール進行・敵・当たり判定は更新しない(晴れ終わるまで、ゲームの進行度は動かない)
-  void UpdateIntro_(float deltaTime);
-  // イントロを終える。カメラと自機を、基準の位置と画角へ正確に戻す
-  void FinishIntro_();
-  // --- ステージ開始演出(イントロのあと、プレイが始まるまで。俯瞰へ引き、戻りながら自機がステージ名の板を突き破る) ---
-  // 時間を進め、ステージ名の板の出し入れ、板を割る時刻の判定、操作のロック解除を行う。
-  // カメラの俯瞰のずれは、ここでは変えない(描画の間だけ Draw が重ねる)。
-  // 俯瞰へ引く・保つ間(世界は止まる)の自機のアニメーションも、ここで進める
-  void UpdateStageStart_(float deltaTime);
+  void ApplyIntroPose() override;
+  // カメラと自機を、基準の位置と画角へ正確に戻し、ステージ名の板を置き、板を割るまで操作をロックする
+  void FinishIntro() override;
+  void ShowStageNameInFrontOfView(const StageStartPose &pose, float alpha) override;
+  void MoveStageNameAlongArc(float returnElapsedSeconds, float alpha) override;
+  void BreakStageName() override;
+  void FinishOpening() override;
+
   // ステージ名の板の通り道を決め、最初の位置へ置く。
   // 通り道: 俯瞰のカメラの正面(画面の上寄り) -> 竜の上を弧を描いて飛び越える -> 竜が板を割る時刻に通る、レール上の位置の前
   void PlaceStageNameBoard_();
-  // 今の段階での、板の衝撃点の位置(ワールド)。俯瞰へ引く・保つ間はカメラの正面、戻る間は弧の上、着いたあとは竜の前
-  Vector3 CalcStageNamePosition_() const;
+  // 俯瞰へ引く・保つ段階の、板の衝撃点の位置(ワールド)。スタート位置のカメラに pose のずれを重ねたカメラの正面(画面の上寄り)
+  Vector3 CalcStageNameFrontPosition_(const StageStartPose &pose) const;
+  // 戻る段階の、板の衝撃点の位置(ワールド)。竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。
+  // returnElapsedSeconds: 戻る段階の始まりからの経過(秒)
+  Vector3 CalcStageNameArcPosition_(float returnElapsedSeconds) const;
   // レールカメラのコンポーネントを探す(無ければ nullptr)
   RailCameraComponent *FindRailCamera_() const;
   // ブースト量(0 〜 1)から、世界の速さの倍率(1 以上)を求める
@@ -266,16 +277,17 @@ private:
 
   float time_ = 0.0f;
 
-  // イントロの状態
-  bool introActive_ = false;
+  // 開幕の演出の進行(イントロ、俯瞰へ引く、保つ、戻る)。演出をしていないときは IsActive が false
+  OpeningSequence opening_;
+
+  // イントロの基準(スタート位置)
   Vector3 introBaseEye_{0.0f, 0.0f, 0.0f};    // 助走の基準(スタート位置)のカメラの位置
   Vector3 introBaseTarget_{0.0f, 0.0f, 1.0f}; // 同じく注視点
   Vector3 introBasePlayerPosition_{0.0f, 0.0f, 0.0f};
   Vector3 introBasePlayerRotation_{0.0f, 0.0f, 0.0f}; // 助走の基準の、自機の向き(昇りの機首上げの前の値)
   float introRailSpeed_ = 0.0f;               // 助走の速さに使う、レールの進む速さ
 
-  // ステージ開始演出の状態。カメラの基準は、上のイントロの基準(introBaseEye_ など)と共通
-  StageStartDirector stageStart_;
+  // ステージ開始演出の設定と、ステージ名の板。カメラの基準は、上のイントロの基準(introBaseEye_ など)と共通
   StageStartSettings stageStartSettings_; // このステージの設定(ステージが増えたら、ステージごとの値へ差し替える)
   StageNameBoard stageNameBoard_;          // ステージ名の板(俯瞰の間、自機の前に出す)
   StageNameStyle stageNameStyle_ = StageNameStyle::Clouds; // ステージ名の見せ方(ステージごとの素材へ差し替える)
@@ -294,7 +306,7 @@ private:
   SpeedStreakSettings speedStreakSettings_;         // 速度線の設定(濃さ、伸び方)
   bool showDebugFracture_ = false;                // 板の分割の輪郭線を描く(確認用。分割の形を調整するときだけ true にする)
 
-  GamePhase phase_ = GamePhase::InProgress;
+  GameFlow flow_;                           // ゲームの進行(道中、ボス戦、死亡演出、撃破演出、終了の要求済み)。Initialize で道中から始める
   PlayerDeathDirector deathDirector_;       // 死亡演出の進行(サブフェーズ、世界の時間の速さ、自機の落下)
   CloudImpact cloudImpact_;                 // 雲海への着地の反応(くぼみと波の縁。着地の瞬間に始まる)
   CloudImpactDebugUi cloudImpactDebugUi_;   // 雲の着地の反応の、確認用の調整窓(着地点と強さを保持する)
@@ -302,7 +314,6 @@ private:
   PlayerDeathDust playerDeathDust_;         // 崩壊の鱗粉(破片の解放と朽ちる縁から出る、熾火から灰へ冷める粒)
   DeathCameraDirector deathCamera_;         // 死亡カメラの進行(蝶を中心にした回り込み・急降下)
   DeathCameraSettings deathCameraSettings_; // 死亡カメラの設定(キーフレームの表)
-  GamePhase phaseBeforeDeath_ = GamePhase::InProgress; // 死亡演出の前のフェーズ(蘇生で戻す先)
   bool debugHoldAtCover_ = false;           // デバッグ: Cover で遷移を要求せず、演出をその場で保つ(演出だけを、何度も見るため)
   PlayerDeathSettings deathSettings_;       // 死亡演出の設定(ステージごとの値へ差し替えられる)
   ClearDirector clearDirector_;             // ボス撃破演出の進行(サブフェーズ、世界の時間の速さ)

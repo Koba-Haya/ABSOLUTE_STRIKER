@@ -129,10 +129,9 @@ void GameOverScene::BeginRebirth_() {
   start.cameraEye = backdrop_.GetCameraEye();
   start.cameraTarget = backdrop_.GetCameraTarget();
   rebirth_.Begin(start);
-  // 灰がまだ漂っているだけなら、集まりを始める(集まっていれば、速さを上げる指示で一気に集まる)
-  if (ash_.GetPhase() == GameOverAshPhase::Drifting) {
-    ash_.SetPhase(GameOverAshPhase::Gathering);
-  }
+  // 灰に「集まり始めて」と頼む。まだ漂っているだけなら集まりを始め、集まっていれば何もしない(速さを上げる指示で一気に集まる)。
+  // 受けるかは、灰の今の段階が決める
+  ash_.RequestGather();
 }
 
 void GameOverScene::UpdateRebirth_() {

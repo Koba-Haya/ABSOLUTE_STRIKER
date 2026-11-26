@@ -53,7 +53,7 @@
 #include "CloudImpactDebugUi.h"
 #include "ScaleDustDebugUi.h"
 #include "GameIntroDirector.h"
-#include "StageStartDirector.h"
+#include "opening/StageStartPose.h"
 #include "StageNamePath.h"
 #include "StageImpactEffects.h"
 #include "SpeedStreaks.h"
@@ -64,6 +64,7 @@
 #include "../exhibition/ExhibitionHint.h"
 #include "../exhibition/ExhibitionSession.h"
 #include "StageStartDemoMode.h"
+#include "gameflow/InProgressState.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
 #include "AbsoluteEngine/scene/SceneSerializer.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
@@ -97,21 +98,8 @@ constexpr const char *kPuffTexturePath = "resources/app/title/puff.png";
 // 自機がここを突き破る。画像の「STAGE 1」の文字の中心あたり(y は画像の上から約 1/4)
 constexpr Vector2 kStageNameImpactPoint{0.0f, 0.12f};
 
-// ステージ名の板の透明度を、ステージ開始演出の段階から決める。
-// 引く間に現れ、保つ間と戻る間(割れるまで)は見えたまま。割れたあとの破片の薄れ方は、破片側が決める
-// phase: 今の段階。progress: 段階の中での進み具合(0 〜 1)
-float CalcStageNameAlpha(StageStartPhase phase, float progress) {
-  switch (phase) {
-  case StageStartPhase::PullBack:
-    return progress;
-  case StageStartPhase::Hold:
-  case StageStartPhase::Return:
-    return 1.0f;
-  case StageStartPhase::Idle:
-  default:
-    return 0.0f;
-  }
-}
+// 開幕の演出が終わったときの、ステージ名の板の透明度(消す)。段階ごとの透明度は、開幕の演出の状態クラスが決める
+constexpr float kStageNameHiddenAlpha = 0.0f;
 
 // 0 〜 1 を、始まりと終わりがなめらかな S 字(smoothstep)に変える(板が弧を描くときの、動き出しと着地をなめらかにする)
 float SmoothStep01(float t) {
@@ -126,6 +114,8 @@ constexpr const char *kImpactFlashModelPath = "resources/app/title/flash.obj";
 
 // 板が突き破られる位置を決めるとき、「戻る」の始まりから板を割るまでに進む距離を、何個に区切って足し合わせるか
 constexpr int kBreakTravelSamples = 64;
+// 俯瞰の度合いの最大(俯瞰を保つ段階のカメラのずれ。板の弧の始点を、前もって求めるのに使う)
+constexpr float kStageStartFullBlend = 1.0f;
 
 // 描画の間だけ、カメラに俯瞰のずれを重ね、スコープを抜けたら元の位置・向き・画角へ戻す(差し替えの仕組みは ScopedCameraOverride)。
 // ゲームの進行(自機の位置、敵、弾)に使うカメラの位置は変えず、見せるだけのずれにする
@@ -140,7 +130,7 @@ private:
     Vector3 offsetEye{0.0f, 0.0f, 0.0f};
     Vector3 offsetTarget{0.0f, 0.0f, 1.0f};
     if (camera != nullptr) {
-      StageStartDirector::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), offsetEye, offsetTarget);
+      StageStartMath::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), offsetEye, offsetTarget);
     }
     return ScopedCameraOverride(camera, offsetEye, offsetTarget, kGameCameraFovY * pose.fovScale, kGameCameraFovY, kGameCameraNear,
                                 kGameCameraFar);
@@ -164,7 +154,7 @@ constexpr float kPlayerWingspan = 3.7f;
 constexpr float kBossEnvironmentCoefficient = 0.0f;
 
 // 死亡演出のスキップに使う入力(発射ボタン(Space・パッド A・マウス左)とは別のキーにして、連打による誤スキップを避ける)。
-// キーボードは主列の 0(Enter は、デバッグのショートカットでクリアに使うので避ける)。パッドは Start
+// キーボードは主列の 0。パッドは Start
 constexpr BYTE kDeathSkipKey = DIK_0;
 constexpr WORD kDeathSkipPadButton = XINPUT_GAMEPAD_START;
 
@@ -175,12 +165,6 @@ constexpr WORD kClearSkipPadButton = kDeathSkipPadButton;
 // 死亡演出の間、敵(全部)を画面から消すまでの時間(秒)。死亡の瞬間から、この時間をかけて縮んで見えなくなる。
 // 描かないだけで、敵は存在し続ける(撃破扱いにならず、スコア・編隊のカウント・撃破の演出に影響しない)
 constexpr float kDeathHideEnemyFadeSeconds = 0.2f;
-// デバッグ用: 死亡演出を蘇生するキー(0 はスキップ。BACKSPACE で死亡)
-constexpr BYTE kDebugReviveKey = DIK_9;
-
-// 開発用のフロー確認ショートカットを有効にするか(提出・展示のビルドでは false にする)。
-// SPACE はゲーム中の射撃・ロックオンに使うので、ゲーム中の確認用には使わない
-constexpr bool kDebugFlowShortcutEnabled = false;
 
 // 開発用のショートカット(8: ボス戦へ飛ぶ、7: ボスを倒す、B: 骨の表示)を使えるビルドか。
 // エディタ付きのビルド(Debug / Development。USE_IMGUI が定義される)だけ true にする。Release(提出・展示)では、常に無効
@@ -192,21 +176,21 @@ constexpr bool kDebugShortcutsAvailable = false;
 #endif
 
 // 開発用: ボス戦まで飛ばすショートカット。撃破演出の確認や録画のため、道中を待たずにボス戦へ入る。
-// キーは主列の 8(0 は演出のスキップ、9 は蘇生、B は骨の表示に使用済み)
+// キーは主列の 8(0 は演出のスキップ、B は骨の表示に使用済み)
 constexpr bool kDebugSkipToBossEnabled = kDebugShortcutsAvailable;
 constexpr BYTE kDebugSkipToBossKey = DIK_8;
 
 // 開発用: ボスを一撃で倒すショートカット。撃破演出の確認や録画のため。
-// キーは主列の 7(0 はスキップ、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+// キーは主列の 7(0 はスキップ、8 はボス戦へ飛ぶに使用済み)
 constexpr bool kDebugKillBossEnabled = kDebugShortcutsAvailable;
 constexpr BYTE kDebugKillBossKey = DIK_7;
 
 // 開発用: ボスの HP を、次のフェーズの境目まで減らすショートカット。シールドの確認のため(境目を切ると、シールドが始まる。シールドの最中に押すと、耐久が 3 減る)。
-// キーは主列の 6(0 はスキップ、7 は撃破、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+// キーは主列の 6(0 はスキップ、7 は撃破、8 はボス戦へ飛ぶに使用済み)
 constexpr BYTE kDebugBossPhaseKey = DIK_6;
 
 // 開発用: 自機を一撃で倒すショートカット。死亡演出の間に、ボスの弾や誘導弾の玉が残らないことの確認のため(ボス戦の最中だけ)。
-// キーは主列の 5(0 はスキップ、6 はボスの HP、7 は撃破、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+// キーは主列の 5(0 はスキップ、6 はボスの HP、7 は撃破、8 はボス戦へ飛ぶに使用済み)
 constexpr BYTE kDebugKillPlayerKey = DIK_5;
 
 // 開発用: 出ているボスの誘導弾の玉(待機中も飛行中も)を、自機のロックオン弾で撃つショートカット。撃ち落としの確認のため(ボス戦の最中だけ)。
@@ -535,6 +519,9 @@ void GameScene::Initialize(const SceneServices &services) {
   stageIslands_.BuildOccluders(islandOccluders_);
   OcclusionWorld::GetInstance().Register(&islandOccluders_);
 
+  // ゲームの進行を、道中から始める(次の状態は、状態クラスが決める)
+  flow_.Start(std::make_unique<InProgressState>(), *this);
+
   // 画面遷移の覆いの中で始まった場合は、晴れる間の助走(イントロ)を始める
   BeginIntro_();
 }
@@ -552,10 +539,8 @@ void GameScene::Finalize() {
 }
 
 void GameScene::BeginIntro_() {
-  // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは通常どおり始める)
-  introActive_ = IsSceneTransitioning();
-  if (!introActive_ || GetMainCamera() == nullptr) {
-    introActive_ = false;
+  // 覆いの中で始まったときだけ行う(編集中の再読み込みなど、遷移なしで始まったときは、開幕の演出なしで、通常どおり始める)
+  if (!IsSceneTransitioning() || GetMainCamera() == nullptr) {
     return;
   }
 
@@ -573,6 +558,13 @@ void GameScene::BeginIntro_() {
   if (const auto *rail = FindRailCamera_()) {
     introRailSpeed_ = rail->GetSpeed();
   }
+
+  // 開幕の演出を、イントロから始める(以降の段階は、状態クラスが決める)
+  opening_.Start(stageStartSettings_);
+}
+
+bool GameScene::IsTransitionRevealing() const {
+  return IsSceneTransitioning();
 }
 
 RailCameraComponent *GameScene::FindRailCamera_() const {
@@ -584,13 +576,8 @@ RailCameraComponent *GameScene::FindRailCamera_() const {
   return nullptr;
 }
 
-void GameScene::UpdateIntro_(float deltaTime) {
-  // 覆いが晴れ終わったら、助走を終えて通常の更新へ戻る
-  if (!IsSceneTransitioning()) {
-    FinishIntro_();
-    return;
-  }
-
+void GameScene::ApplyIntroPose() {
+  // 覆いが晴れ終わったかの判定と、イントロを終えるのは、IntroState が行う
   const GameIntroPose pose = GameIntroDirector::Evaluate(
       GetTransitionRevealProgress(), introRailSpeed_, GetTransitionRevealSeconds());
 
@@ -614,7 +601,7 @@ void GameScene::UpdateIntro_(float deltaTime) {
     rotation.x -= pose.pitchUp;
     playerObj_->SetRotation(rotation);
   }
-  UpdatePlayerModelOnly_(deltaTime);
+  // 自機のアニメーションは、世界が止まっている段階の共通の処理として、Update が進める
 }
 
 void GameScene::UpdatePlayerModelOnly_(float deltaTime) {
@@ -626,33 +613,40 @@ void GameScene::UpdatePlayerModelOnly_(float deltaTime) {
   }
 }
 
-void GameScene::UpdateStageStart_(float deltaTime) {
-  stageStart_.Update(deltaTime);
-
-  // 世界が止まっている間(俯瞰へ引く・保つ)は、自機のアニメーションだけ進める。
-  // 世界が動く「戻る」段階では、通常の更新が自機のモデルも進める
-  if (!stageStart_.IsWorldRunning()) {
-    UpdatePlayerModelOnly_(deltaTime);
-  }
-
-  // ステージ名の板: 段階に合わせて出し入れし、板を割る時刻になったら割る。
-  // 割れる瞬間(自機が板に触れた瞬間)に、操作のロックを解く
-  stageNameBoard_.SetAlpha(CalcStageNameAlpha(stageStart_.GetPhase(), stageStart_.GetPhaseProgress()));
-  if (stageStart_.HasReachedBreak() && !stageNameBoard_.IsBroken()) {
-    stageNameBoard_.Break();
-    // 突き破った瞬間の衝撃(白いフラッシュ)
-    stageImpact_.Trigger(stageImpactSettings_);
-    SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
-  }
+void GameScene::ShowStageNameInFrontOfView(const StageStartPose &pose, float alpha) {
+  stageNameBoard_.SetAlpha(alpha);
   // 割れるまでは、板を段階に合わせた位置へ動かす(割れたあとの破片は、割れた位置から、自分の動きで飛ぶ)
   if (!stageNameBoard_.IsBroken()) {
-    stageNameBoard_.Place(CalcStageNamePosition_(), stageNameForward_, stageNameBoardSettings_);
+    stageNameBoard_.Place(CalcStageNameFrontPosition_(pose), stageNameForward_, stageNameBoardSettings_);
   }
+}
 
-  // 演出が終わったら、割れていなくても(板が読み込めなかったときなど)、必ず操作を戻す
-  if (!stageStart_.IsActive()) {
-    SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
+void GameScene::MoveStageNameAlongArc(float returnElapsedSeconds, float alpha) {
+  stageNameBoard_.SetAlpha(alpha);
+  if (!stageNameBoard_.IsBroken()) {
+    stageNameBoard_.Place(CalcStageNameArcPosition_(returnElapsedSeconds), stageNameForward_, stageNameBoardSettings_);
   }
+}
+
+void GameScene::BreakStageName() {
+  // 割れる瞬間(自機が板に触れた瞬間)に、操作のロックを解く。板が読み込めず、すでに割れた扱いのときは、何もしない
+  if (stageNameBoard_.IsBroken()) {
+    return;
+  }
+  stageNameBoard_.Break();
+  // 突き破った瞬間の衝撃(白いフラッシュ)
+  stageImpact_.Trigger(stageImpactSettings_);
+  SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
+}
+
+void GameScene::FinishOpening() {
+  // 板を消す。割れていなければ(板が読み込めなかったときなど)、竜が触れる位置へ置いて終える
+  stageNameBoard_.SetAlpha(kStageNameHiddenAlpha);
+  if (!stageNameBoard_.IsBroken()) {
+    stageNameBoard_.Place(stageNameAnchor_, stageNameForward_, stageNameBoardSettings_);
+  }
+  // 演出が終わったら、割れていなくても、必ず操作を戻す
+  SetPlayerInputLocked_(StageStartDemoMode::kEnabled);
 }
 
 void GameScene::PlaceStageNameBoard_() {
@@ -673,7 +667,7 @@ void GameScene::PlaceStageNameBoard_() {
     float travel = 0.0f;
     for (int i = 0; i < kBreakTravelSamples; ++i) {
       const float returnSeconds = (static_cast<float>(i) + 0.5f) * sampleSeconds;
-      travel += rail->GetSpeed() * WorldSpeedScale_(stageStart_.BoostAt(returnSeconds)) * sampleSeconds;
+      travel += rail->GetSpeed() * WorldSpeedScale_(StageStartMath::BoostAt(stageStartSettings_, returnSeconds)) * sampleSeconds;
     }
     const float progress = rail->GetProgress() + travel / rail->GetTotalLength();
     rail->GetPointAndForward(progress, cameraPosition, forward);
@@ -688,11 +682,13 @@ void GameScene::PlaceStageNameBoard_() {
   // 俯瞰を保つ間の位置: 俯瞰のカメラが、最終的にある位置の正面(画面の上寄り)。ここから弧を描いて、上の位置へ着く
   Vector3 holdEye{0.0f, 0.0f, 0.0f};
   Vector3 holdTarget{0.0f, 0.0f, 1.0f};
-  StageStartDirector::ApplyPose(stageStart_.GetHoldPose(), introBaseEye_, introBaseTarget_, holdEye, holdTarget);
+  StageStartMath::ApplyPose(StageStartMath::MakePose(stageStartSettings_, kStageStartFullBlend), introBaseEye_, introBaseTarget_, holdEye,
+                            holdTarget);
   stageNameHoldPosition_ = StageNamePath::InFrontOfCamera(holdEye, holdTarget, stageNameBoardSettings_.holdDistance,
                                                           stageNameBoardSettings_.holdAngle);
 
-  stageNameBoard_.Place(CalcStageNamePosition_(), stageNameForward_, stageNameBoardSettings_);
+  // 最初の位置: 俯瞰へ引き始める瞬間(ずれなし)のカメラの正面
+  stageNameBoard_.Place(CalcStageNameFrontPosition_(StageStartPose{}), stageNameForward_, stageNameBoardSettings_);
 }
 
 float GameScene::WorldSpeedScale_(float boost) const {
@@ -702,7 +698,7 @@ float GameScene::WorldSpeedScale_(float boost) const {
 int GameScene::CalcWorldSteps_() {
   // 速さの倍率を足し合わせ、整数の部分だけ今フレームの更新回数にして、小数の部分は次のフレームへ持ち越す。
   // 倍率が 1 のときは、毎フレームちょうど 1 回になる。2.5 のときは、2 回と 3 回が交互に来て、平均 2.5 回になる
-  worldStepAccumulator_ += WorldSpeedScale_(stageStart_.GetBoost());
+  worldStepAccumulator_ += WorldSpeedScale_(opening_.GetBoost());
   const int steps = static_cast<int>(std::floor(worldStepAccumulator_));
   worldStepAccumulator_ -= static_cast<float>(steps);
   return steps;
@@ -710,50 +706,43 @@ int GameScene::CalcWorldSteps_() {
 
 StageStartPose GameScene::GetStageStartViewPose_() const {
   // 俯瞰のカメラのずれに、ブーストによる画角の広がりを重ねる(速く進むほど、画角が広がって、速さが強く見える)
-  StageStartPose pose = stageStart_.GetPose();
-  pose.fovScale *= 1.0f + (stageStartSettings_.boostFovScale - 1.0f) * stageStart_.GetBoost();
+  StageStartPose pose = opening_.GetPose();
+  pose.fovScale *= 1.0f + (stageStartSettings_.boostFovScale - 1.0f) * opening_.GetBoost();
   return pose;
 }
 
-Vector3 GameScene::CalcStageNamePosition_() const {
-  switch (stageStart_.GetPhase()) {
-  case StageStartPhase::PullBack:
-  case StageStartPhase::Hold: {
-    // 俯瞰へ引く間は、引いていくカメラ(スタート位置のカメラに、今のずれを重ねたもの)の正面に、貼り付いたように付いてくる。
-    // 俯瞰を保つ間は、カメラが止まるので、ワールドの同じ位置に留まる
-    Vector3 eye{0.0f, 0.0f, 0.0f};
-    Vector3 target{0.0f, 0.0f, 1.0f};
-    StageStartDirector::ApplyPose(stageStart_.GetPose(), introBaseEye_, introBaseTarget_, eye, target);
-    return StageNamePath::InFrontOfCamera(eye, target, stageNameBoardSettings_.holdDistance, stageNameBoardSettings_.holdAngle);
-  }
-  case StageStartPhase::Return: {
-    // 竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。竜が触れる時刻より前に着く
-    const float duration = std::min(stageNameBoardSettings_.arcSeconds, stageStartSettings_.breakSeconds);
-    const float u = duration > 0.0f ? stageStart_.GetReturnElapsedSeconds() / duration : 1.0f;
-    const float s = SmoothStep01(u);
+Vector3 GameScene::CalcStageNameFrontPosition_(const StageStartPose &pose) const {
+  // 俯瞰へ引く間は、引いていくカメラ(スタート位置のカメラに、今のずれを重ねたもの)の正面に、貼り付いたように付いてくる。
+  // 俯瞰を保つ間は、カメラが止まるので、ワールドの同じ位置に留まる
+  Vector3 eye{0.0f, 0.0f, 0.0f};
+  Vector3 target{0.0f, 0.0f, 1.0f};
+  StageStartMath::ApplyPose(pose, introBaseEye_, introBaseTarget_, eye, target);
+  return StageNamePath::InFrontOfCamera(eye, target, stageNameBoardSettings_.holdDistance, stageNameBoardSettings_.holdAngle);
+}
 
-    // 始点から終点への直線(弦)の上の点に、弧の高さを足す
-    const Vector3 chord = StageNamePath::ChordPoint(stageNameHoldPosition_, stageNameAnchor_, s);
-    float lift = StageNamePath::ArcLift(stageNameBoardSettings_.arcHeight, s);
+Vector3 GameScene::CalcStageNameArcPosition_(float returnElapsedSeconds) const {
+  // 竜の上を弧を描いて飛び越え、竜が触れる位置(前)へ降りる。竜が触れる時刻より前に着く
+  const float duration = std::min(stageNameBoardSettings_.arcSeconds, stageStartSettings_.breakSeconds);
+  const float u = duration > 0.0f ? returnElapsedSeconds / duration : 1.0f;
+  const float s = SmoothStep01(u);
 
-    // 板の上端が画面の上端を超えないよう、持ち上げる高さを抑える。
-    // カメラは、戻る間に下がり、画角も変わるので、固定の高さでは画面の外へ出てしまう。
-    // 画面に映るカメラ(今のカメラに、今の俯瞰のずれを重ねたもの)で、毎フレーム確かめる
-    if (const auto *camera = GetMainCamera()) {
-      const StageStartPose pose = GetStageStartViewPose_();
-      Vector3 viewEye{0.0f, 0.0f, 0.0f};
-      Vector3 viewTarget{0.0f, 0.0f, 1.0f};
-      StageStartDirector::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), viewEye, viewTarget);
-      const float maxLift = StageNamePath::MaxLiftInView(chord, stageNameBoard_.HeightAboveImpact(stageNameBoardSettings_), viewEye,
-                                                         viewTarget, kGameCameraFovY * pose.fovScale, stageNameBoardSettings_.screenLimit);
-      lift = std::min(lift, maxLift);
-    }
-    return {chord.x, chord.y + lift, chord.z};
+  // 始点から終点への直線(弦)の上の点に、弧の高さを足す
+  const Vector3 chord = StageNamePath::ChordPoint(stageNameHoldPosition_, stageNameAnchor_, s);
+  float lift = StageNamePath::ArcLift(stageNameBoardSettings_.arcHeight, s);
+
+  // 板の上端が画面の上端を超えないよう、持ち上げる高さを抑える。
+  // カメラは、戻る間に下がり、画角も変わるので、固定の高さでは画面の外へ出てしまう。
+  // 画面に映るカメラ(今のカメラに、今の俯瞰のずれを重ねたもの)で、毎フレーム確かめる
+  if (const auto *camera = GetMainCamera()) {
+    const StageStartPose pose = GetStageStartViewPose_();
+    Vector3 viewEye{0.0f, 0.0f, 0.0f};
+    Vector3 viewTarget{0.0f, 0.0f, 1.0f};
+    StageStartMath::ApplyPose(pose, camera->GetEye(), camera->GetTarget(), viewEye, viewTarget);
+    const float maxLift = StageNamePath::MaxLiftInView(chord, stageNameBoard_.HeightAboveImpact(stageNameBoardSettings_), viewEye,
+                                                       viewTarget, kGameCameraFovY * pose.fovScale, stageNameBoardSettings_.screenLimit);
+    lift = std::min(lift, maxLift);
   }
-  case StageStartPhase::Idle:
-  default:
-    return stageNameAnchor_;
-  }
+  return {chord.x, chord.y + lift, chord.z};
 }
 
 void GameScene::SetPlayerInputLocked_(bool locked) {
@@ -766,8 +755,7 @@ void GameScene::SetPlayerInputLocked_(bool locked) {
   }
 }
 
-void GameScene::FinishIntro_() {
-  introActive_ = false;
+void GameScene::FinishIntro() {
   if (auto *camera = GetMainCamera()) {
     camera->SetEye(introBaseEye_);
     camera->SetTarget(introBaseTarget_);
@@ -778,8 +766,7 @@ void GameScene::FinishIntro_() {
     playerObj_->SetRotation(introBasePlayerRotation_);
   }
 
-  // イントロが終わったら、ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)へ続ける。基準の位置は、いま戻したスタート位置
-  stageStart_.Begin(stageStartSettings_);
+  // このあと、IntroState が、俯瞰へ引く段階(PullBackState)へ進める。俯瞰のずれの基準は、いま戻したスタート位置
 
   // ステージ名の板を、自機が衝撃点を通る位置へ置く(割れ方の準備は、重いので、シーンを作るときに済ませてある)
   PlaceStageNameBoard_();
@@ -897,14 +884,51 @@ void GameScene::SetupPlayerVisuals_() {
 void GameScene::RestoreScene() {
   BaseScene::RestoreScene();
 
+  // Stop は「最初から」へ戻す操作(オブジェクトは Play を押した時点へ、タイムラインは 0 秒へ戻る)なので、
+  // GameScene が持つ 1 回のプレイの状態(進行、演出、スコア)も、最初へ戻す
+  ResetRun_();
+
   playerObj_ = FindPlayerObject_();
   if (!playerObj_) return;
 
   SetupPlayerVisuals_();
-  // 死亡演出で消した翅の三角形(共有のモデルに残っている)を元に戻す
-  wingShatter_.Reset();
   // 強化の状態(PlayerUpgradeState)は、シーンの JSON には保存されない。新しい自機へ、いまの強化を反映し直す
   itemSystem_.RebindPlayer(playerObj_);
+}
+
+void GameScene::ResetRun_() {
+  // ゲームの進行: 道中から始め直す(ボス戦や演出の途中で Stop しても、次の Play は道中から)
+  flow_.Start(std::make_unique<InProgressState>(), *this);
+
+  // 開幕の演出(イントロ、スタート演出)の途中で止めたときに、次の Play で、世界が止まったままにならないようにする
+  opening_.Stop();
+  worldStepAccumulator_ = 0.0f;
+
+  // 死亡演出と、それに付いて動くもの(カメラ、雲の着地の反応、翅の破片)
+  deathDirector_.Reset();
+  deathCamera_.Reset();
+  cloudImpact_.Reset();
+  wingShatter_.Reset(); // 死亡演出で消した翅の三角形(共有のモデルに残っている)を元に戻す
+
+  // 撃破演出と、それに付いて動くもの(ボスの見た目、次の島)
+  clearDirector_.Reset();
+  bossDefeatVisual_.Reset();
+  nextIsland_.Reset();
+
+  // 演出が変えた、世界の時間の速さ(ヒットストップ、スロー)と、画面の効果(HP 1 の赤い枠、ボス出現のぼかし)
+  SetWorldTimeScale(1.0f);
+  postEffects_.Reset();
+
+  // スコアと成績と、ボスを倒したときに決めた結果
+  scoreTracker_ = ScoreTracker{};
+  runStats_.Reset();
+  clearResult_.reset();
+
+  // 展示とスタート演出のデモの自動進行の、数えている時間と印
+  exhibitionHoldTimer_ = 0.0f;
+  exhibitionBossKilled_ = false;
+  stageStartDemoTimer_ = 0.0f;
+  stageStartDemoReturnRequested_ = false;
 }
 
 std::shared_ptr<AbsoluteEngine::GameObject> GameScene::FindPlayerObject_() const {
@@ -925,11 +949,11 @@ Camera* GameScene::GetGameplayCamera_() const {
 
 void GameScene::UpdatePostEffects_(float deltaTime) {
   PostEffectDirector::FrameState state;
-  state.isBossPhase = phase_ == GamePhase::Boss;
-  // ボス撃破の演出中は、HP 1 の赤い枠などが演出の見栄えを損なうので、ポストエフェクトを止める
-  state.suppressAll = phase_ == GamePhase::Clearing;
+  state.isBossPhase = flow_.IsBossBattle();
+  // ボス撃破の演出中は、HP 1 の赤い枠などが演出の見栄えを損なうので、ポストエフェクトを止める(止めるかは、状態が決める)
+  state.suppressAll = flow_.SuppressesPostEffects();
   // ステージ開始演出の加速(ブースト)の間、画面にブラーを掛ける。ブラーの中心は、画面の中心(自機のいる辺り)
-  state.speedBlur = stageStart_.GetBoost();
+  state.speedBlur = opening_.GetBoost();
   if (playerObj_) {
       if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
           state.hasPlayer     = true;
@@ -952,8 +976,7 @@ void GameScene::UpdateMouseCapture_() {
       mouseCaptureSuspended_ = !mouseCaptureSuspended_;
   }
 
-  const bool isInGame = GetPlayMode() == PlayMode::Play && !isDebugCamera_
-                     && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss);
+  const bool isInGame = GetPlayMode() == PlayMode::Play && !isDebugCamera_ && flow_.IsPlayable();
   mouseCapture_.Apply(isInGame && !mouseCaptureSuspended_);
   SyncMouseAimToPlayer_();
 }
@@ -993,7 +1016,29 @@ void GameScene::RemoveExpiredObjects_() {
   RemoveRootObjectsIf(isExpired);
 }
 
-void GameScene::SpawnBoss_() {
+bool GameScene::IsPlayerDead() const {
+  if (!playerObj_) return false;
+  const auto* pComp = playerObj_->GetComponent<PlayerComponent>();
+  return pComp && pComp->IsDead();
+}
+
+bool GameScene::HasRouteReachedEnd() const {
+  return HasTimelineReachedEnd();
+}
+
+bool GameScene::IsBossDefeated() const {
+  // 撃破されたボスは、撃破演出が姿を使うので、消さずに残る(BossComponent::IsActive が false)。
+  // そのため、「ボスがいない」だけでなく「全員が撃破済み」も撃破とみなす
+  for (const auto& obj : GetRootObjects()) {
+    const auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr;
+    if (boss && boss->IsActive()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void GameScene::SpawnBoss() {
   Logger::GetInstance().Log("[Boss] spawned"); // ボス戦の開始(自動撮影が、ログを見て、次の操作を始める目印)
   // ボス出現演出（PostEffect加点要素: GaussianFilter）
   postEffects_.OnBossIntro();
@@ -1037,31 +1082,8 @@ void GameScene::SpawnBoss_() {
   AddRootObject(bossObj);
 }
 
-void GameScene::CheckDebugFlowShortcut_() {
-  if (!kDebugFlowShortcutEnabled || !GetInput()) {
-    return;
-  }
-  // すでに終了の要求を出している間は受け付けない(二重に要求しない)
-  if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
-    return;
-  }
-  if (GetInput()->TriggerKey(DIK_RETURN)) {
-    // 本物の撃破の経路を通す。道中なら、ボスを出す(1 回目)。ボス戦なら、ボスを倒す(2 回目)。
-    // 倒すと、CheckGameEnd_ が撃破演出を始め、演出の終わりにクリアへの遷移を要求する
-    if (phase_ == GamePhase::InProgress) {
-      phase_ = GamePhase::Boss;
-      SpawnBoss_();
-    } else {
-      KillBossForDebug_();
-    }
-  } else if (GetInput()->TriggerKey(DIK_BACK)) {
-    // 本番と同じ死亡の経路(Dying)を通す。HP を 0 にして、CheckGameEnd_ が死亡演出を始める
-    KillPlayer_();
-  }
-}
-
 void GameScene::KillBossForDebug_() {
-  // HP を 0 にする本物の撃破の経路。倒れると、CheckGameEnd_ が撃破演出(BeginClearing_)を始める
+  // HP を 0 にする本物の撃破の経路。倒れると、ボス戦の状態(BossBattleState)が撃破演出(ClearingState)へ進める
   for (const auto& obj : GetRootObjects()) {
     if (auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr) {
       boss->TakeDamage(boss->GetMaxHp());
@@ -1095,7 +1117,7 @@ void GameScene::CheckKillBossShortcut_() {
     return;
   }
   // ボス戦の最中だけ受け付ける(道中や、演出・終了の要求の最中は何もしない。二重に倒さない)
-  if (phase_ != GamePhase::Boss) {
+  if (!flow_.IsBossBattle()) {
     return;
   }
   if (GetInput()->TriggerKey(kDebugKillBossKey)) {
@@ -1137,7 +1159,7 @@ void GameScene::CheckSkipToBossShortcut_() {
     return;
   }
   // 道中だけ受け付ける(すでにボス戦、演出、終了の要求の最中は何もしない)。スタート演出の最中は、世界の準備が整っていないので受け付けない
-  if (phase_ != GamePhase::InProgress || stageStart_.IsActive()) {
+  if (!flow_.IsAdvancingRoute() || opening_.IsActive()) {
     return;
   }
   if (GetInput()->TriggerKey(kDebugSkipToBossKey)) {
@@ -1146,22 +1168,22 @@ void GameScene::CheckSkipToBossShortcut_() {
 }
 
 void GameScene::SkipToBoss_() {
-  // タイムラインを終端へ飛ばす。次の更新で「終点に到達した」合図(HasTimelineReachedEnd)が立ち、本物のボス戦への移行(SpawnBoss_)が走る。
+  // タイムラインを終端へ飛ばす。次の更新で「終点に到達した」合図(HasTimelineReachedEnd)が立ち、道中の状態が、本物のボス戦への移行を行う。
   // 出ていた敵は、終端での巻き戻しで片づく
   SeekTimelineToEnd();
 }
 
 void GameScene::UpdateExhibitionFlow_(float deltaTime) {
   // 死亡演出の最中や、終了の要求を出している間は何もしない(二重に死なせない)
-  if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
+  if (!flow_.IsPlayable()) {
     return;
   }
-  // スタート演出の最中は数えない(終わってから数える)
-  if (stageStart_.IsActive()) {
+  // 開幕の演出の最中は数えない(終わってから数える)
+  if (opening_.IsActive()) {
     return;
   }
   exhibitionHoldTimer_ += deltaTime;
-  if (phase_ == GamePhase::InProgress) {
+  if (flow_.IsAdvancingRoute()) {
     // 道中: 少しだけ見せてから、ボス戦へ飛ぶ(次の更新で、本物のボス戦への移行が走る)
     if (exhibitionHoldTimer_ >= ExhibitionMode::kGameHoldSec) {
       exhibitionHoldTimer_ = 0.0f;
@@ -1176,10 +1198,10 @@ void GameScene::UpdateExhibitionFlow_(float deltaTime) {
 
 void GameScene::UpdateStageStartDemoFlow_(float deltaTime) {
   // 演出の最中は数えない。終了の要求を出している間も何もしない(二重に要求しない)
-  if (stageStart_.IsActive() || stageStartDemoReturnRequested_) {
+  if (opening_.IsActive() || stageStartDemoReturnRequested_) {
     return;
   }
-  if (phase_ != GamePhase::InProgress && phase_ != GamePhase::Boss) {
+  if (!flow_.IsPlayable()) {
     return;
   }
   // 演出が終わってからの時間を数え、一定時間たったらタイトルへ戻る
@@ -1200,17 +1222,16 @@ void GameScene::RequestResultScene_(const std::string &sceneId) {
   RequestSceneChange(sceneId, std::move(params));
 }
 
-void GameScene::KillPlayer_() {
-  if (!playerObj_) return;
-  if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
-      pComp->TakeDamage(pComp->GetMaxHp());
-  }
+
+void GameScene::RequestGameOverScene() {
+  RequestResultScene_(SceneId::GameOver);
 }
 
-void GameScene::BeginDying_() {
-  phaseBeforeDeath_ = phase_;
-  phase_ = GamePhase::Dying;
+void GameScene::RequestClearScene() {
+  RequestResultScene_(SceneId::Clear);
+}
 
+void GameScene::BeginDeathDirection() {
   PlayerDeathStart start;
   float railSpeed = 0.0f;
   if (const auto* rail = FindRailCamera_()) {
@@ -1269,12 +1290,14 @@ void GameScene::UpdateDying_(float deltaTime) {
       }
   }
 
-  // Cover へ入ったら、ゲームオーバーへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う。演出クラスは、遷移の間も進み続ける
-  // (デバッグで、遷移を要求せずに演出を保つ設定のときは、要求しない)
-  if (deathDirector_.ConsumeCoverStart() && !debugHoldAtCover_) {
-      phase_ = GamePhase::GameOver;
-      RequestResultScene_(SceneId::GameOver);
-  }
+  // Cover へ入ったかの判定と、ゲームオーバーへの遷移の要求は、DyingState が行う(ConsumeDeathCover)。
+  // 演出クラスは、遷移を要求したあとも、画面が覆われる間、ここで進み続ける
+}
+
+bool GameScene::ConsumeDeathCover() {
+  // 合図は、デバッグの設定に関係なく消費する(以前と同じ)。
+  // デバッグで、遷移を要求せずに演出を保つ設定のときは、Cover に入っても false を返す(ゲームオーバーへ進まない)
+  return deathDirector_.ConsumeCoverStart() && !debugHoldAtCover_;
 }
 
 void GameScene::RemoveBulletsDuringCutscene_() {
@@ -1294,37 +1317,9 @@ float GameScene::GetEnemyDrawScaleDuringDeath_(const AbsoluteEngine::GameObject&
   const std::string& tag = obj.GetTag();
   if (tag != "Enemy" && tag != "Boss") return 1.0f;
 
-  // 死亡の瞬間からの実時間で、1 -> 0 へ縮める(状態を持たないので、蘇生・リトライのあとに残らない)
+  // 死亡の瞬間からの実時間で、1 -> 0 へ縮める(状態を持たないので、リトライのあとに残らない)
   const float t = std::clamp(deathDirector_.GetElapsed() / kDeathHideEnemyFadeSeconds, 0.0f, 1.0f);
   return 1.0f - t;
-}
-
-void GameScene::ReviveForDebug_() {
-  // 遷移を要求したあと(GameOver)や、死亡していないときは、できない
-  if (phase_ != GamePhase::Dying) return;
-  deathDirector_.Reset();
-  deathCamera_.Reset();
-  cloudImpact_.Reset();
-  wingShatter_.Reset();
-  SetWorldTimeScale(1.0f);
-  phase_ = phaseBeforeDeath_;
-  if (playerObj_) {
-      if (auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
-          pComp->Revive();
-      }
-      if (auto* dissolve = playerObj_->GetComponent<AbsoluteEngine::DissolveComponent>()) {
-          AbsoluteEngine::DissolveComponent::Settings state = dissolve->GetSettings();
-          state.enable = false;
-          dissolve->SetSettings(state);
-      }
-  }
-}
-
-void GameScene::CheckDebugReviveShortcut_() {
-  if (!kDebugFlowShortcutEnabled || exhibition_.IsEnabled() || !GetInput()) return;
-  if (GetInput()->TriggerKey(kDebugReviveKey)) {
-      ReviveForDebug_();
-  }
 }
 
 void GameScene::ApplyDeathPose_() {
@@ -1346,34 +1341,7 @@ void GameScene::ApplyDeathPose_() {
   }
 }
 
-void GameScene::CheckGameEnd_() {
-  if (playerObj_) {
-      auto pComp = playerObj_->GetComponent<PlayerComponent>();
-      // HP が 0 になったら、死亡演出を始める。すでに演出中・終了の要求済みのときは、始めない
-      if (pComp && pComp->IsDead() && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss)) {
-          BeginDying_();
-      }
-  }
-
-  if (phase_ == GamePhase::Boss) {
-      // ボスの撃破を見つける。撃破されたボスは、消さずに残る(BossComponent::IsActive が false)ので、
-      // 「ボスがいない」だけでなく「ボスが撃破済み」も撃破とみなす
-      bool bossDefeated = true;
-      for (const auto& obj : GetRootObjects()) {
-          const auto* boss = obj ? obj->GetComponent<BossComponent>() : nullptr;
-          if (boss && boss->IsActive()) {
-              bossDefeated = false;
-              break;
-          }
-      }
-      if (bossDefeated) {
-          BeginClearing_();
-      }
-  }
-}
-
-void GameScene::BeginClearing_() {
-  phase_ = GamePhase::Clearing;
+void GameScene::BeginClearDirection() {
   // 演出の間、操作を受け付けず、ダメージも受けない(残った敵や、消し損ねた弾で死なないため)
   SetPlayerInputLocked_(true);
   if (playerObj_) {
@@ -1500,11 +1468,11 @@ void GameScene::UpdateClearing_(float deltaTime) {
   bossDefeatVisual_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress(), deltaTime);
   nextIsland_.Update(clearDirector_.GetPhase(), clearDirector_.GetPhaseProgress());
 
-  // Cover へ入ったら、クリアへの遷移を要求する(1 回だけ)。覆いは、遷移が画面を覆う
-  if (clearDirector_.ConsumeCoverStart()) {
-      phase_ = GamePhase::Clear;
-      RequestResultScene_(SceneId::Clear);
-  }
+  // Cover へ入ったかの判定と、クリアへの遷移の要求は、ClearingState が行う(ConsumeClearCover)
+}
+
+bool GameScene::ConsumeClearCover() {
+  return clearDirector_.ConsumeCoverStart();
 }
 
 void GameScene::UpdateHud_() {
@@ -1517,8 +1485,9 @@ void GameScene::UpdateHud_() {
   HudStatus status;
   status.score = scoreTracker_.GetScore();
   status.kills = scoreTracker_.GetKillCount();
-  status.objective = phase_ == GamePhase::Boss ? HudObjective::DefeatBoss : HudObjective::Advance;
-  if (phase_ == GamePhase::Boss) {
+  const bool bossBattle = flow_.IsBossBattle();
+  status.objective = bossBattle ? HudObjective::DefeatBoss : HudObjective::Advance;
+  if (bossBattle) {
     // ボス戦は、バーを進行度からボスの体力へ切り替える(出現した直後でまだ見つからないときは満タン)
     status.gauge = HudGauge::BossHp;
     status.gaugeRatio = 1.0f;
@@ -1573,25 +1542,16 @@ void GameScene::Update() {
 
   playerObj_ = FindPlayerObject_();
 
-  // イントロ(画面遷移の覆いが晴れる間)は、世界の進行を止め、見た目だけの助走を動かす。
-  // 晴れ終わった(UpdateIntro_ が終了した)フレームから、通常の更新に入る
-  if (introActive_) {
-      UpdateIntro_(deltaTime);
-      if (introActive_) {
+  // 開幕の演出(イントロ -> 俯瞰へ引く -> 保つ -> 戻りながら板を突き破る)。段階の切り替えと、段階ごとの見た目は、状態クラスが決める。
+  // 世界が止まる段階(イントロ、俯瞰へ引く・保つ)では、自機のアニメーションだけを進めて、世界の更新はしない。
+  // 「戻る」段階からは、世界(レール・敵・自機)を動かすので、通常の更新へ進む(自機のアニメーションも、通常の更新が進める)
+  if (opening_.IsActive()) {
+      opening_.Update(*this, deltaTime);
+      if (opening_.IsActive() && !opening_.IsWorldRunning()) {
+          UpdatePlayerModelOnly_(deltaTime);
           return;
       }
   }
-
-  // ステージ開始演出(俯瞰へ引き、戻りながら板を突き破る)。
-  // 俯瞰へ引く・保つ間は、世界の進行を止める。「戻る」段階からは、世界(レール・敵・自機)を動かすので、通常の更新へ進む
-  if (stageStart_.IsActive()) {
-      UpdateStageStart_(deltaTime);
-      if (stageStart_.IsActive() && !stageStart_.IsWorldRunning()) {
-          return;
-      }
-  }
-
-  CheckDebugReviveShortcut_();
 
   // 死亡演出(実時間)。世界の時間の速さを、ここで決めてから、世界を更新する
   if (deathDirector_.IsActive()) {
@@ -1628,7 +1588,7 @@ void GameScene::Update() {
           CameraContext ctx{};
           ctx.deltaTime = deltaTime;
           GetMainCamera()->SetContext(ctx);
-          if (!isDragging && phase_ == GamePhase::InProgress) GetMainCamera()->Update(*GetInput());
+          if (!isDragging && flow_.IsAdvancingRoute()) GetMainCamera()->Update(*GetInput());
       }
 
       // 骨のデバッグ表示トグル（Bキー）
@@ -1657,8 +1617,7 @@ void GameScene::Update() {
       // リザルトの評価のための計測(時間、被ダメージ、同時ロック数)。数えるのは、通常の進行とボス戦の間だけ
       if (playerObj_) {
           if (const auto* playerComp = playerObj_->GetComponent<PlayerComponent>()) {
-              const bool countingStats = phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss;
-              runStats_.Update(worldDeltaTime, countingStats, phase_ == GamePhase::Boss, playerComp->GetHp(),
+              runStats_.Update(worldDeltaTime, flow_.IsPlayable(), flow_.IsBossBattle(), playerComp->GetHp(),
                                playerComp->GetLockOn().GetLockedCount());
           }
       }
@@ -1666,24 +1625,18 @@ void GameScene::Update() {
       // EffectManagerの更新（RingEffectなど）
       EffectManager::GetInstance()->Update(worldDeltaTime, GetGameplayCamera_());
 
-      // ボスフェーズ移行: タイムラインが終点に到達した合図で行う(進行度の値の比較には頼らない)。
-      // 到達後は、タイムラインが終端で止まり、レールの進行度は 1.0 のまま保たれる(レール自身の進行も 1.0 で頭打ち)ので、
-      // ボス戦の間、レールは動かず、島の描画範囲や島のタレットも再スタートしない
-      if (phase_ == GamePhase::InProgress && HasTimelineReachedEnd()) {
-          phase_ = GamePhase::Boss;
-          SpawnBoss_();
-      }
-
       if (StageStartDemoMode::kEnabled) {
           UpdateStageStartDemoFlow_(deltaTime);
       } else if (exhibition_.IsEnabled()) {
           UpdateExhibitionFlow_(deltaTime);
       } else {
-          CheckDebugFlowShortcut_();
           CheckSkipToBossShortcut_();
           CheckKillBossShortcut_();
       }
-      CheckGameEnd_();
+      // ゲームの進行を 1 回進める。道中 -> ボス戦(終点に到達)、死亡演出(自機の HP が 0)、撃破演出(ボスを撃破)、
+      // 演出が画面を覆ったときの結果画面への要求は、すべて状態クラスが判断する。
+      // 上のショートカットや展示の自動進行の結果(HP が 0 になった等)を、同じフレームで拾うため、それらのあとに呼ぶ
+      flow_.Update(*this);
       ApplyDeathPose_();
       // 崩壊の破片(解放、移動)。蝶の今のポーズ・位置を使うので、位置を決めたあとに進める
       if (deathDirector_.IsActive()) {
@@ -1739,9 +1692,9 @@ void GameScene::Draw() {
   auto *renderer = Renderer::GetInstance();
   renderer->BeginRenderScene();
 
-  // ステージ開始演出の間は、俯瞰のカメラのずれを、描画の間だけ重ねる(この関数を抜けるとき、元のカメラへ戻る)。
-  // デバッグカメラで見ているときは、ずらさない
-  const ScopedStageStartCameraOffset stageStartView(stageStart_.IsActive() && !isDebugCamera_ ? GetMainCamera() : nullptr,
+  // 俯瞰へ引く・保つ・戻る段階の間は、俯瞰のカメラのずれを、描画の間だけ重ねる(この関数を抜けるとき、元のカメラへ戻る)。
+  // イントロはカメラを実際に動かすので、重ねない(重ねるかは、状態が答える)。デバッグカメラで見ているときは、ずらさない
+  const ScopedStageStartCameraOffset stageStartView(opening_.AppliesViewOffset() && !isDebugCamera_ ? GetMainCamera() : nullptr,
                                                     GetStageStartViewPose_());
 
   // 死亡演出のカメラ(蝶を中心にした回り込み・急降下)。描画の間だけ差し替える。デバッグカメラのときは、差し替えない
@@ -1883,7 +1836,7 @@ void GameScene::Draw() {
       if (const auto *camera = GetMainCamera()) {
           const Vector3 flowAxis = Normalize({introBaseTarget_.x - introBaseEye_.x, introBaseTarget_.y - introBaseEye_.y,
                                               introBaseTarget_.z - introBaseEye_.z});
-          speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, stageStart_.GetBoost(), speedStreakSettings_);
+          speedStreaks_.Draw(renderer, camera->GetEye(), flowAxis, opening_.GetBoost(), speedStreakSettings_);
           stageImpact_.DrawFlash(renderer, camera->GetEye(), camera->GetTarget());
           bossDefeatVisual_.DrawFlash(camera->GetEye(), camera->GetTarget());
       }
@@ -1923,10 +1876,10 @@ void GameScene::Draw() {
   }
   ParticleManager::GetInstance()->Draw(BlendMode::Alpha, false, ParticleDrawFilter::AfterCloudsOnly);
 
-  // HUD等の2Dスプライト描画(ステージ開始演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない)
-  // 画面遷移の覆いが晴れる助走(introActive_)の間も、開始演出の前なので同じ扱いにして出さない
+  // HUD等の2Dスプライト描画(開幕の演出の間は、俯瞰のカメラとレティクルの位置が合わないので、出さない。
+  // 画面遷移の覆いが晴れる助走(イントロ)の間も、開幕の演出の一部なので、同じく出さない)
   // ボス撃破の演出の間(clearDirector_)も、出さない(演出の邪魔になるため。スコア、進行バー、レティクルのすべて)
-  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !introActive_ && !stageStart_.IsActive() && !deathDirector_.IsActive() &&
+  if (GetPlayMode() == PlayMode::Play && gameHUD_ && !opening_.IsActive() && !deathDirector_.IsActive() &&
       !clearDirector_.IsActive()) {
       // 雲は通常 EndRenderScene で描かれるため、先に描いた HUD が雲に隠れてしまう。
       // HUD を描く前に雲を合成しておく(GameOverBackdrop::ResolveClouds と同じ方法)。以降の 2D は、深度なしのパイプラインで描かれる
@@ -1973,9 +1926,7 @@ void GameScene::DrawEditorUI() {
         // 死亡演出の確認用。設定は、次に死んだとき(Begin)に反映される。「Hold at Cover」を入れると、遷移を要求せず、演出をその場で保つ
         ImGui::Text("Phase: %d  Elapsed: %.2f s  World time scale: %.2f", static_cast<int>(deathDirector_.GetPhase()),
                     deathDirector_.GetElapsed(), GetWorldTimeScale());
-        if (ImGui::Button("Kill player (BACKSPACE)")) KillPlayer_();
-        ImGui::SameLine();
-        if (ImGui::Button("Revive (9)")) ReviveForDebug_();
+        if (ImGui::Button("Kill player")) KillPlayerForDebug_();
         ImGui::Checkbox("Hold at Cover (no scene change)", &debugHoldAtCover_);
         ImGui::Checkbox("Hold player position (debug)", &deathSettings_.debugHoldPlayerPosition);
         ImGui::Text("Landing height (cloud top): %.1f", volumeCloudSea_.layerTop);
@@ -2093,7 +2044,7 @@ void GameScene::DrawEditorUI() {
     }
 
     // ボスHP（ボス出現中のみ表示。フェーズも併記して状況が伝わるようにする）
-    if (phase_ == GamePhase::Boss) {
+    if (flow_.IsBossBattle()) {
         for (const auto& obj : GetRootObjects()) {
             if (!obj) continue;
             if (auto* bComp = obj->GetComponent<BossComponent>()) {

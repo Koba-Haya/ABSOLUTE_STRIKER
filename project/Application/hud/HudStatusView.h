@@ -6,13 +6,13 @@
 #include "HudProgressBar.h"
 #include <vector>
 
-/// <summary>いまのステージの目的(HUD に短い日本語で出す)。ゲームの流れ(GamePhase)と 1 対 1 に対応する</summary>
+/// <summary>いまのステージの目的(HUD に短い日本語で出す)。ゲームの進行(GameFlow の状態。道中かボス戦か)に対応する</summary>
 enum class HudObjective {
   Advance,    // レールを進む間: 敵を倒しながら進む
   DefeatBoss, // ボス戦: ボスを倒す
 };
 
-/// <summary>上の中央のバーが表すもの。ゲームの流れ(GamePhase)に合わせて切り替える</summary>
+/// <summary>上の中央のバーが表すもの。ゲームの進行(GameFlow の状態)に合わせて切り替える</summary>
 enum class HudGauge {
   Progress, // ステージの進行度(レールを進む間)
   BossHp,   // ボスの体力(ボス戦)

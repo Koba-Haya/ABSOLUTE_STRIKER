@@ -87,6 +87,10 @@ public:
   // 演出を始める。shell: ボスの外殻のオブジェクト(ModelComponent を持つ)。crackShape: 球の中心(origin)を、ひび割れの形から取る
   void Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, const BossCrackShape &crackShape, const BossExplosionSettings &settings);
 
+  // 演出を、始まる前の状態へ戻す(濃さを 0 にして、何も描かれなくする)。読み込んだモデルは残す。
+  // Begin の始めと、BossDefeatVisual::Reset(エディタの Stop)から呼ぶ。出ている最中のフラッシュは、自分の寿命で消える
+  void Reset();
+
   // いまのサブフェーズと、その中の進み具合(0 〜 1)から、球・ハロ・リングの大きさと濃さを決める。毎フレーム呼ぶ(Begin のあと)
   // deltaTime: 1 フレームの実時間(秒。球面の斑が流れる位相と、フラッシュの経過に使う)
   void Update(ClearPhase phase, float phaseProgress, float deltaTime);

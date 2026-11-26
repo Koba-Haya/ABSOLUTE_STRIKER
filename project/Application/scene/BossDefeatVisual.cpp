@@ -29,16 +29,15 @@ float Lerp(float a, float b, float t) {
 void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, std::shared_ptr<AbsoluteEngine::GameObject> shards,
                              const BossShardInfo &shardInfo, float crackEndThreshold, const BossCrackShape &crackShape,
                              const BossDefeatSettings &settings) {
+  // 前の演出の値(光線、欠片、爆破の球、粒の目的地など)を残さない。目的地は、Begin のあとに SetFlightTarget で設定する
+  Reset();
   shell_ = std::move(shell);
   crackEnd_ = std::clamp(crackEndThreshold, 0.0f, kThresholdAllGone);
   crackShape_ = crackShape;
-  lastCellBreak_ = 0.0f;
   settings_ = settings;
-  hasFlightTarget_ = false; // 目的地は、Begin のあとに SetFlightTarget で設定する(前の演出の値を残さない)
 
   // 欠片があれば、外殻を消して、欠片へ差し替える(割る前の外殻と、組み立てた欠片は、同じ形に見える)。
   // 欠片の準備に失敗したときは、shatter_ が有効にならないので、外殻のディゾルブで消える
-  shatter_ = BossShatter();
   if (shards) {
     shatter_.Begin(std::move(shards), shardInfo, settings_.shatter);
   }
@@ -48,7 +47,6 @@ void BossDefeatVisual::Begin(std::shared_ptr<AbsoluteEngine::GameObject> shell, 
   }
 
   // 光線(ボロノイのひびを使うときだけ。ひびの線の上の頂点を GPU に選ばせるので、ひびと同じ形・太さを渡す)
-  beams_ = BossLightBeams();
   if (UsesVoronoiCrack_()) {
     beams_.Begin(shell_, crackShape_, settings_.crackLineWidth, settings_.beams);
     explosion_.Begin(shell_, crackShape_, settings_.explosion);
@@ -70,6 +68,18 @@ bool BossDefeatVisual::GetFlightTarget(Vector3 &target) const {
 
 void BossDefeatVisual::Shutdown() {
   dustHold_.Clear();
+}
+
+void BossDefeatVisual::Reset() {
+  // 粒に掛けた力を外し、見た目の部品を、始まる前の状態へ戻す。
+  // 爆破の球は、読み込んだモデルを持ち続けるので、作り直さずに Reset で濃さを 0 にする
+  Shutdown();
+  shell_.reset();
+  beams_ = BossLightBeams();
+  shatter_ = BossShatter();
+  explosion_.Reset();
+  hasFlightTarget_ = false;
+  lastCellBreak_ = 0.0f;
 }
 
 bool BossDefeatVisual::GetBurstCenter(Vector3 &center) const {

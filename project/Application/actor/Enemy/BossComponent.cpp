@@ -1,7 +1,6 @@
 #include "BossComponent.h"
 #include "BossModelSpec.h"
 #include "BossIdleState.h"
-#include "BossShieldState.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "../Bullet/BossBulletVisualComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
@@ -239,21 +238,20 @@ int BossComponent::GetNextPhaseBoundaryHp() const {
 }
 
 void BossComponent::UpdatePhase() {
-    // シールドの最中は、フェーズの判定を止める(シールドが終わったときに、FinishShield がフェーズを進める)
-    if (maxHp_ <= 0 || shieldActive_) return;
+    // 状態が無い(最初のフレームの切り替え前)ときは、次のフレームで伝える
+    if (maxHp_ <= 0 || !state_) return;
 
-    // HP が、いまのフェーズより先の境目を切ったら、すぐにはフェーズを進めず、シールドを始める。
+    // HP が、いまのフェーズより先の境目を切ったら、すぐにはフェーズを進めず、今の状態へ伝える。
+    // 待機や攻撃の状態はシールドの展開へ進み、シールドの段階は(すでに張っているので)無視する。
     // 一度に 2 つの境目を越えても、1 段ずつ進める(まず次のフェーズのシールド。そのあと、残りの境目で、もう一度)
     if (static_cast<int>(PhaseFromHp(hp_, maxHp_)) > static_cast<int>(phase_)) {
-        StartShield_(static_cast<BossPhase>(static_cast<int>(phase_) + 1));
+        state_->OnPhaseBoundaryCrossed(*this, static_cast<BossPhase>(static_cast<int>(phase_) + 1));
     }
 }
 
-void BossComponent::StartShield_(BossPhase nextPhase) {
+void BossComponent::BeginShield(BossPhase nextPhase) {
     // 境目を大きく越えて減っていたら、境目の値へ戻す(シールドを壊すと、次のフェーズから、境目の HP で始まる)
     hp_ = (std::max)(hp_, BoundaryHpOf(nextPhase, maxHp_));
-    shieldActive_ = true;
-    pendingState_ = std::make_unique<BossShieldState>(nextPhase);
 }
 
 void BossComponent::ApplyBlastDamage(int damage) {
