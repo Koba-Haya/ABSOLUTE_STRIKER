@@ -1,6 +1,5 @@
 #include "HomingBulletComponent.h"
-#include "../Enemy/EnemyComponent.h"
-#include "../Enemy/BossComponent.h"
+#include "../Player/LockOnTarget.h"
 #include "RibbonTrailComponent.h"
 #include "Application/occlusion/OcclusionWorld.h"
 #include <cmath>
@@ -32,17 +31,8 @@ void HomingBulletComponent::Update(float deltaTime) {
     // --- ターゲットの生存確認（weak_ptrをlock()して安全にアクセス） ---
     auto targetShared = target_.lock();
     if (targetShared) {
-        auto enemyComp = targetShared->GetComponent<EnemyComponent>();
-        auto bossComp  = targetShared->GetComponent<BossComponent>();
-
-        bool alive = false;
-        if (enemyComp && !enemyComp->IsDead()) {
-            alive = true;
-        } else if (bossComp && bossComp->GetHp() > 0) {
-            alive = true;
-        }
-
-        if (!alive) {
+        // 対象の生死は、ロックオンと共通の判定(敵、ボス、ボスの誘導弾の玉)で調べる
+        if (!LockOnTarget::IsAlive(*targetShared)) {
             // ターゲットが消滅 → 弾も消す
             Finish_();
             return;
@@ -126,7 +116,7 @@ void HomingBulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     // タグのみで判定する（名前に「Enemy」が含まれる敵弾を誤って消滅させるバグを防ぐ）。
     // ロック対象だけに当たり、道中のロックしていない敵は通り抜ける
     const std::string& otherTag = other->GetTag();
-    if ((otherTag == "Enemy" || otherTag == "Boss") && IsAimingAt(other)) {
+    if (LockOnTarget::IsTargetTag(otherTag) && IsAimingAt(other)) {
         Finish_();
     }
 }

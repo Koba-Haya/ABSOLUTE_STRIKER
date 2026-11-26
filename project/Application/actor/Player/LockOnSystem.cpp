@@ -3,18 +3,13 @@
 #include "Application/ScreenSize.h"
 #include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../Enemy/EnemyComponent.h"
-#include "../Enemy/BossComponent.h"
+#include "LockOnTarget.h"
 #include "../Bullet/HomingBulletComponent.h"
 #include "Application/occlusion/OcclusionWorld.h"
 #include <algorithm>
 #include <cmath>
 
 namespace {
-// ロックオン対象を判別するタグ(GameObject::GetTag の値)
-constexpr const char* kEnemyTag = "Enemy";
-constexpr const char* kBossTag  = "Boss";
-
 // カメラから敵までの視線が、遮蔽物に遮られているか。ロックオンは、島と雲(将来)のどちらに遮られても狙えない
 // (島: 見えない。雲: 見えるが、ロックオンはできない、という決定)。通常弾の判定とは、遮る種類が違う
 bool IsHiddenFromCamera(const Vector3& eye, const Vector3& targetPos) {
@@ -38,11 +33,8 @@ void LockOnSystem::Update(float deltaTime, bool fireHeld, const AbsoluteEngine::
             // weak_ptr.lock()で生存確認（破棄済みなら自動でtrue=除外）
             auto obj = weak.lock();
             if (!obj) return true;
-            // EnemyComponentかBossComponentを見て死んでいるかチェック
-            auto enemyComp = obj->GetComponent<EnemyComponent>();
-            if (enemyComp && enemyComp->IsDead()) return true;
-            auto bossComp = obj->GetComponent<BossComponent>();
-            if (bossComp && bossComp->GetHp() <= 0) return true;
+            // 死んでいる(敵、ボス、玉)、または、狙えなくなった(撃ち落とされた玉など)ものは、外す
+            if (!LockOnTarget::IsAlive(*obj)) return true;
             // すでにロックしていた敵が、島の陰に入ったら、ロックを外す。
             // 理由: (1) 見えない敵に枠が残ると、隠れている位置が分かってしまう。(2) そのまま撃つと、ロック弾は島に当たって消えるので、
             // 枠を 1 つ無駄にする。外した枠は空くので、別の敵を捕まえられる。敵が島の陰から出てきて、カーソルの範囲に入れば、
@@ -87,18 +79,15 @@ void LockOnSystem::SearchAndLockTargets(const AbsoluteEngine::IScreenView& scree
     for (const auto& obj : objects) {
         if (!obj) continue;
         
-        // 敵またはボスのみ対象。判定はタグだけで行う。
+        // 敵、ボス、ボスの誘導弾の玉のみ対象。判定はタグだけで行う(LockOnTarget::IsTargetTag)。
         // 名前の部分一致を使うと、敵弾(名前が EnemyBullet)まで対象になり、ロックオンの枠を取られてしまう。
-        // 敵のプレハブはすべてタグ Enemy、ボスは GameScene が生成時にタグ Boss を付ける
-        if (obj->GetTag() != kEnemyTag && obj->GetTag() != kBossTag) {
+        // 敵のプレハブはすべてタグ Enemy、ボスは GameScene が生成時にタグ Boss、玉は生成時にタグ EnemyOrb を付ける
+        if (!LockOnTarget::IsTargetTag(obj->GetTag())) {
             continue;
         }
 
-        // 死んでいないかチェック
-        auto enemyComp = obj->GetComponent<EnemyComponent>();
-        if (enemyComp && enemyComp->IsDead()) continue;
-        auto bossComp = obj->GetComponent<BossComponent>();
-        if (bossComp && bossComp->GetHp() <= 0) continue;
+        // 死んでいない(玉は、現れきっていて、撃ち落とされていない)かチェック
+        if (!LockOnTarget::IsAlive(*obj)) continue;
 
         // 既にロックオン済みかチェック（weak_ptr経由で比較）
         bool alreadyLocked = std::any_of(lockedTargets_.begin(), lockedTargets_.end(),

@@ -35,6 +35,11 @@ class RibbonTrail;
 class ParticleManager;
 class Camera;
 class Ring;
+class ArcRing;
+class EnergyOrb;
+struct EnergyRibbonStyle;
+class EnergyRibbonParamsRing;
+class ShieldDome;
 class Cylinder;
 class CloudNoiseTextures;
 struct ID3D12Resource;
@@ -220,6 +225,24 @@ public:
   //             半透明のエフェクトの後ろを透けさせたいときは false のまま使う
   void DrawEffectModel(ModelInstance *model, bool writeDepth = false);
   void DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
+  // 切れ目のある輪(板 1 枚 + シェーダー)を描く。形と色は ArcRing::SetParams、位置と向きは SetBillboardTransform で、描く前に決めておく。
+  // アルファ合成で、深度は見る(書かない)。シーンの Draw の中で、物体を描いたあとに呼ぶ
+  void DrawArcRing(ArcRing *ring);
+  // ArcRing の板と定数バッファを、このレンダラーのデバイスで作る(アプリ側が、デバイスを直接触らずに済むようにする窓口)。失敗したら false
+  bool InitializeArcRing(ArcRing &ring);
+  // 渦巻く光の玉(板 1 枚 + シェーダー)を描く。形と色は EnergyOrb::SetParams、位置と向きは SetBillboardTransform で、描く前に決めておく。
+  // アルファ合成で、深度は見ない。雲の合成のあと(描画先が色だけのとき)にだけ描く(それ以外では、何も描かない)
+  void DrawEnergyOrb(EnergyOrb *orb);
+  // EnergyOrb の板と定数バッファを、このレンダラーのデバイスで作る。失敗したら false
+  bool InitializeEnergyOrb(EnergyOrb &orb);
+  // エネルギーのリボン(光の帯)を描く。帯の形は RibbonTrail、色と模様は style で決める。
+  // アルファ合成で、深度は見ない。雲の合成のあと(描画先が色だけのとき)にだけ描く(それ以外では、何も描かない)
+  void DrawEnergyRibbon(const RibbonTrail &trail, const EnergyRibbonStyle &style);
+  // シールドのドーム(三角形の格子の球)を描く。形と状態は ShieldDome::SetParams / SetTransform で、描く前に決めておく。
+  // 通常は、深度テストで、手前の物の後ろを隠す。雲の合成のあと(FlushVolumeClouds のあと)は、シーンの深度を読んで隠す
+  void DrawShieldDome(ShieldDome *dome);
+  // ShieldDome のメッシュと定数バッファを、このレンダラーのデバイスで作る。失敗したら false
+  bool InitializeShieldDome(ShieldDome &dome);
   void DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle);
   // 軌跡(リボン)を、カメラに面を向けた帯として描く。シーンの Draw の中で、描きたい軌跡の数だけ呼ぶ。
   // blendMode: Add(既定。加算で光らせる。暗い背景向き)か Alpha(通常のアルファ合成。明るい背景でも、色が白く飛ばない)。それ以外は Add として描く
@@ -344,6 +367,7 @@ private:
 
   std::unique_ptr<UnifiedPipeline> particlePipelineAlpha_;
   std::unique_ptr<UnifiedPipeline> particlePipelineAlphaDepth_; // 深度テストあり版
+  std::unique_ptr<UnifiedPipeline> particlePipelineAlphaColorOnly_; // 雲の合成のあと(描画先が色だけ)の版
   std::unique_ptr<UnifiedPipeline> particlePipelineAdd_;
   std::unique_ptr<UnifiedPipeline> particlePipelineSub_;
   std::unique_ptr<UnifiedPipeline> particlePipelineMul_;
@@ -366,9 +390,17 @@ private:
   std::unique_ptr<UnifiedPipeline> effectPipeline_; // エフェクト用
   std::unique_ptr<UnifiedPipeline> effectDepthPipeline_; // エフェクト用(深度を書き込む版。DrawEffectModel の writeDepth)
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
+  std::unique_ptr<UnifiedPipeline> arcRingPipeline_; // 切れ目のある輪(DrawArcRing)
+  std::unique_ptr<UnifiedPipeline> arcRingColorOnlyPipeline_; // 同、雲の合成のあと(描画先が色だけ)の版
+  std::unique_ptr<UnifiedPipeline> energyOrbColorOnlyPipeline_; // 渦巻く光の玉(DrawEnergyOrb)。雲の合成のあと(描画先が色だけ)の版だけ
+  std::unique_ptr<UnifiedPipeline> shieldDomePipeline_;           // シールドのドーム(DrawShieldDome)
+  std::unique_ptr<UnifiedPipeline> shieldDomeColorOnlyPipeline_;  // 同、雲の合成のあとの版(シーンの深度を読む)
+  std::unique_ptr<UnifiedPipeline> ribbonAlphaColorOnlyPipeline_; // リボン(アルファ合成)の、雲の合成のあとの版
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonAlphaPipeline_; // リボン(通常のアルファ合成版。DrawRibbon の blendMode が Alpha のとき)
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;
+  std::unique_ptr<UnifiedPipeline> energyRibbonColorOnlyPipeline_; // エネルギーのリボン(DrawEnergyRibbon)。雲のあと(描画先が色だけ)の版だけ
+  std::unique_ptr<EnergyRibbonParamsRing> energyRibbonParams_;     // 帯ごとのパラメータの置き場(描くたびに、次の枠へ書く)
   std::unique_ptr<SpriteBatchDrawer> spriteBatchDrawer_; // 文字などのクワッドをまとめて描く(共有バッファ)
   ComPtr<ID3D12Resource> ribbonTransformCB_;
   TransformCB *ribbonTransformMapped_ = nullptr;

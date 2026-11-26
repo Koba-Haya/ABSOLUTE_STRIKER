@@ -198,6 +198,21 @@
     <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp">
       <Filter>engine\graphics\primitive</Filter>
     </ClCompile>
+    <ClCompile Include="graphics\primitive\ArcRing.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\primitive\EnergyOrb.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\primitive\EnergyRibbon.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\primitive\ShaderQuad.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
+    <ClCompile Include="graphics\primitive\ShieldDome.cpp">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClCompile>
     <ClCompile Include="graphics\primitive\Ring.cpp">
       <Filter>engine\graphics\primitive</Filter>
     </ClCompile>
@@ -451,6 +466,21 @@
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\primitive\PrimitiveDrawer.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\ArcRing.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\EnergyOrb.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\EnergyRibbon.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\ShaderQuad.h">
+      <Filter>engine\graphics\primitive</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics\primitive\ShieldDome.h">
       <Filter>engine\graphics\primitive</Filter>
     </ClInclude>
     <ClInclude Include="graphics\primitive\Ring.h">

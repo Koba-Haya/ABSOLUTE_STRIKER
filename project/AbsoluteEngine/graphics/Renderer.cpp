@@ -9,6 +9,10 @@
 #include "ParticleManager.h"
 #include "particle/GPUParticleManager.h"
 #include "Ring.h"
+#include "ArcRing.h"
+#include "EnergyOrb.h"
+#include "EnergyRibbon.h"
+#include "ShieldDome.h"
 #include "Cylinder.h"
 #include "ShaderCompilerUtils.h"
 #include "Skybox.h"
@@ -39,6 +43,8 @@ namespace {
 // 1フレームに描けるリボンの頂点の総数(共有バッファの大きさ)。
 // 1本のリボンは最大 (RibbonTrail::Params::maxPoints + 1) * 2 頂点なので、同時に数十本は描ける
 constexpr uint32_t kMaxRibbonVertices = 16384;
+// 1 フレームに描けるエネルギーのリボンの本数(帯ごとに、パラメータの枠を 1 つ使う)
+constexpr uint32_t kMaxEnergyRibbonDraws = 512;
 } // namespace
 
 // シングルトンの実体を .cpp 内に隠蔽
@@ -206,6 +212,15 @@ void Renderer::Initialize(DirectXCommon *dx) {
       CHECK_INIT(particlePipelineAlphaDepth_->Initialize(device, utils, compiler,
                                                          includeHandler, depthDesc));
     }
+    {
+      // 雲の合成のあとは、描画先に深度バッファが付いていない(色だけ)ので、深度の形式を付けない版が要る(「雲のあとに描く」粒用)
+      PipelineDesc colorOnlyDesc = desc;
+      colorOnlyDesc.enableDepth = false;
+      colorOnlyDesc.dsvFormat = DXGI_FORMAT_UNKNOWN;
+      particlePipelineAlphaColorOnly_ = std::make_unique<UnifiedPipeline>();
+      CHECK_INIT(particlePipelineAlphaColorOnly_->Initialize(device, utils, compiler,
+                                                             includeHandler, colorOnlyDesc));
+    }
     desc.blendMode = BlendMode::Add;
     particlePipelineAdd_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(particlePipelineAdd_->Initialize(device, utils, compiler,
@@ -250,6 +265,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ringPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ringPipeline_->Initialize(device, utils, compiler,
                                          includeHandler, ringDesc));
+    PipelineDesc arcRingDesc = UnifiedPipeline::MakeArcRingDesc();
+    arcRingPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(arcRingPipeline_->Initialize(device, utils, compiler,
+                                            includeHandler, arcRingDesc));
     PipelineDesc ribbonDesc = UnifiedPipeline::MakeRibbonDesc();
     ribbonPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ribbonPipeline_->Initialize(device, utils, compiler,
@@ -260,6 +279,31 @@ void Renderer::Initialize(DirectXCommon *dx) {
     ribbonAlphaPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(ribbonAlphaPipeline_->Initialize(device, utils, compiler,
                                                 includeHandler, ribbonAlphaDesc));
+    // 雲の合成のあと(描画先が色だけ)の版: 深度の形式を付けず、深度は見ない(雲に隠れさせたくない帯用)
+    PipelineDesc ribbonAlphaColorOnlyDesc = ribbonAlphaDesc;
+    ribbonAlphaColorOnlyDesc.enableDepth = false;
+    ribbonAlphaColorOnlyDesc.dsvFormat = DXGI_FORMAT_UNKNOWN;
+    ribbonAlphaColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(ribbonAlphaColorOnlyPipeline_->Initialize(device, utils, compiler,
+                                                         includeHandler, ribbonAlphaColorOnlyDesc));
+    shieldDomePipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(shieldDomePipeline_->Initialize(device, utils, compiler, includeHandler,
+                                               UnifiedPipeline::MakeShieldDomeDesc()));
+    shieldDomeColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(shieldDomeColorOnlyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                                        UnifiedPipeline::MakeShieldDomeColorOnlyDesc()));
+    PipelineDesc arcRingColorOnlyDesc = arcRingDesc;
+    arcRingColorOnlyDesc.enableDepth = false;
+    arcRingColorOnlyDesc.dsvFormat = DXGI_FORMAT_UNKNOWN;
+    arcRingColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(arcRingColorOnlyPipeline_->Initialize(device, utils, compiler,
+                                                     includeHandler, arcRingColorOnlyDesc));
+    energyOrbColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(energyOrbColorOnlyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                                       UnifiedPipeline::MakeEnergyOrbColorOnlyDesc()));
+    energyRibbonColorOnlyPipeline_ = std::make_unique<UnifiedPipeline>();
+    CHECK_INIT(energyRibbonColorOnlyPipeline_->Initialize(device, utils, compiler, includeHandler,
+                                                          UnifiedPipeline::MakeEnergyRibbonColorOnlyDesc()));
     PipelineDesc cylinderDesc = UnifiedPipeline::MakeCylinderDesc();
     cylinderPipeline_ = std::make_unique<UnifiedPipeline>();
     CHECK_INIT(cylinderPipeline_->Initialize(device, utils, compiler,
@@ -331,6 +375,10 @@ void Renderer::Initialize(DirectXCommon *dx) {
   // Ribbon Drawer(軌跡の帯。頂点バッファは全リボンで共有)
   ribbonDrawer_ = std::make_unique<RibbonDrawer>();
   ribbonDrawer_->Initialize(device, kMaxRibbonVertices);
+
+  // エネルギーのリボンの、帯ごとのパラメータの置き場
+  energyRibbonParams_ = std::make_unique<EnergyRibbonParamsRing>();
+  energyRibbonParams_->Initialize(device, kMaxEnergyRibbonDraws);
 
   // Sprite Batch Drawer(文字など、たくさんの四角形を 1 回の描画命令で描くための共有バッファ)
   spriteBatchDrawer_ = std::make_unique<SpriteBatchDrawer>();
@@ -1238,7 +1286,10 @@ void Renderer::DrawParticles(ParticleManager *pm, BlendMode blendMode, bool dept
   if (!pm)
     return;
   auto *cmdList = dx_->GetCommandList();
-  UnifiedPipeline *pipeline = (depthTest && blendMode == BlendMode::Alpha)
+  // 雲の合成のあと(描画先が色だけ)は、深度の形式がない版で描く(雲のあとに描くグループ用。深度は見ない)
+  UnifiedPipeline *pipeline = (spriteColorOnly_ && blendMode == BlendMode::Alpha && particlePipelineAlphaColorOnly_)
+                                  ? particlePipelineAlphaColorOnly_.get()
+                              : (depthTest && blendMode == BlendMode::Alpha)
                                   ? particlePipelineAlphaDepth_.get()
                                   : GetParticlePipeline_(blendMode);
   pipeline->SetPipelineState(cmdList);
@@ -1293,6 +1344,7 @@ void Renderer::BeginRenderScene() {
     spriteColorOnly_ = false; // 前のフレームの雲の合成で切り替えた、スプライトのパイプラインを戻す
     // リボンの共有頂点バッファの書き込み位置を、フレームの最初に先頭へ戻す
     if (ribbonDrawer_) ribbonDrawer_->Reset();
+    if (energyRibbonParams_) energyRibbonParams_->Reset();
 
     if (renderTexture_ && depthTexture_) {
         dx_->SetRenderTargetWithDepth(renderTexture_.get(), depthTexture_.get());
@@ -1577,6 +1629,98 @@ void Renderer::DrawRing(Ring *ring, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
   ring->Draw(cmdList);
 }
 
+bool Renderer::InitializeShieldDome(ShieldDome &dome) {
+  return dx_ && dome.Initialize(dx_->GetDevice());
+}
+
+void Renderer::DrawShieldDome(ShieldDome *dome) {
+  if (!dome || !dome->IsReady() || !shieldDomePipeline_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 雲の合成のあと(描画先が色だけ)は、シーンの深度をテクスチャとして読む版で描く。それ以外は、深度テストの版
+  const bool readSceneDepth = spriteColorOnly_ && shieldDomeColorOnlyPipeline_ && depthTexture_;
+  (readSceneDepth ? shieldDomeColorOnlyPipeline_ : shieldDomePipeline_)->SetPipelineState(cmdList);
+
+  // 定数バッファ (0:ドームのパラメータ(PS), 1:変換行列(VS))
+  cmdList->SetGraphicsRootConstantBufferView(0, dome->GetParamsCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, dome->GetTransformCBAddress());
+  if (readSceneDepth) {
+    ID3D12DescriptorHeap *heaps[] = {dx_->GetSRVHeap()};
+    cmdList->SetDescriptorHeaps(1, heaps);
+    cmdList->SetGraphicsRootDescriptorTable(2, depthTexture_->GetSrvGpuHandle());
+  }
+
+  dome->Draw(cmdList);
+}
+
+bool Renderer::InitializeArcRing(ArcRing &ring) {
+  return dx_ && ring.Initialize(dx_->GetDevice());
+}
+
+void Renderer::DrawArcRing(ArcRing *ring) {
+  if (!ring || !ring->IsReady() || !arcRingPipeline_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // パイプライン設定。雲の合成のあと(描画先が色だけ)は、深度の形式がない版で描く
+  (spriteColorOnly_ && arcRingColorOnlyPipeline_ ? arcRingColorOnlyPipeline_ : arcRingPipeline_)->SetPipelineState(cmdList);
+
+  // 定数バッファ (0:輪のパラメータ(PS), 1:変換行列(VS))。テクスチャは使わない
+  cmdList->SetGraphicsRootConstantBufferView(0, ring->GetParamsCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, ring->GetTransformCBAddress());
+
+  // 描画
+  ring->Draw(cmdList);
+}
+
+bool Renderer::InitializeEnergyOrb(EnergyOrb &orb) {
+  return dx_ && orb.Initialize(dx_->GetDevice());
+}
+
+void Renderer::DrawEnergyOrb(EnergyOrb *orb) {
+  // 雲の合成のあと(描画先が色だけ)の版しか持たない。それ以外の描画先では、形式が合わないので描かない
+  if (!orb || !orb->IsReady() || !spriteColorOnly_ || !energyOrbColorOnlyPipeline_)
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  energyOrbColorOnlyPipeline_->SetPipelineState(cmdList);
+
+  // 定数バッファ (0:玉のパラメータ(PS), 1:変換行列(VS))。テクスチャは使わない
+  cmdList->SetGraphicsRootConstantBufferView(0, orb->GetParamsCBAddress());
+  cmdList->SetGraphicsRootConstantBufferView(1, orb->GetTransformCBAddress());
+
+  // 描画
+  orb->Draw(cmdList);
+}
+
+void Renderer::DrawEnergyRibbon(const RibbonTrail &trail, const EnergyRibbonStyle &style) {
+  // 雲の合成のあと(描画先が色だけ)の版しか持たない。それ以外の描画先では、形式が合わないので描かない
+  if (!ribbonDrawer_ || !ribbonTransformMapped_ || !energyRibbonParams_ || !spriteColorOnly_ ||
+      !energyRibbonColorOnlyPipeline_ || !trail.HasRibbon())
+    return;
+  auto *cmdList = dx_->GetCommandList();
+
+  // 帯のパラメータを、次の枠へ書く(枠が足りなければ、この帯は描かない)
+  const D3D12_GPU_VIRTUAL_ADDRESS paramsAddress = energyRibbonParams_->Write(style);
+  if (paramsAddress == 0)
+    return;
+
+  // リボンの頂点はワールド座標なので、ビュー射影行列だけを渡す(DrawRibbon と同じ共有の定数バッファ)
+  ribbonTransformMapped_->WVP = Multiply(view_, proj_);
+
+  // カメラのワールド座標(帯の幅方向を、カメラへ向けるのに使う)
+  const Matrix4x4 invView = Inverse(view_);
+  const Vector3 cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
+
+  energyRibbonColorOnlyPipeline_->SetPipelineState(cmdList);
+  // 定数バッファ (0:帯のパラメータ(PS), 1:変換行列(VS))
+  cmdList->SetGraphicsRootConstantBufferView(0, paramsAddress);
+  cmdList->SetGraphicsRootConstantBufferView(1, ribbonTransformCB_->GetGPUVirtualAddress());
+
+  ribbonDrawer_->Draw(cmdList, trail, cameraPosition);
+}
+
 void Renderer::DrawCylinder(Cylinder *cylinder, D3D12_GPU_DESCRIPTOR_HANDLE textureHandle) {
   if (!cylinder || !textureHandle.ptr)
     return;
@@ -1612,7 +1756,11 @@ void Renderer::DrawRibbon(const RibbonTrail &trail, BlendMode blendMode) {
   const Matrix4x4 invView = Inverse(view_);
   const Vector3 cameraPosition = {invView.m[3][0], invView.m[3][1], invView.m[3][2]};
 
-  UnifiedPipeline *pipeline = (blendMode == BlendMode::Alpha && ribbonAlphaPipeline_) ? ribbonAlphaPipeline_.get() : ribbonPipeline_.get();
+  // 雲の合成のあと(描画先が色だけ)は、深度の形式がない版で描く
+  UnifiedPipeline *pipeline = (blendMode == BlendMode::Alpha && spriteColorOnly_ && ribbonAlphaColorOnlyPipeline_)
+                                  ? ribbonAlphaColorOnlyPipeline_.get()
+                              : (blendMode == BlendMode::Alpha && ribbonAlphaPipeline_) ? ribbonAlphaPipeline_.get()
+                                                                                        : ribbonPipeline_.get();
   pipeline->SetPipelineState(cmdList);
   cmdList->SetGraphicsRootConstantBufferView(
       0, ribbonTransformCB_->GetGPUVirtualAddress());

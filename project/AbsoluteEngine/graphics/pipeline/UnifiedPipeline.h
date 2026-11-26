@@ -120,6 +120,21 @@ public:
   // 3D空間用のエフェクト（ライティングなし）の記述
   static PipelineDesc MakeUnlitEffectDesc();
   static PipelineDesc MakeRingDesc();
+  // 切れ目のある輪(ArcRing)。板 1 枚を、ピクセルシェーダーが輪の形に描く。b0(PS)は輪のパラメータ、b0(VS)は変換行列。テクスチャなし。
+  // 通常のアルファ合成(明るい空や雲の上でも、色が白く飛ばない)
+  static PipelineDesc MakeArcRingDesc();
+  // 渦巻く光の玉(EnergyOrb)。板 1 枚を、ピクセルシェーダーが玉に描く。b0(PS)は玉のパラメータ、b0(VS)は変換行列。テクスチャなし。
+  // 雲の合成のあと(描画先が色だけで、深度バッファが付いていない)に描く版だけを持つ。通常のアルファ合成
+  static PipelineDesc MakeEnergyOrbColorOnlyDesc();
+  // エネルギーのリボン(EnergyRibbon)。頂点は RibbonTrail の帯(位置・UV・色)。b0(PS)は帯のパラメータ、b0(VS)は変換行列。
+  // 雲の合成のあと(描画先が色だけで、深度バッファが付いていない)に描く版だけを持つ。通常のアルファ合成
+  static PipelineDesc MakeEnergyRibbonColorOnlyDesc();
+  // シールドのドーム(ShieldDome)。球のメッシュを、ピクセルシェーダーが、三角形の格子の半透明のドームに描く。通常のアルファ合成。
+  // b0(PS)はドームのパラメータ、b0(VS)は変換行列。深度は、描画先の深度バッファで扱う(雲の合成の前に描く版)
+  static PipelineDesc MakeShieldDomeDesc();
+  // 同、雲の合成のあと(描画先が色だけで、深度バッファが付いていない)に描く版。シーンの深度を、テクスチャ(t0)として読んで、
+  // ピクセルシェーダーが自分で比べる(ルートパラメータは 0 = b0(PS)、1 = b0(VS)、2 = t0(深度))
+  static PipelineDesc MakeShieldDomeColorOnlyDesc();
   // 軌跡の帯(リボン)。頂点は位置・UV・色。b0 は VS の変換行列だけ(PS の定数バッファ・テクスチャなし)
   static PipelineDesc MakeRibbonDesc();
   static PipelineDesc MakeCylinderDesc();

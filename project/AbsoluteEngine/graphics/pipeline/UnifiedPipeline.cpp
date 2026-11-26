@@ -625,6 +625,72 @@ PipelineDesc UnifiedPipeline::MakeRingDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeArcRingDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+  };
+  d.vsPath = L"resources/engine/shaders/ArcRing.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/ArcRing.PS.hlsl";
+  d.usePSMaterial_b0 = true;       // ルートパラメータ 0 番: PS の輪のパラメータ
+  d.useVSTransform_b0 = true;      // ルートパラメータ 1 番: VS の変換行列
+  d.usePSTextureTable_t0 = false;  // テクスチャは使わない(形はシェーダーで計算する)
+  d.enableDepth = true;            // 島や敵に隠れるようにする
+  d.depthWrite = false;            // 半透明の輪が、後ろの物を隠さないようにする
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Alpha;  // 通常のアルファ合成
+  d.cullMode = D3D12_CULL_MODE_NONE; // 板は裏から見ても描く
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeEnergyOrbColorOnlyDesc() {
+  // 板の頂点とルートシグネチャは、ArcRing と同じ(頂点シェーダーも共通)。ピクセルシェーダーだけが違う
+  PipelineDesc d = MakeArcRingDesc();
+  d.psPath = L"resources/engine/shaders/EnergyOrb.PS.hlsl";
+  d.enableDepth = false;           // 描画先に深度バッファが付いていない。雲のあとの描画なので、深度は見ない
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeShieldDomeDesc() {
+  PipelineDesc d{};
+  d.inputElements = {
+      {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+       D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+       0},
+      {"TEXCOORD", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}, // 重心座標
+      {"TEXCOORD", 1, DXGI_FORMAT_R32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}, // 面ごとの乱数
+      {"TEXCOORD", 2, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+       D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0}, // 面の中心
+  };
+  d.vsPath = L"resources/engine/shaders/ShieldDome.VS.hlsl";
+  d.psPath = L"resources/engine/shaders/ShieldDome.PS.hlsl";
+  d.usePSMaterial_b0 = true;       // ルートパラメータ 0 番: PS のドームのパラメータ
+  d.useVSTransform_b0 = true;      // ルートパラメータ 1 番: VS の変換行列
+  d.usePSTextureTable_t0 = false;
+  d.enableDepth = true;            // 自機やボスの体の手前だけが見えるようにする
+  d.depthWrite = false;            // 半透明のドームが、後ろの物を隠さないようにする
+  d.alphaBlend = true;
+  d.blendMode = BlendMode::Alpha;  // 通常のアルファ合成
+  d.cullMode = D3D12_CULL_MODE_NONE; // ドームは、表も裏(奥の半球)も描く
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeShieldDomeColorOnlyDesc() {
+  PipelineDesc d = MakeShieldDomeDesc();
+  d.psPath = L"resources/engine/shaders/ShieldDomeSrvDepth.PS.hlsl";
+  d.usePSTextureTable_t0 = true;   // ルートパラメータ 2 番: シーンの深度(t0)
+  d.enableDepth = false;           // 描画先に深度バッファが付いていない。深度は、ピクセルシェーダーが比べる
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeRibbonDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -647,6 +713,17 @@ PipelineDesc UnifiedPipeline::MakeRibbonDesc() {
   d.alphaBlend = true;
   d.blendMode = BlendMode::Add;    // 加算合成で光らせる
   d.cullMode = D3D12_CULL_MODE_NONE; // 帯は裏から見ても描く
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeEnergyRibbonColorOnlyDesc() {
+  // 頂点の形と、頂点シェーダーは、通常のリボンと同じ。ピクセルシェーダーと、ルートシグネチャ(PS の定数バッファが増える)が違う
+  PipelineDesc d = MakeRibbonDesc();
+  d.psPath = L"resources/engine/shaders/EnergyRibbon.PS.hlsl";
+  d.usePSMaterial_b0 = true;       // ルートパラメータ 0 番: PS の帯のパラメータ(VS の変換行列は、1 番になる)
+  d.blendMode = BlendMode::Alpha;  // 通常のアルファ合成(明るい空の上でも、暗い輪郭と明るい光が見える)
+  d.enableDepth = false;           // 描画先に深度バッファが付いていない。雲のあとの描画なので、深度は見ない
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
   return d;
 }
 

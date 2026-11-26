@@ -52,7 +52,7 @@ void ParticleManager::Finalize() {
     dx_ = nullptr;
 }
 
-bool ParticleManager::CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha) {
+bool ParticleManager::CreateParticleGroup(const std::string& name, const std::string& texturePath, uint32_t maxInstances, bool softAlpha, bool afterClouds) {
     assert(dx_);
     assert(device_);
     assert(maxInstances > 0);
@@ -62,11 +62,13 @@ bool ParticleManager::CreateParticleGroup(const std::string& name, const std::st
         // アサートで落とさずにパーティクルをリセットして再利用する
         ClearParticleGroup(name);
         groups_.at(name).softAlpha = softAlpha;
+        groups_.at(name).afterClouds = afterClouds;
         return true;
     }
 
     ParticleGroup g{};
     g.softAlpha = softAlpha;
+    g.afterClouds = afterClouds;
     g.maxInstances = maxInstances;
     g.instanceLimit = maxInstances;
     g.activeInstanceCount = 0;
@@ -264,8 +266,11 @@ void ParticleManager::DrawInternal(ID3D12GraphicsCommandList* cmdList, ParticleD
         if (g.activeInstanceCount == 0) {
             continue;
         }
-        // グループの選び方: 「柔らかいアルファ」の印で、描くかどうかを決める
-        if ((filter == ParticleDrawFilter::NormalOnly && g.softAlpha) || (filter == ParticleDrawFilter::SoftAlphaOnly && !g.softAlpha)) {
+        // グループの選び方: 「柔らかいアルファ」と「雲のあとに描く」の印で、描くかどうかを決める。
+        // 「雲のあとに描く」印のあるグループは、AfterCloudsOnly でだけ描く(All は従来どおり、すべて描く)
+        if ((filter == ParticleDrawFilter::NormalOnly && (g.softAlpha || g.afterClouds)) ||
+            (filter == ParticleDrawFilter::SoftAlphaOnly && (!g.softAlpha || g.afterClouds)) ||
+            (filter == ParticleDrawFilter::AfterCloudsOnly && !g.afterClouds)) {
             continue;
         }
 
