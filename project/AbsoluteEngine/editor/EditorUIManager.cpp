@@ -7,6 +7,7 @@
 #include "../base/EnginePath.h"
 #include <filesystem>
 #include "../scene/ColliderComponent.h"
+#include "../scene/collision/SphereShape.h"
 #include "../scene/LightNodeComponent.h"
 #include "../scene/ModelComponent.h"
 #include "../graphics/Renderer.h"
@@ -23,6 +24,9 @@
 namespace AbsoluteEngine {
 
 namespace {
+// コライダーが無いモデルを、クリックで選ぶときの球の半径(オブジェクトの scale を掛ける)
+constexpr float kFallbackPickRadius = 1.0f;
+
 // インスペクタで部品が「編集した」と伝えたとき、その編集を、取り消し履歴(CommandManager)へ記録する。
 // どのオブジェクトの、どの部品の変更かは、エディタが知っているので、ここで ComponentStateCommand を作る(部品は履歴の作り方を知らない)
 class ComponentEditRecorder final : public IEditRecorder {
@@ -410,75 +414,26 @@ void EditorUIManager::HandleMousePicking(const SceneWorld::ObjectList& rootObjec
 void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT) {
   if (!obj) return;
 
+  // レイが当たったら、今までで一番近いものとして覚える
+  const auto tryHit = [&](const ICollisionShape& shape, const ShapePlacement& placement) {
+    float t = 0.0f;
+    if (shape.Raycast(placement, rayOrigin, rayDir, t) && t < minT) {
+      minT = t;
+      hitObject = obj;
+    }
+  };
+
   auto colliderComp = obj->GetComponent<ColliderComponent>();
-  if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
-    const auto& collider = colliderComp->GetSettings();
-    Vector3 objPos = obj->GetTransform().translate;
-    Vector3 scale = obj->GetTransform().scale;
-    Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
-                       objPos.y + collider.centerOffset.y * scale.y, 
-                       objPos.z + collider.centerOffset.z * scale.z };
-
-    if (collider.type == ColliderComponent::Type::Sphere) {
-      float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-      float scaledRadius = collider.radius * maxScale;
-
-      Vector3 m = { rayOrigin.x - center.x, rayOrigin.y - center.y, rayOrigin.z - center.z };
-      float b = Dot(m, rayDir);
-      float c = Dot(m, m) - scaledRadius * scaledRadius;
-
-      float discriminant = b * b - c;
-      if (discriminant > 0.0f) {
-        float t = -b - std::sqrt(discriminant);
-        if (t > 0.0f && t < minT) {
-          minT = t;
-          hitObject = obj;
-        }
-      }
-    } else if (collider.type == ColliderComponent::Type::AABB) {
-      Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
-      Vector3 minBounds = { center.x - scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z };
-      Vector3 maxBounds = { center.x + scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z };
-      
-      float t1 = (minBounds.x - rayOrigin.x) / (rayDir.x != 0.0f ? rayDir.x : 0.00001f);
-      float t2 = (maxBounds.x - rayOrigin.x) / (rayDir.x != 0.0f ? rayDir.x : 0.00001f);
-      float t3 = (minBounds.y - rayOrigin.y) / (rayDir.y != 0.0f ? rayDir.y : 0.00001f);
-      float t4 = (maxBounds.y - rayOrigin.y) / (rayDir.y != 0.0f ? rayDir.y : 0.00001f);
-      float t5 = (minBounds.z - rayOrigin.z) / (rayDir.z != 0.0f ? rayDir.z : 0.00001f);
-      float t6 = (maxBounds.z - rayOrigin.z) / (rayDir.z != 0.0f ? rayDir.z : 0.00001f);
-      
-      float tmin = (std::max)((std::max)((std::min)(t1, t2), (std::min)(t3, t4)), (std::min)(t5, t6));
-      float tmax = (std::min)((std::min)((std::max)(t1, t2), (std::max)(t3, t4)), (std::max)(t5, t6));
-      
-      if (tmax >= 0 && tmin <= tmax) {
-        if (tmin < minT) {
-          minT = tmin;
-          hitObject = obj;
-        }
-      }
-    }
-  } else {
-    // フォールバック: コライダーが無い場合でもモデルがあれば簡易的な球体判定を行う
-    auto modelComp = obj->GetComponent<ModelComponent>();
-    if (modelComp) {
-      Vector3 objPos = obj->GetTransform().translate;
-      Vector3 scale = obj->GetTransform().scale;
-      float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-      float scaledRadius = 1.0f * maxScale; // デフォルト半径 1.0
-
-      Vector3 m = { rayOrigin.x - objPos.x, rayOrigin.y - objPos.y, rayOrigin.z - objPos.z };
-      float b = Dot(m, rayDir);
-      float c = Dot(m, m) - scaledRadius * scaledRadius;
-
-      float discriminant = b * b - c;
-      if (discriminant > 0.0f) {
-        float t = -b - std::sqrt(discriminant);
-        if (t > 0.0f && t < minT) {
-          minT = t;
-          hitObject = obj;
-        }
-      }
-    }
+  if (colliderComp && colliderComp->GetShape()) {
+    // 形ごとのレイ判定は、形状のクラスに任せる(エディタは形の種類を知らない)
+    tryHit(*colliderComp->GetShape(), colliderComp->GetEditorPlacement());
+  } else if (obj->GetComponent<ModelComponent>()) {
+    // フォールバック: コライダーが無い場合でもモデルがあれば、オブジェクトの位置に置いた既定の大きさの球で判定する
+    const SphereShape fallbackSphere(kFallbackPickRadius);
+    ShapePlacement placement;
+    placement.center = obj->GetTransform().translate;
+    placement.scale = obj->GetTransform().scale;
+    tryHit(fallbackSphere, placement);
   }
 
   // 子ノードも再帰的にチェック
@@ -508,61 +463,15 @@ void EditorUIManager::DrawColliderDebug(const SceneWorld::ObjectList& rootObject
     if (!obj) return;
 
     auto colliderComp = obj->GetComponent<ColliderComponent>();
-    if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
-      const auto& collider = colliderComp->GetSettings();
-      Vector3 objPos = obj->GetTransform().translate;
-      Vector3 scale = obj->GetTransform().scale;
-      Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
-                         objPos.y + collider.centerOffset.y * scale.y, 
-                         objPos.z + collider.centerOffset.z * scale.z };
-
-      if (collider.type == ColliderComponent::Type::AABB) {
-        Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
-        
-        Vector3 corners[8] = {
-          {center.x - scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z},
-          {center.x + scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z},
-          {center.x + scaledSize.x, center.y + scaledSize.y, center.z - scaledSize.z},
-          {center.x - scaledSize.x, center.y + scaledSize.y, center.z - scaledSize.z},
-          {center.x - scaledSize.x, center.y - scaledSize.y, center.z + scaledSize.z},
-          {center.x + scaledSize.x, center.y - scaledSize.y, center.z + scaledSize.z},
-          {center.x + scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z},
-          {center.x - scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z}
-        };
-
-        ImVec2 screenCorners[8];
-        bool visible[8];
-        for (int i = 0; i < 8; ++i) {
-          visible[i] = WorldToScreen(corners[i], viewProj, vMin, vMax, screenCorners[i]);
+    if (colliderComp && colliderComp->GetShape()) {
+      // 形の輪郭の線分は、形状のクラスが作る。エディタは、両端が画面に映る線分だけを描く
+      colliderComp->GetShape()->DrawWire(colliderComp->GetEditorPlacement(), [&](const Vector3& from, const Vector3& to) {
+        ImVec2 screenFrom;
+        ImVec2 screenTo;
+        if (WorldToScreen(from, viewProj, vMin, vMax, screenFrom) && WorldToScreen(to, viewProj, vMin, vMax, screenTo)) {
+          drawList->AddLine(screenFrom, screenTo, color);
         }
-
-        auto drawLine = [&](int i, int j) {
-          if (visible[i] && visible[j]) {
-            drawList->AddLine(screenCorners[i], screenCorners[j], color);
-          }
-        };
-
-        drawLine(0, 1); drawLine(1, 2); drawLine(2, 3); drawLine(3, 0);
-        drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
-        drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
-
-      } else if (collider.type == ColliderComponent::Type::Sphere) {
-        float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-        float r = collider.radius * maxScale;
-        
-        Vector3 points[6] = {
-          {center.x - r, center.y, center.z}, {center.x + r, center.y, center.z},
-          {center.x, center.y - r, center.z}, {center.x, center.y + r, center.z},
-          {center.x, center.y, center.z - r}, {center.x, center.y, center.z + r}
-        };
-        ImVec2 sp[6];
-        bool v[6];
-        for (int i = 0; i < 6; ++i) v[i] = WorldToScreen(points[i], viewProj, vMin, vMax, sp[i]);
-
-        if(v[0]&&v[1]) drawList->AddLine(sp[0], sp[1], color);
-        if(v[2]&&v[3]) drawList->AddLine(sp[2], sp[3], color);
-        if(v[4]&&v[5]) drawList->AddLine(sp[4], sp[5], color);
-      }
+      });
     }
 
     for (const auto& child : obj->GetChildren()) {

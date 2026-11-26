@@ -294,6 +294,9 @@
     <ClCompile Include="scene\ModelComponent.cpp" />
     <ClCompile Include="scene\DissolveComponent.cpp" />
     <ClCompile Include="scene\CollisionManager.cpp" />
+    <ClCompile Include="scene\collision\SphereShape.cpp" />
+    <ClCompile Include="scene\collision\AabbShape.cpp" />
+    <ClCompile Include="scene\collision\ShapePairTests.cpp" />
     <ClCompile Include="scene\RigidbodyComponent.cpp" />
     <ClCompile Include="resources\AssetManager.cpp">
       <Filter>resources</Filter>
@@ -619,6 +622,10 @@
     <ClInclude Include="scene\ModelComponent.h" />
     <ClInclude Include="scene\DissolveComponent.h" />
     <ClInclude Include="scene\CollisionManager.h" />
+    <ClInclude Include="scene\collision\CollisionShape.h" />
+    <ClInclude Include="scene\collision\SphereShape.h" />
+    <ClInclude Include="scene\collision\AabbShape.h" />
+    <ClInclude Include="scene\collision\ShapePairTests.h" />
     <ClInclude Include="scene\RigidbodyComponent.h" />
     <ClInclude Include="resources\AssetManager.h">
       <Filter>resources</Filter>

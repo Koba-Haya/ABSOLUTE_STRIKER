@@ -193,6 +193,9 @@
     <ClCompile Include="scene\TimelineSpawnPreview.cpp" />
     <ClCompile Include="scene\SceneLights.cpp" />
     <ClCompile Include="scene\CollisionManager.cpp" />
+    <ClCompile Include="scene\collision\SphereShape.cpp" />
+    <ClCompile Include="scene\collision\AabbShape.cpp" />
+    <ClCompile Include="scene\collision\ShapePairTests.cpp" />
     <ClCompile Include="scene\GameObject.cpp" />
     <ClCompile Include="scene\ColliderComponent.cpp" />
     <ClCompile Include="scene\LightNodeComponent.cpp" />
@@ -309,6 +312,10 @@
     <ClInclude Include="scene\TimelineSpawnPreview.h" />
     <ClInclude Include="scene\SceneLights.h" />
     <ClInclude Include="scene\CollisionManager.h" />
+    <ClInclude Include="scene\collision\CollisionShape.h" />
+    <ClInclude Include="scene\collision\SphereShape.h" />
+    <ClInclude Include="scene\collision\AabbShape.h" />
+    <ClInclude Include="scene\collision\ShapePairTests.h" />
     <ClInclude Include="scene\GameObject.h" />
     <ClInclude Include="scene\ColliderComponent.h" />
     <ClInclude Include="scene\LightNodeComponent.h" />

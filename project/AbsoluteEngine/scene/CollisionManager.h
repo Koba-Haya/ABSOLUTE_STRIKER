@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "../Type/Vector.h"
+#include "collision/CollisionShape.h"
 
 namespace AbsoluteEngine {
 
@@ -17,14 +18,9 @@ public:
     void Update(const std::vector<std::shared_ptr<GameObject>>& rootObjects);
 
 private:
-    struct CollisionResult {
-        bool isHit = false;
-        Vector3 normal{0, 0, 0};   // BからAに向かう法線ベクトル (Aを押し出す方向)
-        float depth = 0.0f;        // めり込みの深さ
-    };
-
     void CollectColliders(std::shared_ptr<GameObject> obj, std::vector<ColliderComponent*>& outColliders);
-    CollisionResult CheckCollision(ColliderComponent* a, ColliderComponent* b);
+    // a と b の衝突を、形状のクラスに調べさせる(結果の法線は、a を押し出す向き)
+    CollisionResult CheckCollision(const ColliderComponent& a, const ColliderComponent& b) const;
     void ResolvePenetration(ColliderComponent* a, ColliderComponent* b, const CollisionResult& result);
 };
 
