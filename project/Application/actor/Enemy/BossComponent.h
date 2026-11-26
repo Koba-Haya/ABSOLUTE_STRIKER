@@ -70,10 +70,10 @@ private:
     void SummonOrbs(int count, float appearSec, float chargeSec) override;
     void DismissOrbs() override { orbGroup_.DismissHeld(); }
     void LaunchOrbs(float flightSec, float intervalSec) override;
-    void SetAttackStage(BossAttackStage stage, const BossAttackSpec& spec) override {
+    void SetAttackStage(BossAttackStage stage, const BossAttackCue& cue) override {
         attackStage_ = stage;
         attackStageChanged_ = (stage != BossAttackStage::None);
-        attackEffects_.OnStageChanged(stage, spec);
+        attackEffects_.OnStageChanged(stage, cue);
     }
     void ChangeState(std::unique_ptr<IBossState> next) override { pendingState_ = std::move(next); }
     void Stagger() override { hitRequested_ = true; }

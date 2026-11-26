@@ -57,6 +57,10 @@
     <ClCompile Include="actor\Enemy\BossAttackEffects.cpp" />
     <ClCompile Include="actor\Enemy\BossEffectParticles.cpp" />
     <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
+    <ClCompile Include="actor\Enemy\BossAttackPatternFactory.cpp" />
+    <ClCompile Include="actor\Enemy\AimedShotAttack.cpp" />
+    <ClCompile Include="actor\Enemy\SpreadShotAttack.cpp" />
+    <ClCompile Include="actor\Enemy\HomingOrbsAttack.cpp" />
     <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
     <ClCompile Include="actor\Enemy\BossShieldEffects.cpp" />
     <ClCompile Include="actor\Enemy\BossOrbComponent.cpp" />
@@ -203,6 +207,12 @@
     <ClInclude Include="actor\Enemy\BossEffectParticles.h" />
     <ClInclude Include="actor\Enemy\BossAttackPlan.h" />
     <ClInclude Include="actor\Enemy\BossAttackState.h" />
+    <ClInclude Include="actor\Enemy\BossAttackCue.h" />
+    <ClInclude Include="actor\Enemy\IBossAttackPattern.h" />
+    <ClInclude Include="actor\Enemy\BossAttackPatternFactory.h" />
+    <ClInclude Include="actor\Enemy\AimedShotAttack.h" />
+    <ClInclude Include="actor\Enemy\SpreadShotAttack.h" />
+    <ClInclude Include="actor\Enemy\HomingOrbsAttack.h" />
     <ClInclude Include="actor\Enemy\BossIdleState.h" />
     <ClInclude Include="actor\Enemy\BossShieldEffects.h" />
     <ClInclude Include="actor\Enemy\BossOrbComponent.h" />

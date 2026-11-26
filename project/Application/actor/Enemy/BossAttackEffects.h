@@ -1,7 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/graphics/primitive/ArcRing.h"
 #include "BossActions.h"
-#include "BossAttackPlan.h"
+#include "BossAttackCue.h"
 #include "Type/Vector.h"
 #include <cstdint>
 #include <random>
@@ -16,7 +16,7 @@
 //   溜め(Charge)   : 輪が口へ縮み(溜めの終わりの少し前に口へ着く)、切れ目が閉じ、速く回り、明るくなる。
 //                    輪のあたりから、粒が口へ吸い込まれる(だんだん増える)
 //   発射(Fire)     : 輪が弾けるように広がって消える。光の閃光と、放射状の火花がはじけ、火の粉が少し残る
-// 弧の数: 単発弾は固定、扇状弾は、弾の数と同じにする(1 本の弧が、1 発の弾に当たる)。扇状弾は、輪も大きくする。
+// 輪を出すか、弧の数、輪の大きさの倍率は、攻撃パターンが決めて、BossAttackCue で渡す(演出は、攻撃の種類を知らない)。
 // 粒は、CPU のパーティクル(ParticleManager)の、専用のグループで出す(アルファ合成。明るい空の上でも、色が白く飛ばない)。
 // 使い方: OnStageChanged(段が変わるとき) / Update(毎フレーム) / Draw(毎フレーム。シーンの描画の中)
 namespace BossAttackEffectDefaults {
@@ -33,10 +33,6 @@ constexpr float kScaleChargeEnd = 0.20f;
 constexpr float kScaleFireEnd = 1.80f;
 // 溜めのうち、輪が口へ着くまでの割合(0 〜 1)。残りは、口に着いたまま、強く光って、発射を待つ
 constexpr float kChargeArriveShare = 0.80f;
-// 扇状弾のとき、輪の大きさに掛ける倍率
-constexpr float kSpreadScaleMultiplier = 1.25f;
-// 弧の数(単発弾)
-constexpr uint32_t kAimedArcCount = 4;
 // 切れ目の割合: 予告の始め -> 溜めの終わり(閉じていく)-> 発射の終わり(ばらける)
 constexpr float kGapTelegraph = 0.55f;
 constexpr float kGapChargeEnd = 0.12f;
@@ -98,8 +94,8 @@ inline const Vector4 kEmberColor{ 1.00f, 0.30f, 0.15f, 0.9f };
 
 class BossAttackEffects {
 public:
-    // 攻撃の段が変わったとき(BossComponent が、状態からの通知を受けて呼ぶ)。spec: いまの攻撃の定義(段の長さと種類を読む)
-    void OnStageChanged(BossAttackStage stage, const BossAttackSpec& spec);
+    // 攻撃の段が変わったとき(BossComponent が、状態からの通知を受けて呼ぶ)。cue: 段の長さと、輪の見せ方
+    void OnStageChanged(BossAttackStage stage, const BossAttackCue& cue);
 
     // 毎フレーム。muzzle: 口の前(出口)のワールド位置。nullptr なら、演出を出さない(モデルに出口のボーンが無いとき)
     void Update(float deltaTime, const Vector3* muzzle);
@@ -127,7 +123,7 @@ private:
     bool initializeFailed_ = false; // 作るのに失敗した(毎フレーム作り直さない)
 
     BossAttackStage stage_ = BossAttackStage::None;
-    BossAttackSpec spec_{};
+    BossAttackCue cue_{};
     float stageElapsed_ = 0.0f; // いまの段に入ってからの時間
     float stageSeconds_ = 0.0f; // いまの段の長さ
     float spin_ = 0.0f;         // 輪の回転角(ラジアン)

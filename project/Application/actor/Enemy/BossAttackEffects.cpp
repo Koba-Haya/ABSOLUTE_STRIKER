@@ -64,14 +64,14 @@ bool BossAttackEffects::EnsureInitialized_() {
     return ringReady_;
 }
 
-void BossAttackEffects::OnStageChanged(BossAttackStage stage, const BossAttackSpec& spec) {
+void BossAttackEffects::OnStageChanged(BossAttackStage stage, const BossAttackCue& cue) {
     stage_ = stage;
-    spec_ = spec;
+    cue_ = cue;
     stageElapsed_ = 0.0f;
     emitCarry_ = 0.0f;
     switch (stage) {
-    case BossAttackStage::Telegraph: stageSeconds_ = spec.telegraphSec; break;
-    case BossAttackStage::Charge:    stageSeconds_ = spec.chargeSec; break;
+    case BossAttackStage::Telegraph: stageSeconds_ = cue.telegraphSec; break;
+    case BossAttackStage::Charge:    stageSeconds_ = cue.chargeSec; break;
     case BossAttackStage::Fire:      stageSeconds_ = kFireSeconds; break;
     case BossAttackStage::None:      stageSeconds_ = 0.0f; break;
     }
@@ -94,8 +94,8 @@ void BossAttackEffects::Update(float deltaTime, const Vector3* muzzle) {
     }
 
     // 攻撃の最中でない、または出口の位置が分からないときは、何も出さない。
-    // 誘導弾は、口の前の輪を出さない(予告と溜めは、ボスの周りに現れる玉そのものが見せる。口から弾は出ない)
-    if (stage_ == BossAttackStage::None || !muzzle || spec_.kind == BossAttackKind::HomingOrbs) {
+    // 輪を出さない攻撃(誘導弾など。攻撃パターンが決める)も、何も出さない
+    if (stage_ == BossAttackStage::None || !muzzle || !cue_.ring.visible) {
         visible_ = false;
         return;
     }
@@ -170,12 +170,9 @@ void BossAttackEffects::ApplyLook_(float progress) {
         break;
     }
 
-    // 扇状弾は、弧の数を弾の数に合わせ、輪も大きくする
-    uint32_t arcCount = kAimedArcCount;
-    if (spec_.kind == BossAttackKind::Spread) {
-        arcCount = static_cast<uint32_t>((std::max)(spec_.count, 1)); // max マクロとの衝突を避ける括弧
-        scale *= kSpreadScaleMultiplier;
-    }
+    // 弧の数と輪の大きさは、攻撃パターンが決めた見せ方に従う(扇状弾なら、弧の数 = 弾の数で、輪も大きい)
+    const uint32_t arcCount = cue_.ring.arcCount;
+    scale *= cue_.ring.scaleMultiplier;
 
     ArcRing::Params params;
     params.innerRadius = kRingInnerRadius;
