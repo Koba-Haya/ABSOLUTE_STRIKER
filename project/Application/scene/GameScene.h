@@ -10,6 +10,7 @@
 #include "../actor/Bullet/BulletComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/EnemyBulletPools.h"
+#include "EnemyDefeatRewards.h"
 #include "../hud/GameHUD.h"
 #include "../hud/HudStatusView.h"
 #include "AbsoluteEngine/resources/AssetManager.h"
@@ -106,9 +107,6 @@ private:
   // 解放済みのステージの再クリア、最終ステージ(次が無い)は nullptr(今までどおり、元の位置へ戻る)
   const StageDefinition *FindNextLockedStage_() const;
 
-  // EnemyComponent::onDestroyed コールバックの登録を1箇所に集約する。
-  // FormationMemberComponentを持つ場合は編隊トラッキングの初期カウントも行う。
-  void RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj);
 
   // 1 回のプレイの状態(ゲームの進行、開幕の演出、死亡演出と撃破演出、世界の時間の速さ、ポストエフェクト、スコアと成績、
   // 展示の自動進行)を、最初へ戻す。エディタの Stop(RestoreScene)から呼ぶ。
@@ -278,6 +276,9 @@ private:
   // 敵の射撃部品へは、型で引く表(ServiceTable)を通して渡す。シーンの終わりには、オブジェクトの一覧(基底の BaseScene が持つ)より先に消える。
   // そのあとに手放された弾は、置き場所へ戻らずに普通に削除される(GameObjectPool がそう作られている)
   EnemyBulletPools enemyBulletPools_;
+  // 敵が倒れたときの報酬の係(Observer)。敵が出たときに Track で登録する。
+  // 上の hitEffects_ / itemSystem_ / scoreTracker_ / runStats_ の参照を持つので、それらより後に宣言する(先に作られ、後に消えるように)
+  EnemyDefeatRewards enemyDefeatRewards_;
 
   float time_ = 0.0f;
 

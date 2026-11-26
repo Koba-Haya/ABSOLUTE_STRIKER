@@ -36,7 +36,6 @@
 #include "../actor/Bullet/BulletFactory.h"
 #include "../actor/Bullet/BulletCatalog.h"
 #include "AbsoluteEngine/scene/ServiceTable.h"
-#include "../actor/Enemy/FormationMemberComponent.h"
 #include "../actor/Enemy/FormationSpawnEvent.h"
 #include "../actor/Enemy/TurretShootComponent.h"
 #include "../actor/Enemy/ChargeOnApproachComponent.h"
@@ -245,7 +244,8 @@ std::string GameScene::GetDataName() const {
 
 GameScene::GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
     : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData),
-      itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState(), gameData.GetPlayerUpgradeState()) {
+      itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState(), gameData.GetPlayerUpgradeState()),
+      enemyDefeatRewards_(hitEffects_, itemSystem_, scoreTracker_, runStats_, GetSpawner(), GetSceneQuery()) {
   // 弾を撃つ部品(自機、敵の射撃部品)は、弾の定義の表を、生成の関数の中で、この表から受け取る。
   // 読み取り専用(const)で登録する。GameData はアプリの寿命なので、このシーンより長く生きる
   GetServiceTable().Register<const BulletCatalog>(gameData_.GetBulletCatalog());
@@ -292,9 +292,9 @@ void GameScene::Initialize(const SceneServices &services) {
 
   BaseScene::Initialize(services);
 
-  // 実行中に出てきた敵(タイムライン、編隊、島のタレットなど)へ、撃破時のコールバックを付ける。
+  // 実行中に出てきた敵(タイムライン、編隊、島のタレットなど)を、報酬の係に見張らせる(倒れたことの受け取りを登録する)。
   // 最初のオブジェクトを出す前に登録する
-  SetObjectSpawnedCallback([this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { RegisterEnemyCallbacks(obj); });
+  SetObjectSpawnedCallback([this](const std::shared_ptr<AbsoluteEngine::GameObject>& obj) { enemyDefeatRewards_.Track(obj); });
 
   auto* am = AbsoluteEngine::AssetManager::GetInstance();
 
@@ -401,12 +401,11 @@ void GameScene::Initialize(const SceneServices &services) {
   }
 
   // -----------------------------------------------------------------------
-  // 【バグ修正】エディタで配置した敵への onDestroyed コールバック一括登録
-  // SpawnManager 経由で生成した敵は Spawn 時にコールバックを登録するが、
-  // JSON/エディタからロードした敵にはその処理が走らないため、ここで補完する。
+  // エディタで配置した敵(JSON から読み込んだ敵)を、報酬の係に見張らせる。
+  // 出す経路(Spawn)で出た敵は、出たときに登録されるが、読み込んだ敵には、その処理が走らないため、ここで補う。
   // -----------------------------------------------------------------------
   for (const auto& obj : GetRootObjects()) {
-      RegisterEnemyCallbacks(obj);
+      enemyDefeatRewards_.Track(obj);
   }
 
   // シーン開始直後の初期視点がワープしないように1度更新して位置を確定させる
@@ -837,63 +836,6 @@ const Camera* GameScene::GetEditorViewCamera() const {
         return debugCamera_.get();
     }
     return GetMainCamera();
-}
-
-// -----------------------------------------------------------------------
-// RegisterEnemyCallbacks
-// EnemyComponent::onDestroyed の登録を1箇所に集約したもの
-// （Initialize でのロード済みオブジェクト・出す経路(SetObjectSpawnedCallback で登録した通知)・タイムライン生成の全てで共通）。
-// FormationMemberComponent を持つ場合は編隊トラッキングの初期カウントも行う。
-// -----------------------------------------------------------------------
-void GameScene::RegisterEnemyCallbacks(const std::shared_ptr<AbsoluteEngine::GameObject>& obj) {
-    if (!obj) return;
-
-    auto* enemyComp = obj->GetComponent<EnemyComponent>();
-    if (!enemyComp) return;
-
-    // 既にコールバックが登録済みの場合は上書きしない（二重登録防止）
-    if (enemyComp->onDestroyed) return;
-
-    // 編隊メンバーなら初期カウントを積んでおく。
-    // 生ポインタをラムダにキャプチャするが、FormationMemberComponentはEnemyComponentと
-    // 同じGameObjectがunique_ptrで所有しているため、EnemyComponent（=このラムダ自身の所有者）が
-    // 生きている間は必ず有効。shared_ptr<GameObject>を直接キャプチャすると
-    // GameObject→EnemyComponent→(このラムダ)→GameObjectの循環参照でリークするため、
-    // あえてGameObjectそのものは持たない。
-    FormationMemberComponent* formationComp = obj->GetComponent<FormationMemberComponent>();
-    if (formationComp) {
-        scoreTracker_.RegisterFormationMember(formationComp->GetFormationId());
-    }
-
-    // リザルトの評価のための計測: 敵の出現(編隊のメンバーなら、編隊の ID も)
-    runStats_.OnEnemySpawned(formationComp != nullptr, formationComp ? formationComp->GetFormationId() : 0);
-
-    // 敵の種類は、オブジェクトの名前(= プレハブ名)で見分ける。ラムダには、名前の複製だけを持たせる(GameObject は持たない)
-    enemyComp->onDestroyed = [this, formationComp, enemyName = obj->GetName()](const Vector3& hitPos, EnemyDestroyReason reason) {
-        // ヒットエフェクト（パーティクル・リングエフェクト・爆発ライト）。倒れた理由に関わらず出す
-        hitEffects_.Spawn(GetSpawner(), hitPos);
-
-        // 自滅(体当たりなど)は、自機が倒したのではないので、以降の報酬(アイテム、スコア、撃破数、編隊の判定)は出さない。
-        // 編隊の判定を数えないので、自滅した者がいる編隊は、全滅ボーナスが出ない(全員を自分で倒したときだけ出る)
-        if (reason != EnemyDestroyReason::Player) {
-            runStats_.OnEnemySelfDestructed(); // 自滅した敵は、撃破率の母数から外す(評価のための計測)
-            return;
-        }
-
-        // ドロップアイテム(抽選に当たれば、倒れた位置に置く)
-        itemSystem_.OnEnemyDestroyed(GetSpawner(), GetSceneQuery(), enemyName, hitPos);
-
-        // スコア加算
-        scoreTracker_.OnEnemyKilled();
-        runStats_.OnEnemyKilled();
-
-        // 編隊トラッキング：編隊が全滅したら全滅ボーナスを加算する。戻り値(初期メンバー数)が 0 より大きいときが、全滅の合図
-        if (formationComp) {
-            if (scoreTracker_.OnFormationMemberKilled(formationComp->GetFormationId()) > 0) {
-                runStats_.OnFormationCleared();
-            }
-        }
-    };
 }
 
 // 自機のオブジェクトへ、実行時の見た目の設定を行う。
@@ -1644,8 +1586,7 @@ void GameScene::Update() {
           showDebugSkeleton_ = !showDebugSkeleton_;
       }
 
-      // ヒットエフェクトはイベントコールバック（onDestroyed）によって
-      // EnemyComponent::Update 内から自動的に発火されるため、ここでのポーリングは不要。
+      // ヒットエフェクトは、倒れた敵からの知らせ(Observer)を受けた報酬の係(EnemyDefeatRewards)が出すため、ここで敵を調べる必要はない。
 
       RemoveExpiredObjects_();
 

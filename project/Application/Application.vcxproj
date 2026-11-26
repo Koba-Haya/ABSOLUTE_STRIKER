@@ -254,6 +254,7 @@
     <ClCompile Include="actor\Bullet\BulletBuilder.cpp" />
     <ClCompile Include="actor\Enemy\EnemyBulletLauncher.cpp" />
     <ClCompile Include="actor\Enemy\EnemyBulletPools.cpp" />
+    <ClCompile Include="scene\EnemyDefeatRewards.cpp" />
     <ClCompile Include="actor\Player\PlayerInput.cpp" />
     <ClCompile Include="scene\CloudImpact.cpp" />
     <ClCompile Include="scene\CloudImpactDebugUi.cpp" />
@@ -452,6 +453,8 @@
     <ClInclude Include="actor\Bullet\BulletBuilder.h" />
     <ClInclude Include="actor\Enemy\EnemyBulletLauncher.h" />
     <ClInclude Include="actor\Enemy\EnemyBulletPools.h" />
+    <ClInclude Include="scene\EnemyDefeatRewards.h" />
+    <ClInclude Include="actor\Enemy\IEnemyDefeatObserver.h" />
     <ClInclude Include="actor\Player\PlayerInput.h" />
     <ClInclude Include="scene\CloudImpact.h" />
     <ClInclude Include="scene\CloudImpactDebugUi.h" />
