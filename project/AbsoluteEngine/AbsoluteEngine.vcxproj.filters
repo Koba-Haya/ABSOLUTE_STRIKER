@@ -258,6 +258,9 @@
     <ClCompile Include="scene\SceneWorld.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
+    <ClCompile Include="scene\GameObjectPool.cpp">
+      <Filter>engine\scene</Filter>
+    </ClCompile>
     <ClCompile Include="scene\SceneNavigator.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
@@ -536,6 +539,9 @@
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\SceneWorld.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\GameObjectPool.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\SceneNavigator.h">
