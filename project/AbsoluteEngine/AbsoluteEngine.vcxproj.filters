@@ -288,6 +288,7 @@
     <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="scene\SceneSerializer.cpp" />
     <ClCompile Include="editor\CommandManager.cpp" />
+    <ClCompile Include="editor\InspectorEditTracker.cpp" />
     <ClCompile Include="scene\ColliderComponent.cpp" />
     <ClCompile Include="scene\LightNodeComponent.cpp" />
     <ClCompile Include="scene\ModelComponent.cpp" />
@@ -612,6 +613,7 @@
     <ClInclude Include="scene\SceneSerializer.h" />
     <ClInclude Include="editor\Command.h" />
     <ClInclude Include="editor\CommandManager.h" />
+    <ClInclude Include="editor\InspectorEditTracker.h" />
     <ClInclude Include="scene\ColliderComponent.h" />
     <ClInclude Include="scene\LightNodeComponent.h" />
     <ClInclude Include="scene\ModelComponent.h" />

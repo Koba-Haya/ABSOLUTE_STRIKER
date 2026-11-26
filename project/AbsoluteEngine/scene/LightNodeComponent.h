@@ -33,6 +33,10 @@ public:
     // 設定値を丸ごと差し替える(書き込みの窓口はここだけ)
     void SetSettings(const Settings& settings) { settings_ = settings; }
 
+    // エディタのインスペクタに、ライトの設定を表示し、編集を受け付ける(種類に応じて、出す項目を変える)。
+    // 取り消し履歴への記録はエディタ側が行う(ここでは値を変えるだけ)
+    void DrawInspectorUI() override;
+
     void Serialize(nlohmann::json& j) const override {
         j["lightType"] = static_cast<int>(settings_.type);
         j["color"] = { {"x", settings_.color.x}, {"y", settings_.color.y}, {"z", settings_.color.z} };

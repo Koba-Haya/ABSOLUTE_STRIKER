@@ -136,6 +136,7 @@
     <ClCompile Include="editor\EditorCamera.cpp" />
     <ClCompile Include="editor\EditorUIManager.cpp" />
     <ClCompile Include="editor\CommandManager.cpp" />
+    <ClCompile Include="editor\InspectorEditTracker.cpp" />
     <ClCompile Include="graphics\Renderer.cpp" />
     <ClCompile Include="graphics\VolumeCloudQuality.cpp" />
     <ClCompile Include="graphics\Skybox.cpp" />
@@ -233,6 +234,7 @@
     <ClInclude Include="editor\EditorUIManager.h" />
     <ClInclude Include="editor\Command.h" />
     <ClInclude Include="editor\CommandManager.h" />
+    <ClInclude Include="editor\InspectorEditTracker.h" />
     <ClInclude Include="graphics\LightTypes.h" />
     <ClInclude Include="graphics\Renderer.h" />
     <ClInclude Include="graphics\VolumeCloudQuality.h" />

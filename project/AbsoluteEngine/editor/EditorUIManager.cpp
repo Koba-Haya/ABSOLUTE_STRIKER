@@ -9,7 +9,6 @@
 #include "../scene/ColliderComponent.h"
 #include "../scene/LightNodeComponent.h"
 #include "../scene/ModelComponent.h"
-#include "../scene/DissolveComponent.h"
 #include "../graphics/Renderer.h"
 // タイムラインイベントインスペクタ用（タスク15）
 #include "../scene/timeline/ITimelineEvent.h"
@@ -747,45 +746,6 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
 
     ImGui::Separator();
     
-    // モデルとテクスチャの設定表示
-    if (ImGui::CollapsingHeader("Model & Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto modelComp = obj->GetComponent<ModelComponent>();
-      if (modelComp) {
-        ImGui::Text("Model: %s", modelComp->GetModelPath().empty() ? "None" : modelComp->GetModelPath().c_str());
-        ImGui::Text("Texture: %s", modelComp->GetTexturePath().empty() ? "None" : modelComp->GetTexturePath().c_str());
-        
-        // テクスチャ適用用のドロップエリア
-        ImGui::Button("Drop Texture Here (.png/.dds)", ImVec2(-FLT_MIN, 30));
-        if (ImGui::BeginDragDropTarget()) {
-          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-            const char* payloadPath = (const char*)payload->Data;
-            modelComp->LoadTexture(payloadPath);
-            SetSceneModified();
-          }
-          ImGui::EndDragDropTarget();
-        }
-
-        // モデル適用用のドロップエリア
-        ImGui::Button("Drop Model Here (.obj)", ImVec2(-FLT_MIN, 30));
-        if (ImGui::BeginDragDropTarget()) {
-          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-            const char* payloadPath = (const char*)payload->Data;
-            modelComp->LoadModel(payloadPath);
-            SetSceneModified();
-          }
-          ImGui::EndDragDropTarget();
-        }
-      } else {
-        ImGui::Text("No ModelComponent attached.");
-        if (ImGui::Button("Add ModelComponent")) {
-          obj->AddComponent(std::make_unique<ModelComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    ImGui::Separator();
-
     // Transformの編集
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
       // コピーを編集し、スライダーの処理のあとで SetTransform で戻す
@@ -836,142 +796,6 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
       }
     }
 
-    // --- LightComponent ---
-    if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto lightComp = obj->GetComponent<LightNodeComponent>();
-      if (lightComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        LightNodeComponent::Settings l = lightComp->GetSettings();
-        int currentType = static_cast<int>(l.type);
-        const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
-
-        bool activated = false;
-        bool deactivatedAfterEdit = false;
-
-        if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
-          l.type = static_cast<LightNodeComponent::Type>(currentType);
-        }
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-        if (l.type != LightNodeComponent::Type::None) {
-          float color[3] = { l.color.x, l.color.y, l.color.z };
-          if (ImGui::ColorEdit3("Color", color)) {
-            l.color = { color[0], color[1], color[2] };
-          }
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-          ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          
-          if (l.type == LightNodeComponent::Type::Point || l.type == LightNodeComponent::Type::Spot) {
-            ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 1000.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-            ImGui::DragFloat("Decay", &l.decay, 0.05f, 0.0f, 10.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          }
-          if (l.type == LightNodeComponent::Type::Spot) {
-            ImGui::DragFloat("Distance", &l.distance, 0.1f, 0.0f, 1000.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-            ImGui::DragFloat("ConeAngle (deg)", &l.coneAngleDeg, 0.5f, 0.0f, 180.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          }
-        }
-
-        // 編集したコピーを、コンポーネントへ反映する
-        lightComp->SetSettings(l);
-
-        if (activated) {
-            lightComp->Serialize(componentStateBefore_);
-        }
-        if (deactivatedAfterEdit) {
-            if (commandManager_) {
-                nlohmann::json componentStateAfter;
-                lightComp->Serialize(componentStateAfter);
-                commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(obj, "LightNodeComponent", componentStateBefore_, componentStateAfter));
-            }
-        }
-      } else {
-        ImGui::Text("No LightNodeComponent attached.");
-        if (ImGui::Button("Add LightNodeComponent")) {
-          obj->AddComponent(std::make_unique<LightNodeComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    // --- Dissolve ---
-    if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto dissolveComp = obj->GetComponent<DissolveComponent>();
-      if (dissolveComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        DissolveComponent::Settings dissolve = dissolveComp->GetSettings();
-        if (ImGui::Checkbox("Enable Dissolve", &dissolve.enable)) SetSceneModified();
-        if (dissolve.enable) {
-          if (ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f)) SetSceneModified();
-          if (ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f)) SetSceneModified();
-          float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
-          if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
-            dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
-            SetSceneModified();
-          }
-          float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
-          if (ImGui::ColorEdit3("Mask Color", maskCol)) {
-            dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
-            SetSceneModified();
-          }
-        }
-        dissolveComp->SetSettings(dissolve);
-      } else {
-        ImGui::Text("No DissolveComponent attached.");
-        if (ImGui::Button("Add DissolveComponent")) {
-          obj->AddComponent(std::make_unique<DissolveComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    // Colliderの編集
-    if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto colliderComp = obj->GetComponent<ColliderComponent>();
-      if (colliderComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        ColliderComponent::Settings collider = colliderComp->GetSettings();
-
-        const char* types[] = { "None", "Sphere", "AABB" };
-        int currentType = static_cast<int>(collider.type);
-        if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
-          collider.type = static_cast<ColliderComponent::Type>(currentType);
-          SetSceneModified();
-        }
-
-        if (collider.type != ColliderComponent::Type::None) {
-          if (ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f)) SetSceneModified();
-
-          if (collider.type == ColliderComponent::Type::Sphere) {
-            if (ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f)) SetSceneModified();
-          } else if (collider.type == ColliderComponent::Type::AABB) {
-            if (ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f)) SetSceneModified();
-          }
-        }
-        colliderComp->SetSettings(collider);
-      } else {
-        ImGui::Text("No ColliderComponent attached.");
-        if (ImGui::Button("Add ColliderComponent")) {
-          obj->AddComponent(std::make_unique<ColliderComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
     ImGui::Separator();
     
     // プレハブ関連操作
@@ -1002,22 +826,22 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
       IComponent* componentToRemove = nullptr;
       
       for (const auto& comp : obj->GetComponents()) {
-        ImGui::Text("- %s", comp->GetTypeName().c_str());
-        
-        // 追加：各コンポーネントのインスペクタ用UIを描画
-        // 取り消し履歴への記録は、エディタが受け持つ。部品には、記録先(recorder)だけを渡す
-        ComponentEditRecorder recorder(commandManager_.get(), obj, comp->GetTypeName());
-        comp->DrawInspectorUI(recorder);
+        // 部品ごとに ID を分ける(Light と Collider の "Type" のように、同じ名前の項目が並んでも衝突しないため)
+        ImGui::PushID(comp.get());
 
-        ImGui::SameLine();
-        
-        // ボタンIDを一意にするためにポインタアドレスを使用
-        std::string btnLabel = "Remove##" + std::to_string(reinterpret_cast<uintptr_t>(comp.get()));
-        if (ImGui::Button(btnLabel.c_str())) {
+        // 部品ごとに折りたためる見出しを出し、中身は部品自身に描かせる(DrawInspectorUI の override。
+        // エディタは部品の具体的な型を知らない)。取り消し履歴への記録は、トラッカーが全部品に共通で行う
+        if (ImGui::CollapsingHeader(comp->GetTypeName().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+          ComponentEditRecorder recorder(commandManager_.get(), obj, comp->GetTypeName());
+          inspectorEditTracker_.DrawAndRecord(*comp, recorder);
+
+          if (ImGui::Button("Remove Component")) {
             componentToRemove = comp.get();
             SetSceneModified();
+          }
         }
-        // 今後はここで comp->DrawInspector() などを呼んでパラメータ編集できるようにする
+
+        ImGui::PopID();
       }
 
       if (componentToRemove) {

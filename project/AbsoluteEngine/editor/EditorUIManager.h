@@ -6,6 +6,7 @@
 #include "../Type/Vector.h"
 #include "../Type/Transform.h"
 #include "CommandManager.h"
+#include "InspectorEditTracker.h"
 #include "../../externals/nlohmann/json.hpp"
 #include "../scene/LightNodeComponent.h"
 #include "../scene/SceneWorld.h"
@@ -109,7 +110,8 @@ private:
   Transform transformBeforeGizmo_;
 
   Transform transformBeforeInspector_;
-  nlohmann::json componentStateBefore_;
+  // 部品のインスペクタを描き、編集を取り消し履歴へ記録する役(全部品に共通。部品の種類ごとの分岐を持たない)
+  InspectorEditTracker inspectorEditTracker_;
 
   // タイムラインイベントインスペクタ編集用のUndo/Redoスナップショット（タスクF）
   // IsItemActivated()時に取得し、IsItemDeactivatedAfterEdit()時にTimelineCommandを発行する
