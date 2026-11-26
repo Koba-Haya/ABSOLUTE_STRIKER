@@ -32,6 +32,8 @@
 #include "../actor/Enemy/TelegraphComponent.h"
 #include "../actor/Enemy/EnemyShootComponent.h"
 #include "../actor/Enemy/BossComponent.h"
+#include "../actor/Enemy/BossOrbTags.h"
+#include "../actor/Bullet/BulletFactory.h"
 #include "../actor/Enemy/FormationMemberComponent.h"
 #include "../actor/Enemy/FormationSpawnEvent.h"
 #include "../actor/Enemy/TurretShootComponent.h"
@@ -202,6 +204,17 @@ constexpr BYTE kDebugKillBossKey = DIK_7;
 // 開発用: ボスの HP を、次のフェーズの境目まで減らすショートカット。シールドの確認のため(境目を切ると、シールドが始まる。シールドの最中に押すと、耐久が 3 減る)。
 // キーは主列の 6(0 はスキップ、7 は撃破、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
 constexpr BYTE kDebugBossPhaseKey = DIK_6;
+
+// 開発用: 自機を一撃で倒すショートカット。死亡演出の間に、ボスの弾や誘導弾の玉が残らないことの確認のため(ボス戦の最中だけ)。
+// キーは主列の 5(0 はスキップ、6 はボスの HP、7 は撃破、8 はボス戦へ飛ぶ、9 は蘇生に使用済み)
+constexpr BYTE kDebugKillPlayerKey = DIK_5;
+
+// 開発用: 出ているボスの誘導弾の玉(待機中も飛行中も)を、自機のロックオン弾で撃つショートカット。撃ち落としの確認のため(ボス戦の最中だけ)。
+// 本物のロックオン(カーソルの位置と長押し)を使わずに、同じ弾(CreatePlayerHoming)を、玉を狙って出す。
+// キーは主列の 4。弾の飛行の時間と当たり判定の半径は、自機の通常のロックオン弾と同じ値にしてある
+constexpr BYTE kDebugShootOrbsKey = DIK_4;
+constexpr float kDebugOrbShotDuration = 0.6f;
+constexpr float kDebugOrbShotRadius = 1.0f;
 // シールドの最中に 6 キーを押したときの、シールドへのダメージと、波紋を出す位置(ボスの位置からのずれ)
 constexpr int kDebugShieldDamage = 3;
 constexpr float kDebugShieldHitOffsetY = 4.0f;
@@ -979,13 +992,12 @@ void GameScene::SpawnBoss_() {
   Vector3 forward = GetMainCamera()->GetForward();
   // 初期出現位置。以降はBossComponent::UpdateMovement()が毎フレーム
   // カメラの前方に追従＋左右上下の揺れを加えて上書きするため、
-  // ここは最初の1フレーム分の暫定位置（BossComponent::kHoverDistanceFromCameraと合わせておく）。
-  constexpr float kBossInitialDistanceFromCamera = 36.0f;
+  // ここは最初の1フレーム分の暫定位置（BossComponent と同じ距離 BossPlacement::kHoverDistanceFromCamera を使う）。
   const Vector3 cameraEye = GetMainCamera()->GetEye();
   bossObj->SetPosition({
-      cameraEye.x + forward.x * kBossInitialDistanceFromCamera,
-      cameraEye.y + forward.y * kBossInitialDistanceFromCamera,
-      cameraEye.z + forward.z * kBossInitialDistanceFromCamera
+      cameraEye.x + forward.x * BossPlacement::kHoverDistanceFromCamera,
+      cameraEye.y + forward.y * BossPlacement::kHoverDistanceFromCamera,
+      cameraEye.z + forward.z * BossPlacement::kHoverDistanceFromCamera
   });
   // このステージのボスの種類(stages.json の "boss")から、モデル・大きさ・当たり判定の半径を決める
   const BossModelSpec &bossSpec = GetBossModelSpec(ResolveStage_().boss);
@@ -1080,7 +1092,34 @@ void GameScene::CheckKillBossShortcut_() {
     KillBossForDebug_();
   } else if (GetInput()->TriggerKey(kDebugBossPhaseKey)) {
     DamageBossToNextPhaseForDebug_();
+  } else if (GetInput()->TriggerKey(kDebugKillPlayerKey)) {
+    KillPlayerForDebug_();
+  } else if (GetInput()->TriggerKey(kDebugShootOrbsKey)) {
+    ShootOrbsForDebug_();
   }
+}
+
+void GameScene::ShootOrbsForDebug_() {
+  if (!playerObj_) return;
+  const Vector3 start = playerObj_->GetTransform().translate;
+  for (const auto& obj : GetRootObjects()) {
+    if (!obj || obj->GetTag() != BossOrbTags::kOrb) continue;
+    const Vector3 target = obj->GetTransform().translate;
+    HomingBulletSpec spec;
+    spec.startPos = start;
+    spec.controlPos = { (start.x + target.x) * 0.5f, (start.y + target.y) * 0.5f, (start.z + target.z) * 0.5f };
+    spec.duration = kDebugOrbShotDuration;
+    spec.radius = kDebugOrbShotRadius;
+    spec.target = obj;
+    GetSpawner().Spawn(BulletFactory::CreatePlayerHoming(spec, GetSpawner()));
+  }
+}
+
+void GameScene::KillPlayerForDebug_() {
+  if (!playerObj_) return;
+  auto* player = playerObj_->GetComponent<PlayerComponent>();
+  if (!player || player->IsDead()) return;
+  player->TakeDamage(player->GetMaxHp()); // 通常の被弾と同じ経路で、HP を 0 にする(死亡演出が始まる)
 }
 
 void GameScene::CheckSkipToBossShortcut_() {
@@ -1232,7 +1271,9 @@ void GameScene::RemoveBulletsDuringCutscene_() {
   for (const auto& obj : GetRootObjects()) {
       if (!obj) continue;
       const std::string& tag = obj->GetTag();
-      if (tag == "PlayerBullet" || tag == "EnemyBullet") {
+      // ボスの誘導弾の玉(待機中も飛行中も)と、玉が消えたあとに残る尾も、弾と同じように消す。
+      // これを入れ忘れると、死亡演出や撃破演出の間も、玉が飛び続け、光の帯が残って見える
+      if (tag == "PlayerBullet" || tag == "EnemyBullet" || tag == BossOrbTags::kOrb || tag == BossOrbTags::kTrail) {
           obj->Destroy(); // 次の更新の終わりに、シーンから取り除かれる(それまでに描かれない: 更新は描画の前)
       }
   }

@@ -8,11 +8,17 @@ void BossAttackState::Enter(IBossActions& actions) {
     timer_ = 0.0f;
     // 予告の始まりを伝える(体は、予告のアニメーション = 構えへ移る動き、に切り替える)
     actions.SetAttackStage(BossAttackStage::Telegraph, spec_);
+    // 誘導弾は、予告の始まりに、玉をボスの周りへ出す(予告の間に現れ、溜めの間は、固定で待つ)
+    if (spec_.kind == BossAttackKind::HomingOrbs) {
+        actions.SummonOrbs(spec_.count, spec_.telegraphSec, spec_.chargeSec);
+    }
 }
 
 void BossAttackState::Exit(IBossActions& actions) {
     // 攻撃が終わる(次の状態へ移る、または、ほかの理由で抜ける)ことを伝える
     actions.SetAttackStage(BossAttackStage::None, spec_);
+    // 発射の前に攻撃が中断されたとき(シールドの発動など)に、待っている玉が残らないようにする。発射を命じた玉は、そのまま飛び続ける
+    actions.DismissOrbs();
 }
 
 float BossAttackState::GetStageSec() const {
@@ -31,6 +37,10 @@ void BossAttackState::Fire(IBossActions& actions) const {
         break;
     case BossAttackKind::Spread:
         actions.FireSpreadShot(spec_.count, spec_.spreadAngleDeg, spec_.speed);
+        break;
+    case BossAttackKind::HomingOrbs:
+        // 溜めが終わった瞬間に、玉を 1 つずつ自機へ向けて発射する(玉は、ボスの周りに、固定で待っていた)
+        actions.LaunchOrbs(spec_.flightSec, spec_.launchIntervalSec);
         break;
     }
 }

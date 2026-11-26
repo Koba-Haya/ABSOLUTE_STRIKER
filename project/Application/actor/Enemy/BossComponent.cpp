@@ -19,10 +19,7 @@
 namespace {
 // 攻撃の間隔・弾速・弾の数は、攻撃の表(BossAttackPlan.h)に移した
 
-// カメラの前方に留まる距離・左右上下の揺れ幅と速さ
-// 基準はカメラ(=レール上の位置)であり、自機の動きには影響されない。
-// 従来(自機の前方14)と見た目の位置が変わらないよう、自機のカメラ前方距離(22)+14 = 36 にしている
-constexpr float kHoverDistanceFromCamera = 36.0f;
+// 左右上下の揺れ幅と速さ。カメラの前方に留まる距離は、BossPlacement::kHoverDistanceFromCamera(BossComponent.h)
 constexpr float kWeaveAmplitudeX = 6.0f;  // 左右の振れ幅
 constexpr float kWeaveAmplitudeY = 3.0f;  // 上下の振れ幅
 constexpr float kWeaveSpeedX = 0.5f;      // rad/sec
@@ -43,6 +40,10 @@ void BossComponent::Update(float deltaTime) {
     if (!isActive_ || !GetOwner()) return;
 
     UpdateMovement(deltaTime);
+    // 誘導弾の玉は、ボスの動きに合わせる(ボスが動いたあとの、ボスの位置を基準に渡す)
+    if (screen_.HasCamera()) {
+        orbGroup_.Update(GetOwner()->GetTransform().translate, screen_.GetRight(), screen_.GetActualUp());
+    }
     UpdatePhase();
 
     // 状態の切り替えを済ませてから、今の状態を 1 回進める。状態の中で ChangeState が呼ばれても、
@@ -193,9 +194,9 @@ void BossComponent::UpdateMovement(float deltaTime) {
     const float weaveY = std::sin(weaveTimer_ * kWeaveSpeedY) * kWeaveAmplitudeY;
 
     GetOwner()->SetPosition({
-        basePos.x + forward.x * kHoverDistanceFromCamera + right.x * weaveX + up.x * weaveY,
-        basePos.y + forward.y * kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
-        basePos.z + forward.z * kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
+        basePos.x + forward.x * BossPlacement::kHoverDistanceFromCamera + right.x * weaveX + up.x * weaveY,
+        basePos.y + forward.y * BossPlacement::kHoverDistanceFromCamera + right.y * weaveX + up.y * weaveY,
+        basePos.z + forward.z * BossPlacement::kHoverDistanceFromCamera + right.z * weaveX + up.z * weaveY
     });
 
     // 正面(モデルの +Z)を、カメラの方へ向ける。自機は、モデルの +Z を進行方向へ向けて飛ぶ(PlayerComponent と同じ規約)。
@@ -288,6 +289,22 @@ Vector3 BossComponent::GetBulletOrigin_() const {
     return GetOwner()->GetTransform().translate;
 }
 
+void BossComponent::SummonOrbs(int count, float appearSec, float chargeSec) {
+    if (!GetOwner() || !screen_.HasCamera()) return;
+    // 玉は、ボスの中心を基準に、画面に平行な面の上へ並べる(カメラは振り返らないので、必ず見える)
+    orbGroup_.Summon(spawner_, count, appearSec, chargeSec,
+                     GetOwner()->GetTransform().translate, screen_.GetRight(), screen_.GetActualUp());
+}
+
+void BossComponent::LaunchOrbs(float flightSec, float intervalSec) {
+    const auto player = FindPlayer();
+    if (!player) {
+        orbGroup_.DismissHeld(); // 狙う相手がいないので、待っている玉は消す
+        return;
+    }
+    orbGroup_.Launch(player, flightSec, intervalSec);
+}
+
 void BossComponent::FireAimedShot(float speed) {
     if (!GetOwner()) return;
     auto playerObj = FindPlayer();
@@ -355,6 +372,7 @@ void BossComponent::TakeDamage(int damage, const Vector3* hitPosition) {
         isActive_ = false;
         attackEffects_.Stop(); // 撃破: 攻撃の演出(輪)を消す
         shieldEffects_.Stop();
+        orbGroup_.DismissAll(); // 撃破: 誘導弾の玉を、飛行中のものも含めて、すべて消す
     } else {
         // 即死しなかった場合の被弾リアクション(よろめきのアニメーション。次の UpdateAnimation で再生する)
         hitRequested_ = true;

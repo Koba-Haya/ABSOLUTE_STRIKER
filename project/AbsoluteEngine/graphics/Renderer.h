@@ -36,6 +36,9 @@ class ParticleManager;
 class Camera;
 class Ring;
 class ArcRing;
+class EnergyOrb;
+struct EnergyRibbonStyle;
+class EnergyRibbonParamsRing;
 class ShieldDome;
 class Cylinder;
 class CloudNoiseTextures;
@@ -227,6 +230,14 @@ public:
   void DrawArcRing(ArcRing *ring);
   // ArcRing の板と定数バッファを、このレンダラーのデバイスで作る(アプリ側が、デバイスを直接触らずに済むようにする窓口)。失敗したら false
   bool InitializeArcRing(ArcRing &ring);
+  // 渦巻く光の玉(板 1 枚 + シェーダー)を描く。形と色は EnergyOrb::SetParams、位置と向きは SetBillboardTransform で、描く前に決めておく。
+  // アルファ合成で、深度は見ない。雲の合成のあと(描画先が色だけのとき)にだけ描く(それ以外では、何も描かない)
+  void DrawEnergyOrb(EnergyOrb *orb);
+  // EnergyOrb の板と定数バッファを、このレンダラーのデバイスで作る。失敗したら false
+  bool InitializeEnergyOrb(EnergyOrb &orb);
+  // エネルギーのリボン(光の帯)を描く。帯の形は RibbonTrail、色と模様は style で決める。
+  // アルファ合成で、深度は見ない。雲の合成のあと(描画先が色だけのとき)にだけ描く(それ以外では、何も描かない)
+  void DrawEnergyRibbon(const RibbonTrail &trail, const EnergyRibbonStyle &style);
   // シールドのドーム(三角形の格子の球)を描く。形と状態は ShieldDome::SetParams / SetTransform で、描く前に決めておく。
   // 通常は、深度テストで、手前の物の後ろを隠す。雲の合成のあと(FlushVolumeClouds のあと)は、シーンの深度を読んで隠す
   void DrawShieldDome(ShieldDome *dome);
@@ -381,12 +392,15 @@ private:
   std::unique_ptr<UnifiedPipeline> ringPipeline_;
   std::unique_ptr<UnifiedPipeline> arcRingPipeline_; // 切れ目のある輪(DrawArcRing)
   std::unique_ptr<UnifiedPipeline> arcRingColorOnlyPipeline_; // 同、雲の合成のあと(描画先が色だけ)の版
+  std::unique_ptr<UnifiedPipeline> energyOrbColorOnlyPipeline_; // 渦巻く光の玉(DrawEnergyOrb)。雲の合成のあと(描画先が色だけ)の版だけ
   std::unique_ptr<UnifiedPipeline> shieldDomePipeline_;           // シールドのドーム(DrawShieldDome)
   std::unique_ptr<UnifiedPipeline> shieldDomeColorOnlyPipeline_;  // 同、雲の合成のあとの版(シーンの深度を読む)
   std::unique_ptr<UnifiedPipeline> ribbonAlphaColorOnlyPipeline_; // リボン(アルファ合成)の、雲の合成のあとの版
   std::unique_ptr<UnifiedPipeline> ribbonPipeline_;
   std::unique_ptr<UnifiedPipeline> ribbonAlphaPipeline_; // リボン(通常のアルファ合成版。DrawRibbon の blendMode が Alpha のとき)
   std::unique_ptr<RibbonDrawer> ribbonDrawer_;
+  std::unique_ptr<UnifiedPipeline> energyRibbonColorOnlyPipeline_; // エネルギーのリボン(DrawEnergyRibbon)。雲のあと(描画先が色だけ)の版だけ
+  std::unique_ptr<EnergyRibbonParamsRing> energyRibbonParams_;     // 帯ごとのパラメータの置き場(描くたびに、次の枠へ書く)
   std::unique_ptr<SpriteBatchDrawer> spriteBatchDrawer_; // 文字などのクワッドをまとめて描く(共有バッファ)
   ComPtr<ID3D12Resource> ribbonTransformCB_;
   TransformCB *ribbonTransformMapped_ = nullptr;

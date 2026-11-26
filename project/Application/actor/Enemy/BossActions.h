@@ -27,6 +27,14 @@ public:
     virtual void FireAimedShot(float speed) = 0;
     // 自機方向を中心に、扇状の弾を count 発撃つ。spreadAngleDeg: 弾と弾の間の角度(度)。speed: 弾速
     virtual void FireSpreadShot(int count, float spreadAngleDeg, float speed) = 0;
+    // 誘導弾の玉を count 個、ボスの周りに出す(攻撃の予告の始まりに呼ぶ)。appearSec: 出現の秒数(予告の長さ)。chargeSec: 溜めの秒数
+    virtual void SummonOrbs(int count, float appearSec, float chargeSec) = 0;
+    // 待っている誘導弾の玉(まだ発射を命じていないもの)を、消し始める。攻撃が発射の前に中断されたとき(シールドの発動など)に、
+    // 玉が残らないようにするために使う。発射を命じた玉(飛行中を含む)は、そのまま飛び続ける。何もなければ、何もしない
+    virtual void DismissOrbs() = 0;
+    // 待っている玉を、1 つずつ(intervalSec の間隔で)、自機へ向けて発射する。flightSec: 発射から自機へ着くまでの時間(秒)。
+    // 自機が見つからないときは、待っている玉を消す
+    virtual void LaunchOrbs(float flightSec, float intervalSec) = 0;
     // 攻撃の段が変わったことを伝える(体は、その段のアニメーションと演出に切り替える)。攻撃が終わるときは None を渡す。
     // spec: いまの攻撃の定義(演出が、段の長さと種類を読む)
     virtual void SetAttackStage(BossAttackStage stage, const BossAttackSpec& spec) = 0;

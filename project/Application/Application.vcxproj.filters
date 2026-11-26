@@ -59,6 +59,12 @@
     <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
     <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
     <ClCompile Include="actor\Enemy\BossShieldEffects.cpp" />
+    <ClCompile Include="actor\Enemy\BossOrbComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossOrbVisualComponent.cpp" />
+    <ClCompile Include="actor\Enemy\BossOrbGroup.cpp" />
+    <ClCompile Include="actor\Enemy\BossOrbEffects.cpp" />
+    <ClCompile Include="actor\Player\LockOnTarget.cpp" />
+    <ClCompile Include="actor\Enemy\EnergyRibbonFadeComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossShieldState.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossModelSpec.cpp" />
@@ -199,6 +205,13 @@
     <ClInclude Include="actor\Enemy\BossAttackState.h" />
     <ClInclude Include="actor\Enemy\BossIdleState.h" />
     <ClInclude Include="actor\Enemy\BossShieldEffects.h" />
+    <ClInclude Include="actor\Enemy\BossOrbComponent.h" />
+    <ClInclude Include="actor\Enemy\BossOrbVisualComponent.h" />
+    <ClInclude Include="actor\Enemy\BossOrbGroup.h" />
+    <ClInclude Include="actor\Enemy\BossOrbEffects.h" />
+    <ClInclude Include="actor\Enemy\BossOrbTags.h" />
+    <ClInclude Include="actor\Player\LockOnTarget.h" />
+    <ClInclude Include="actor\Enemy\EnergyRibbonFadeComponent.h" />
     <ClInclude Include="actor\Enemy\BossShieldPlan.h" />
     <ClInclude Include="actor\Enemy\BossShieldState.h" />
     <ClInclude Include="actor\Enemy\BossPhase.h" />

@@ -164,6 +164,9 @@
     <ClCompile Include="graphics\primitive\Cylinder.cpp" />
     <ClCompile Include="graphics\primitive\PrimitiveDrawer.cpp" />
     <ClCompile Include="graphics\primitive\ArcRing.cpp" />
+    <ClCompile Include="graphics\primitive\EnergyOrb.cpp" />
+    <ClCompile Include="graphics\primitive\EnergyRibbon.cpp" />
+    <ClCompile Include="graphics\primitive\ShaderQuad.cpp" />
     <ClCompile Include="graphics\primitive\ShieldDome.cpp" />
     <ClCompile Include="graphics\primitive\Ring.cpp" />
     <ClCompile Include="graphics\primitive\RibbonDrawer.cpp" />
@@ -264,6 +267,9 @@
     <ClInclude Include="graphics\primitive\Cylinder.h" />
     <ClInclude Include="graphics\primitive\PrimitiveDrawer.h" />
     <ClInclude Include="graphics\primitive\ArcRing.h" />
+    <ClInclude Include="graphics\primitive\EnergyOrb.h" />
+    <ClInclude Include="graphics\primitive\EnergyRibbon.h" />
+    <ClInclude Include="graphics\primitive\ShaderQuad.h" />
     <ClInclude Include="graphics\primitive\ShieldDome.h" />
     <ClInclude Include="graphics\primitive\Ring.h" />
     <ClInclude Include="graphics\primitive\RibbonDrawer.h" />

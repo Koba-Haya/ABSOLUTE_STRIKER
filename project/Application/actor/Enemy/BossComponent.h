@@ -4,6 +4,7 @@
 #include "BossActions.h"
 #include "BossAttackEffects.h"
 #include "BossModelSpec.h"
+#include "BossOrbGroup.h"
 #include "BossPhase.h"
 #include "BossShieldEffects.h"
 #include "BossState.h"
@@ -17,6 +18,13 @@ class IScreenView;
 class ISceneQuery;
 class ModelComponent;
 }
+
+// ボスの位置の決まり。出現の最初の 1 フレーム(GameScene)と、毎フレームの移動(BossComponent)が、同じ値を使う
+namespace BossPlacement {
+// カメラ(=レール上の位置)の前方に留まる距離。基準はカメラで、自機の動きには影響されない。
+// 自機はカメラの前 22 にいるので、自機からボスまでは、この値 - 22(46 なら 24)。少し離して、攻撃の演出が画面に収まるようにしている
+constexpr float kHoverDistanceFromCamera = 46.0f;
+} // namespace BossPlacement
 
 // ボス本体のコンポーネント。HP、移動、フェーズの判定、アニメーションの切り替えを受け持つ。
 // 攻撃の流れ(待機 -> 予告 -> 溜め -> 発射 -> 隙)は、状態クラス(BossIdleState / BossAttackState)が持つ。
@@ -59,6 +67,9 @@ private:
     // --- IBossActions(状態クラスからの依頼を受ける窓口) ---
     void FireAimedShot(float speed) override;
     void FireSpreadShot(int count, float spreadAngleDeg, float speed) override;
+    void SummonOrbs(int count, float appearSec, float chargeSec) override;
+    void DismissOrbs() override { orbGroup_.DismissHeld(); }
+    void LaunchOrbs(float flightSec, float intervalSec) override;
     void SetAttackStage(BossAttackStage stage, const BossAttackSpec& spec) override {
         attackStage_ = stage;
         attackStageChanged_ = (stage != BossAttackStage::None);
@@ -128,4 +139,6 @@ private:
     BossAttackEffects attackEffects_;
     // シールドの見た目(三角形の格子のドーム)
     BossShieldEffects shieldEffects_;
+    // 誘導弾の玉の集まり(ボスの周りに出す。ボスの動きに合わせて動かす)
+    BossOrbGroup orbGroup_;
 };

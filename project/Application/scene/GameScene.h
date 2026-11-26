@@ -172,6 +172,10 @@ private:
   void KillBossForDebug_();
   // 開発用: ボスの HP を、次のフェーズの境目まで減らす(シールドの確認用。6 キー)
   void DamageBossToNextPhaseForDebug_();
+  // 開発用: 自機の HP を 0 にする(死亡演出の確認用。5 キー)
+  void KillPlayerForDebug_();
+  // 開発用: 出ているボスの誘導弾の玉を、ロックオン弾で撃つ(撃ち落としの確認用。4 キー)
+  void ShootOrbsForDebug_();
   void UpdateHud_();
   // --- ゲーム開始のイントロ(画面遷移の覆いが晴れる間の、見た目だけの助走) ---
   // 覆いの中で始まったときだけ、イントロを始める。助走の基準になる位置(カメラ・自機)をここで記録する

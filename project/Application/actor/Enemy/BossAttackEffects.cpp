@@ -93,8 +93,9 @@ void BossAttackEffects::Update(float deltaTime, const Vector3* muzzle) {
         hasPreviousMuzzle_ = false;
     }
 
-    // 攻撃の最中でない、または出口の位置が分からないときは、何も出さない
-    if (stage_ == BossAttackStage::None || !muzzle) {
+    // 攻撃の最中でない、または出口の位置が分からないときは、何も出さない。
+    // 誘導弾は、口の前の輪を出さない(予告と溜めは、ボスの周りに現れる玉そのものが見せる。口から弾は出ない)
+    if (stage_ == BossAttackStage::None || !muzzle || spec_.kind == BossAttackKind::HomingOrbs) {
         visible_ = false;
         return;
     }

@@ -647,6 +647,15 @@ PipelineDesc UnifiedPipeline::MakeArcRingDesc() {
   return d;
 }
 
+PipelineDesc UnifiedPipeline::MakeEnergyOrbColorOnlyDesc() {
+  // 板の頂点とルートシグネチャは、ArcRing と同じ(頂点シェーダーも共通)。ピクセルシェーダーだけが違う
+  PipelineDesc d = MakeArcRingDesc();
+  d.psPath = L"resources/engine/shaders/EnergyOrb.PS.hlsl";
+  d.enableDepth = false;           // 描画先に深度バッファが付いていない。雲のあとの描画なので、深度は見ない
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
+  return d;
+}
+
 PipelineDesc UnifiedPipeline::MakeShieldDomeDesc() {
   PipelineDesc d{};
   d.inputElements = {
@@ -704,6 +713,17 @@ PipelineDesc UnifiedPipeline::MakeRibbonDesc() {
   d.alphaBlend = true;
   d.blendMode = BlendMode::Add;    // 加算合成で光らせる
   d.cullMode = D3D12_CULL_MODE_NONE; // 帯は裏から見ても描く
+  return d;
+}
+
+PipelineDesc UnifiedPipeline::MakeEnergyRibbonColorOnlyDesc() {
+  // 頂点の形と、頂点シェーダーは、通常のリボンと同じ。ピクセルシェーダーと、ルートシグネチャ(PS の定数バッファが増える)が違う
+  PipelineDesc d = MakeRibbonDesc();
+  d.psPath = L"resources/engine/shaders/EnergyRibbon.PS.hlsl";
+  d.usePSMaterial_b0 = true;       // ルートパラメータ 0 番: PS の帯のパラメータ(VS の変換行列は、1 番になる)
+  d.blendMode = BlendMode::Alpha;  // 通常のアルファ合成(明るい空の上でも、暗い輪郭と明るい光が見える)
+  d.enableDepth = false;           // 描画先に深度バッファが付いていない。雲のあとの描画なので、深度は見ない
+  d.dsvFormat = DXGI_FORMAT_UNKNOWN;
   return d;
 }
 

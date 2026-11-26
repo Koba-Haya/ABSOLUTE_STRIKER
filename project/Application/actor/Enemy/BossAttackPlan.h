@@ -15,6 +15,10 @@
 enum class BossAttackKind {
     Aimed,  // 自機狙いの単発弾
     Spread, // 自機方向を中心にした扇状弾
+    // 誘導弾: 予告でボスの周りに玉が現れ、溜めの間は固定で待ち、発射で 1 つずつ自機へ飛ぶ(自機は、玉を撃ち落とせる)。
+    // 玉の数は count。発射の間隔は launchIntervalSec、飛行の時間は flightSec。speed と spreadAngleDeg は使わない。
+    // 予告と溜めの間が、玉を撃ち落とす猶予になるので、ほかの攻撃より長い
+    HomingOrbs,
 };
 
 // 1 回の攻撃の定義
@@ -27,6 +31,9 @@ struct BossAttackSpec {
     float speed;        // 弾速
     int count;          // 弾の数(Spread のとき。Aimed は 1 発なので使わない)
     float spreadAngleDeg; // 弾と弾の間の角度(度。Spread のとき)
+    // 誘導弾(HomingOrbs)のとき。ほかの攻撃では使わない(表の行では、省略してよい)
+    float launchIntervalSec = 0.0f; // 玉を 1 つずつ発射する間隔(秒)
+    float flightSec = 0.0f;         // 発射から自機へ着くまでの時間(秒。速くしすぎない)
 };
 
 // 1 つのフェーズの攻撃の並び
@@ -54,6 +61,18 @@ constexpr float kRecoverSec = 0.5f;
 // 扇状弾の数
 constexpr int kSpreadCountPhase2 = 5;
 constexpr int kSpreadCountPhase3 = 8;
+// 誘導弾(玉)の数
+constexpr int kOrbCountPhase2 = 4;
+constexpr int kOrbCountPhase3 = 6;
+// 誘導弾の予告(玉が現れる)と溜め(玉が固定で待つ。撃ち落とす猶予)。ほかの攻撃より長い。フェーズが上がるほど、少し短くする
+constexpr float kOrbTelegraphSecPhase2 = 0.9f;
+constexpr float kOrbChargeSecPhase2 = 1.2f;
+constexpr float kOrbTelegraphSecPhase3 = 0.8f;
+constexpr float kOrbChargeSecPhase3 = 1.0f;
+// 誘導弾の、玉を 1 つずつ発射する間隔と、飛行の時間(速くしすぎない。撃ち落とす猶予になる)
+constexpr float kOrbLaunchIntervalSec = 0.25f;
+constexpr float kOrbFlightSecPhase2 = 2.2f;
+constexpr float kOrbFlightSecPhase3 = 2.0f;
 } // namespace BossAttackPlanDefaults
 
 namespace BossAttackPlanTable {
@@ -65,12 +84,16 @@ inline constexpr BossAttackSpec kPhase1[] = {
 };
 inline constexpr BossAttackSpec kPhase2[] = {
     { BossAttackKind::Aimed,  0.4f, kTelegraphSecPhase2, kChargeSecPhase2, kRecoverSec, kAimedSpeed,  1, 0.0f },
-    { BossAttackKind::Spread, 0.6f, kTelegraphSecPhase2, kChargeSecPhase2, kRecoverSec, kSpreadSpeed, kSpreadCountPhase2, kSpreadAngleDeg },
+    // 扇状弾は、プレイ会で邪魔になるため、一時的に表から外している(攻撃の仕組みと数値は残してある。戻すときは、この行を有効にする)
+    // { BossAttackKind::Spread, 0.6f, kTelegraphSecPhase2, kChargeSecPhase2, kRecoverSec, kSpreadSpeed, kSpreadCountPhase2, kSpreadAngleDeg },
+    { BossAttackKind::HomingOrbs, 0.6f, kOrbTelegraphSecPhase2, kOrbChargeSecPhase2, kRecoverSec, 0.0f, kOrbCountPhase2, 0.0f, kOrbLaunchIntervalSec, kOrbFlightSecPhase2 },
 };
 inline constexpr BossAttackSpec kPhase3[] = {
     { BossAttackKind::Aimed,  0.1f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kAimedSpeed,  1, 0.0f },
     { BossAttackKind::Aimed,  0.1f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kAimedSpeed,  1, 0.0f },
-    { BossAttackKind::Spread, 0.3f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kSpreadSpeed, kSpreadCountPhase3, kSpreadAngleDeg },
+    // 扇状弾は、一時的に表から外している(上の Phase2 と同じ理由)
+    // { BossAttackKind::Spread, 0.3f, kTelegraphSecPhase3, kChargeSecPhase3, kRecoverSec, kSpreadSpeed, kSpreadCountPhase3, kSpreadAngleDeg },
+    { BossAttackKind::HomingOrbs, 0.4f, kOrbTelegraphSecPhase3, kOrbChargeSecPhase3, kRecoverSec, 0.0f, kOrbCountPhase3, 0.0f, kOrbLaunchIntervalSec, kOrbFlightSecPhase3 },
 };
 } // namespace BossAttackPlanTable
 

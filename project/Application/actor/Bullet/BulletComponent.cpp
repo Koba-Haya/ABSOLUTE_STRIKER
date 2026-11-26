@@ -3,6 +3,7 @@
 #include "AbsoluteEngine/scene/BaseScene.h"
 #include "../Enemy/EnemyComponent.h"
 #include "../Enemy/BossComponent.h"
+#include "../Player/LockOnTarget.h"
 #include "Application/actor/Player/PlayerComponent.h"
 #include "Application/occlusion/OcclusionWorld.h"
 
@@ -62,8 +63,8 @@ void BulletComponent::OnCollision(AbsoluteEngine::GameObject* other) {
             GetOwner()->Destroy();
         }
     } else if (ownerTag == kPlayerBulletTag) {
-        if (otherTag == "Enemy" || otherTag == "Boss") {
-            // プレイヤー弾 → 敵・ボス本体に当たって消える
+        if (LockOnTarget::IsTargetTag(otherTag)) {
+            // プレイヤー弾 → 敵・ボス・ボスの誘導弾の玉に当たって消える(玉は、撃ち落とされる)
             isActive_ = false;
             GetOwner()->Destroy();
         } else if (otherTag == kEnemyBulletTag && otherBullet) {
