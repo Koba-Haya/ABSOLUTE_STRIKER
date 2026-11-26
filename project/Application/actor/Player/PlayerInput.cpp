@@ -9,7 +9,6 @@ constexpr float kStickMax         = 32767.0f;  // XInput スティック最大�
 constexpr float kMouseSensitivity = 1.0f;      // マウス1カウントあたりのカーソル移動量（ピクセル）
 constexpr int   kMouseLeftButton  = 0;
 
-bool s_cursorHidden = false; // ShowCursor(FALSE) 済みか（表示カウンタを崩さないための状態）
 } // namespace
 
 PlayerInputState PlayerInput::Poll(const Input& input, bool mouseAimEnabled) {
@@ -66,15 +65,14 @@ void MouseCapture::Apply(bool want) {
     const RECT clip{ topLeft.x, topLeft.y, bottomRight.x, bottomRight.y };
     ClipCursor(&clip);
 
-    if (!s_cursorHidden) {
+    if (!cursorHidden_) {
       ShowCursor(FALSE);
-      s_cursorHidden = true;
+      cursorHidden_ = true;
     }
-  } else if (s_cursorHidden) {
+  } else if (cursorHidden_) {
     ClipCursor(nullptr);
     ShowCursor(TRUE);
-    s_cursorHidden = false;
+    cursorHidden_ = false;
   }
 }
 
-bool MouseCapture::IsActive() { return s_cursorHidden; }

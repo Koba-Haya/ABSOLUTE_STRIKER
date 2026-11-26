@@ -101,15 +101,16 @@ const ItemDefinition *InheritancePicker::FindDefinition_(ItemEffectKind kind) co
   return nullptr;
 }
 
-bool InheritancePicker::HasCandidates() {
-  const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
+bool InheritancePicker::HasCandidates(const PlayerUpgradeState &state) {
   for (size_t i = 0; i < kItemEffectKindCount; ++i) {
     if (state.GetEarned(static_cast<ItemEffectKind>(i)) > 0) return true;
   }
   return false;
 }
 
-void InheritancePicker::Initialize(const ItemCatalog &items, const RatingCatalog &rating, const InheritanceState &inheritance) {
+void InheritancePicker::Initialize(const ItemCatalog &items, const RatingCatalog &rating, const InheritanceState &inheritance,
+                                   const PlayerUpgradeState &upgrades) {
+  upgrades_ = &upgrades;
   items_ = &items;
   rating_ = &rating;
   inheritance_ = &inheritance;
@@ -134,7 +135,7 @@ int InheritancePicker::UsedSlots_() const {
 }
 
 void InheritancePicker::Begin(RunRank rank, float delaySeconds) {
-  const PlayerUpgradeState &state = PlayerUpgradeState::Persistent();
+  const PlayerUpgradeState &state = *upgrades_;
   const ItemUpgradeSettings &upgrade = items_->GetUpgradeSettings();
   const InheritanceRule &rule = rating_->GetSettings().GetInheritanceRule(rank);
 

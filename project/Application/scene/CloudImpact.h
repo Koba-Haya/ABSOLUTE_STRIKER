@@ -49,12 +49,14 @@ public:
   // 返した設定を、シーンが Renderer::AddVolumeCloud へ渡す(雲海の層の次に、手前の雲として追加する)
   bool BuildPuff(VolumeCloudSettings &out) const;
 
-  // 塊の調整値(デバッグ UI が編集する)
-  CloudImpactPuff &GetPuff() { return puff_; }
+  // 塊の調整値を読み取り専用で返す。書き換えるときは、コピーを編集して SetPuff で戻す(デバッグ UI が使う)
+  const CloudImpactPuff &GetPuff() const { return puff_; }
+  void SetPuff(const CloudImpactPuff &puff) { puff_ = puff; }
 
-  // 形の調整値(くぼみの大きさ、波の速さなど)。デバッグ UI が編集する。強さ、位置、経過秒は内部で管理する
-  VolumeCloudImpact &GetShape() { return shape_; }
+  // 形の調整値(くぼみの大きさ、波の速さなど)を読み取り専用で返す。書き換えるときは、コピーを編集して SetShape で戻す。
+  // 強さ、位置、経過秒は内部で管理する
   const VolumeCloudImpact &GetShape() const { return shape_; }
+  void SetShape(const VolumeCloudImpact &shape) { shape_ = shape; }
 
 private:
   // 反応が終わったと見なすまでの、最後の動きが終わってからの余裕(秒)

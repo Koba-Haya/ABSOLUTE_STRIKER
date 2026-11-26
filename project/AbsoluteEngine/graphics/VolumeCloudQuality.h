@@ -35,8 +35,10 @@ public:
 
   int32_t GetTier() const { return tier_; }
   float GetSmoothedMs() const { return smoothedMs_; }
-  VolumeCloudQualityConfig &GetConfig() { return config_; }
+  // 自動調整の設定を読み取り専用で返す。書き換えるときは、コピーを編集して SetConfig で戻す
   const VolumeCloudQualityConfig &GetConfig() const { return config_; }
+  // 自動調整の設定を丸ごと差し替える(書き込みの窓口はここだけ)
+  void SetConfig(const VolumeCloudQualityConfig &config) { config_ = config; }
 
 private:
   void ChangeTier_(int32_t newTier);

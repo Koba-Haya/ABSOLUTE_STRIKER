@@ -26,11 +26,16 @@ public:
 };
 
 // Playモード中の OS マウスカーソルの非表示化 / ウィンドウ内への閉じ込め。
-// Win32 のカーソル表示カウンタを崩さないよう、状態を内部で管理する。
-namespace MouseCapture {
-// want が true の間カーソルを隠して閉じ込める。アプリが非アクティブな間は自動で解除する。
-// 毎フレーム呼んでよい（ウィンドウ移動にも追従する）。
-void Apply(bool want);
-// 現在カーソルを閉じ込め中か（Playモードのマウス照準を有効にするかの判定に使う）
-bool IsActive();
-} // namespace MouseCapture
+// Win32 のカーソル表示カウンタを崩さないよう、隠したかどうかの状態をメンバで管理する。
+// 以前は名前空間の関数と、ファイル内のグローバル変数だったが、閉じ込めを決めるシーン(GameScene)が、このクラスを持つ形にした。
+class MouseCapture {
+public:
+  // want が true の間カーソルを隠して閉じ込める。アプリが非アクティブな間は自動で解除する。
+  // 毎フレーム呼んでよい（ウィンドウ移動にも追従する）。
+  void Apply(bool want);
+  // 現在カーソルを閉じ込め中か（Playモードのマウス照準を有効にするかの判定に使う）
+  bool IsActive() const { return cursorHidden_; }
+
+private:
+  bool cursorHidden_ = false; // ShowCursor(FALSE) 済みか（表示カウンタを崩さないための状態）
+};

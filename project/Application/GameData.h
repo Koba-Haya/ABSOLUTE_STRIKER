@@ -1,6 +1,7 @@
 #pragma once
 #include "inheritance/InheritanceState.h"
 #include "item/ItemCatalog.h"
+#include "item/PlayerUpgradeState.h"
 #include "result/RatingCatalog.h"
 #include "stage/StageCatalog.h"
 #include "stage/StageProgress.h"
@@ -31,6 +32,9 @@ public:
   // 継承(前の世代から引き継いだ強化と、世代数)。プレイで変わる保存データ
   InheritanceState &GetInheritanceState() { return inheritanceState_; }
   const InheritanceState &GetInheritanceState() const { return inheritanceState_; }
+  // 自機の強化の状態(継承した分と、今回取った分)。ステージをまたいで残る(保存はしない)
+  PlayerUpgradeState &GetPlayerUpgradeState() { return playerUpgradeState_; }
+  const PlayerUpgradeState &GetPlayerUpgradeState() const { return playerUpgradeState_; }
 
 private:
   StageCatalog stageCatalog_;
@@ -38,4 +42,5 @@ private:
   RatingCatalog ratingCatalog_;
   StageProgress stageProgress_;
   InheritanceState inheritanceState_;
+  PlayerUpgradeState playerUpgradeState_;
 };

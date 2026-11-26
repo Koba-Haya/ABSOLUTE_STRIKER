@@ -79,7 +79,8 @@ void ClearScene::Initialize(const SceneServices &services) {
     const float rangeBottom = menu_.GetPanelTop() - kTallyGapAboveMenu;
     tally_.Initialize(gameData_.GetRatingCatalog());
     tally_.SetVerticalRange(rangeTop, rangeBottom);
-    picker_.Initialize(gameData_.GetItemCatalog(), gameData_.GetRatingCatalog(), gameData_.GetInheritanceState());
+    picker_.Initialize(gameData_.GetItemCatalog(), gameData_.GetRatingCatalog(), gameData_.GetInheritanceState(),
+                      gameData_.GetPlayerUpgradeState());
     picker_.SetVerticalRange(rangeTop, rangeBottom);
     continuePrompt_.Initialize();
     continuePrompt_.SetPosition(ScreenSize::kCenterX, menu_.GetPanelTop() + kContinuePromptOffsetBelowMenuTop);
@@ -126,7 +127,7 @@ void ClearScene::Update() {
   // 強化があれば、案内を出して、決定ボタンを待つ(結果と評価を、ゆっくり見せるため)。押されたら、継承の選択を始め、集計を薄く消す。
   // 展示中は、一定時間待ってから、自動操作で継承の選択を始める(仮の状態なので、保存されない)
   if (hasResult_ && tally_.IsFinished() && !inheritanceStarted_) {
-    if (!InheritancePicker::HasCandidates()) {
+    if (!InheritancePicker::HasCandidates(gameData_.GetPlayerUpgradeState())) {
       inheritanceStarted_ = true;
     } else if (exhibition) {
       exhibitionTallyTimer_ += kFrameDeltaSeconds;

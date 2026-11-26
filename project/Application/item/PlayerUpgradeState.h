@@ -10,15 +10,12 @@
 // 分けた理由: クリア後に、「今回取った分」から継承を選ぶので、継承した分と区別して持つ必要がある。
 //             「継承するか」「持ち越すか」の方針は、ここに閉じ込める(効果を自機へ反映する ItemEffectApplier や、
 //             アイテムの出現とは関係を持たない)。
-// 持ち越しの仕組み: アプリが動いている間ずっと残る 1 個のインスタンス(Persistent)に持つ。
+// 持ち越しの仕組み: アプリが動いている間ずっと残る GameData が、1 個のインスタンスを持つ(以前は関数内 static の Persistent)。
 //   ステージの開始(BeginStage)で、今回取った分を 0 へ戻す(items.json の carryOverBetweenStages が true なら、残す)。
 //   継承した分は、ステージの開始のたびに、シーンが SetInherited で入れ直す。
 //   (ゲームオーバーからのやり直しも、ステージの開始として扱う)
 class PlayerUpgradeState {
 public:
-  // アプリの間ずっと残る、強化の状態
-  static PlayerUpgradeState &Persistent();
-
   // ステージの開始で呼ぶ。carryOver が false なら、今回取った分を 0 に戻す(継承した分は、変えない)
   void BeginStage(bool carryOver);
 
@@ -39,8 +36,6 @@ public:
   int GetRemainingEarnable(ItemEffectKind kind, int maxStacks) const;
 
 private:
-  PlayerUpgradeState() = default;
-
   std::array<float, kItemEffectKindCount> inherited_{};
   std::array<int, kItemEffectKindCount> earned_{};
 };
