@@ -1,0 +1,38 @@
+{
+  "bullets": [
+    {
+      "id": "PlayerBullet",
+      "model": "resources/app/bullet/bullet.obj",
+      "scale": 1.0,
+      "radius": 0.5,
+      "prewarm": 20
+    },
+    {
+      "id": "BossBullet",
+      "scale": 0.5,
+      "radius": 0.25,
+      "prewarm": 8
+    },
+    {
+      "id": "BeeBullet",
+      "model": "resources/app/bullet/bullet.obj",
+      "scale": 0.5,
+      "radius": 0.25,
+      "prewarm": 12
+    },
+    {
+      "id": "SpiderBullet",
+      "model": "resources/app/bullet/bullet.obj",
+      "scale": 0.5,
+      "radius": 0.25,
+      "prewarm": 9
+    },
+    {
+      "id": "CrosserBullet",
+      "model": "resources/app/bullet/bullet.obj",
+      "scale": 0.5,
+      "radius": 0.25,
+      "prewarm": 4
+    }
+  ]
+}

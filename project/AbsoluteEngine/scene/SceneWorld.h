@@ -9,6 +9,7 @@
 #include "ISpawner.h"
 #include "CollisionManager.h"
 #include "SerialNumberIssuer.h"
+#include "ServiceTable.h"
 
 namespace AbsoluteEngine {
 
@@ -26,10 +27,11 @@ class GameObject;
 class SceneWorld : public ISpawner, public ISceneQuery {
 public:
   // 束(deps_)の、出す窓口と、調べる窓口は、この世界自身
-  // 通し番号の発行役(serials_)も、この世界が持ち、束に結びつける
+  // 通し番号の発行役(serials_)と、ゲーム固有の物を型で引く表(services_)も、この世界が持ち、束に結びつける
   SceneWorld() {
     deps_.sceneQuery = this;
     deps_.serialNumbers = &serials_;
+    deps_.services = &services_;
   }
   // 窓口の束(deps_)が、この世界自身を指すため、コピーとムーブは禁止する(コピー先の束が、コピー元を指してしまうのを防ぐ)
   SceneWorld(const SceneWorld&) = delete;
@@ -73,6 +75,9 @@ public:
   void SetPlayState(IPlayState* playState) { deps_.playState = playState; }
   void SetInput(Input* input) { deps_.input = input; }
 
+  // ゲーム固有の物を型で引く表(束の services が指す)。シーンが、部品を作る前に登録する
+  ServiceTable& Services() { return services_; }
+
   // 一覧を読み取り専用で返す。保持せず、使うたびに取得すること
   const ObjectList& Objects() const override { return objects_; }
 
@@ -104,6 +109,7 @@ private:
   SpawnedCallback onSpawned_; // Spawn の後に呼ぶ関数(無ければ空)
   CollisionManager collision_; // 衝突判定と押し戻し(Update のたびに使う)
   SerialNumberIssuer serials_; // 通し番号の発行役(束の serialNumbers が指す)
+  ServiceTable services_;      // ゲーム固有の物を型で引く表(束の services が指す)
   ComponentDeps deps_{this};  // 部品へ渡す窓口の束(出す窓口と、調べる窓口は、この世界自身。ほかは、持ち主が設定する)
   std::string snapshotJson_; // SaveSnapshot で預けた状態(JSON)
 };

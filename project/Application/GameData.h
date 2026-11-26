@@ -1,4 +1,5 @@
 #pragma once
+#include "actor/Bullet/BulletCatalog.h"
 #include "inheritance/InheritanceState.h"
 #include "item/ItemCatalog.h"
 #include "item/PlayerUpgradeState.h"
@@ -15,7 +16,7 @@
 // 読み込みは Load で明示的に行う(ファイルの場所の設定が済んだあと、アプリの初期化で 1 回呼ぶ)。
 class GameData {
 public:
-  // 定義の表(ステージ、アイテム、評価の基準)と、保存データ(進行、継承)を、ファイルから読む。
+  // 定義の表(ステージ、アイテム、評価の基準、弾)と、保存データ(進行、継承)を、ファイルから読む。
   // 定義の表は、ファイルが無い、書式が違うときは、探した場所を表示して終了する。保存データは、無い、壊れているときは、最初の状態で始める
   void Load();
 
@@ -25,6 +26,8 @@ public:
   const ItemCatalog &GetItemCatalog() const { return itemCatalog_; }
   // 評価の基準
   const RatingCatalog &GetRatingCatalog() const { return ratingCatalog_; }
+  // 弾の定義(モデル、大きさ、当たり判定の半径など)
+  const BulletCatalog &GetBulletCatalog() const { return bulletCatalog_; }
 
   // ステージの進行(解放、ベスト記録)。プレイで変わる保存データ
   StageProgress &GetStageProgress() { return stageProgress_; }
@@ -40,6 +43,7 @@ private:
   StageCatalog stageCatalog_;
   ItemCatalog itemCatalog_;
   RatingCatalog ratingCatalog_;
+  BulletCatalog bulletCatalog_;
   StageProgress stageProgress_;
   InheritanceState inheritanceState_;
   PlayerUpgradeState playerUpgradeState_;

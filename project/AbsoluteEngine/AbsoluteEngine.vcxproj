@@ -186,6 +186,7 @@
     <ClCompile Include="math\Spline.cpp" />
     <ClCompile Include="scene\BaseScene.cpp" />
     <ClCompile Include="scene\SceneWorld.cpp" />
+    <ClCompile Include="scene\GameObjectPool.cpp" />
     <ClCompile Include="scene\SceneNavigator.cpp" />
     <ClCompile Include="scene\MainCameraView.cpp" />
     <ClCompile Include="scene\TimelineHost.cpp" />
@@ -296,6 +297,8 @@
     <ClInclude Include="math\Spline.h" />
     <ClInclude Include="scene\BaseScene.h" />
     <ClInclude Include="scene\SceneWorld.h" />
+    <ClInclude Include="scene\GameObjectPool.h" />
+    <ClInclude Include="scene\ServiceTable.h" />
     <ClInclude Include="scene\SceneNavigator.h" />
     <ClInclude Include="scene\ISceneChanger.h" />
     <ClInclude Include="scene\ComponentDeps.h" />

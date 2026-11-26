@@ -16,6 +16,11 @@
 #include "ReticleAim.h"
 #include "Application/ScreenSize.h"
 #include "../Bullet/BulletFactory.h"
+#include "../Bullet/BulletBuilder.h"
+#include "../Bullet/BulletCatalog.h"
+#include "Logger.h"
+#include "../Bullet/BulletTag.h"
+#include "../Enemy/BossOrbTags.h"
 #include "PlayerModelDefs.h"
 
 // 照準点（世界で狙う1点）：カメラからカーソルレイ上に kAimDistance 進んだ点
@@ -42,7 +47,6 @@ static constexpr float kTwoPi             = 6.28318530718f;
 // 通常弾
 static constexpr float kNormalBulletSpeed    = 50.0f;  // 弾速（m/秒）
 static constexpr float kMinAimDistance       = 0.001f; // 照準方向を求められる最小距離
-static constexpr float kNormalBulletRadius   = 0.5f;   // コライダー半径
 static constexpr float kNormalShootInterval  = 0.15f;  // 連射間隔（秒）
 static constexpr float kMinFireIntervalScale = 0.5f;   // 強化で連射を速くしても、間隔の倍率は、これより小さくならない
 
@@ -52,6 +56,22 @@ static constexpr float kHomingBulletDuration = 0.6f;   // 着弾までの時間�
 static constexpr float kHomingSideOffsetMax  = 6.0f;   // ベジェ制御点の横ブレ幅（±）
 static constexpr float kHomingUpOffsetMin    = 5.0f;   // ベジェ制御点の上方向オフセット（最小）
 static constexpr float kHomingUpOffsetMax    = 10.0f;  // 同（最大）
+
+// 通常弾の定義の id(bullets.json)。見た目と当たり判定の大きさは、定義で決まる
+static constexpr const char* kNormalBulletId = "PlayerBullet";
+
+PlayerComponent::PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                                 AbsoluteEngine::IPlayState& playState, Input& input, const BulletCatalog& bullets)
+    : spawner_(spawner), screen_(screen), query_(query), playState_(playState), input_(input),
+      normalBulletDef_(bullets.Find(kNormalBulletId)) {
+  if (!normalBulletDef_) {
+    // bullets.json から PlayerBullet が消された。撃てないことが分かるよう、理由を出す
+    Logger::GetInstance().Log("[PlayerComponent] bullet \"%s\" is not defined in bullets.json. normal shots are disabled", kNormalBulletId);
+    return;
+  }
+  // 最初の連射で、弾を作る処理が重なって止まらないよう、前もって作っておく
+  BulletBuilder::Prewarm(normalBulletPool_, *normalBulletDef_, BulletTag::kPlayer);
+}
 
 void PlayerComponent::Initialize() {
   cursorPos_ = { ScreenSize::kCenterX, ScreenSize::kCenterY };
@@ -365,15 +385,13 @@ void PlayerComponent::FireNormalBullet_(const Vector3& muzzlePos) {
       aimDir = camDirCached_;
   }
 
-  BulletSpec spec;
-  spec.position = muzzlePos;
-  spec.velocity = {
-      aimDir.x * kNormalBulletSpeed,
-      aimDir.y * kNormalBulletSpeed,
-      aimDir.z * kNormalBulletSpeed
-  };
-  spec.radius = kNormalBulletRadius;
-  spawner_.Spawn(BulletFactory::CreatePlayerNormal(spec));
+  if (!normalBulletDef_) return;
+
+  // 置き場所から借りる(空きが無ければ、定義から新しく組み立てる)。今回の位置と速度を入れてから出す
+  const Vector3 velocity = { aimDir.x * kNormalBulletSpeed, aimDir.y * kNormalBulletSpeed, aimDir.z * kNormalBulletSpeed };
+  auto bullet = BulletBuilder::AcquireOrBuild(normalBulletPool_, *normalBulletDef_, BulletTag::kPlayer);
+  BulletBuilder::Launch(*bullet, muzzlePos, velocity);
+  spawner_.Spawn(bullet);
 }
 
 
@@ -403,11 +421,22 @@ bool PlayerComponent::IsDead() const {
   return hp_ <= 0;
 }
 
+namespace {
+// 自機に当たるとダメージを受ける相手のタグ(GameObject::GetTag の値)。敵の体とボスの体は、プレハブと GameScene が付ける値
+constexpr const char* kEnemyBodyTag = "Enemy";
+constexpr const char* kBossBodyTag = "Boss";
+
+// 相手が、当たるとダメージを受ける物か(敵の体、ボスの体、敵の弾(ボス弾を含む)、ボスの誘導弾の玉)。
+// 名前ではなくタグで見分ける(名前は、エディタの表示や弾の種類の id に使うもので、変わりうるため)
+bool IsHarmfulTag(const std::string& tag) {
+    return tag == kEnemyBodyTag || tag == kBossBodyTag || tag == BulletTag::kEnemy || tag == BossOrbTags::kOrb;
+}
+} // namespace
+
 void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (IsDead() || IsInvincible()) return;
 
-    if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" ||
-        other->GetName().find("Boss")  != std::string::npos || other->GetTag() == "Boss") {
+    if (IsHarmfulTag(other->GetTag())) {
         TakeDamage(1);
     }
 }

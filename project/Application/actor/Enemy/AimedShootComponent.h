@@ -15,11 +15,13 @@
 //   recoverAfterBulletGone : 直前の弾が消えて(撃ち落とされて)から、次の弾が出るまでの最低の間(秒)。
 //                            撃ち落とした直後に、次の弾がすぐ出ないようにする
 //   screenMargin           : 画面の端(NDC ±1)からの余裕。1.0 なら、画面内にいる間だけ撃つ
+//   bulletId               : 撃つ弾の種類(bullets.json の id。見た目と当たり判定の大きさは、定義で決まる)
 // ============================================================
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "Type/Vector.h"
 #include "EnemyShootUtil.h"
+#include "EnemyBulletLauncher.h"
 #include <memory>
 #include <random>
 #include <string>
@@ -36,9 +38,10 @@ class AimedShootComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているかの判定に使う窓口。query: 自機を探す窓口。
     // serials: 狙いのばらつきの乱数の種を、敵ごとに変えるための通し番号の発行役(同じ敵の並びなら、毎回同じ種になる)。
-    // いずれも所有しない(種を決めるときに 1 回使うだけ)。このコンポーネントより長く生きること
+    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。bulletPools: 弾の種類ごとの置き場所(シーンが持つ)。
+    // いずれも所有しない(serials は種を決めるときに 1 回使うだけ)。このコンポーネントより長く生きること
     AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                        AbsoluteEngine::SerialNumberIssuer& serials);
+                        AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets, EnemyBulletPools& bulletPools);
     ~AimedShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -47,11 +50,14 @@ public:
 
     void Serialize(nlohmann::json& j) const override;
     void Deserialize(const nlohmann::json& j) override;
+    // エディタのインスペクタ(撃つ弾の選択)
+    void DrawInspectorUI() override;
 
 private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
+    EnemyBulletLauncher launcher_; // 撃つ弾の選択と、弾を出す役
 
     // 狙いの向き dir(長さ1)に、最大 aimErrorDegrees_ 度のばらつきを足して返す
     Vector3 ApplyAimError_(const Vector3& dir);

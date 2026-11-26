@@ -90,6 +90,9 @@ public:
   // 生存フラグ
   bool IsActive() const { return isActive_; }
   void Destroy() { isActive_ = false; }
+  // Destroy() で落とした生存フラグを戻す。使い終わった物を使い回す置き場所(GameObjectPool)が、貸し出すときに呼ぶ。
+  // 生存フラグ以外(位置、部品の状態)は戻さない。前回の値の設定し直しは、借りた人が行う
+  void Reactivate() { isActive_ = true; }
 
   // タイムラインプレビューフラグ（タスク16）
   // true の場合はシリアライザ（SceneSerializer）が保存対象から除外する

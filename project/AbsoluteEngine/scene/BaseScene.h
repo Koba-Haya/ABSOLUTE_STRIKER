@@ -92,6 +92,10 @@ protected:
   // 敵へ撃破時のコールバックを付けるなど、シーン固有の追加処理に使う。派生クラスの Initialize で、最初のオブジェクトを出す前に呼ぶ
   void SetObjectSpawnedCallback(AbsoluteEngine::SceneWorld::SpawnedCallback callback) { world_.SetOnSpawned(std::move(callback)); }
 
+  // 部品を作るときに渡す、ゲーム固有の物(弾の定義の表など)を型で引く表。
+  // 派生クラスが、最初の部品を作る前(コンストラクタ)に登録する。登録した物は、このシーンより長く生きること
+  AbsoluteEngine::ServiceTable& GetServiceTable() { return world_.Services(); }
+
   virtual void BackupScene();
   virtual void RestoreScene();
   virtual void SaveEditorScene();

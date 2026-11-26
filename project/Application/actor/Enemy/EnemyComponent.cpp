@@ -25,12 +25,17 @@ void EnemyComponent::Update(float deltaTime) {
 
     if (isDead_) {
         // -----------------------------------------------------------------------
-        // 撃破直後の1回だけ onDestroyed コールバックを発火する。
-        // Update は毎フレーム呼ばれるため、effectFired_ フラグで1回に制限する。
+        // 倒れた直後の 1 回だけ、受け取る側の全員へ知らせる。
+        // Update は毎フレーム呼ばれるため、effectFired_ フラグで 1 回に制限する。
         // -----------------------------------------------------------------------
-        if (!effectFired_ && onDestroyed) {
+        if (!effectFired_ && !observers_.empty()) {
             effectFired_ = true;
-            onDestroyed(GetOwner()->GetTransform().translate, destroyReason_);
+            const EnemyDefeatEvent event{ *GetOwner(), GetOwner()->GetTransform().translate, destroyReason_ };
+            // 受け取る側が、知らせの中で登録を外しても壊れないよう、一覧の写しに対して呼ぶ
+            const std::vector<IEnemyDefeatObserver*> observers = observers_;
+            for (IEnemyDefeatObserver* observer : observers) {
+                observer->OnEnemyDefeated(event);
+            }
         }
 
         // ディゾルブアニメーションを進める
@@ -55,6 +60,17 @@ void EnemyComponent::Update(float deltaTime) {
             GetOwner()->Destroy();
         }
     }
+}
+
+bool EnemyComponent::AddObserver(IEnemyDefeatObserver* observer) {
+    if (!observer) return false;
+    if (std::find(observers_.begin(), observers_.end(), observer) != observers_.end()) return false;
+    observers_.push_back(observer);
+    return true;
+}
+
+void EnemyComponent::RemoveObserver(IEnemyDefeatObserver* observer) {
+    observers_.erase(std::remove(observers_.begin(), observers_.end(), observer), observers_.end());
 }
 
 void EnemyComponent::OnHit(int damage, EnemyDestroyReason reason) {

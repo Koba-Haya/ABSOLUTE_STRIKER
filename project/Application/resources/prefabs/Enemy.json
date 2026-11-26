@@ -32,7 +32,8 @@
             "type": "EnemyComponent"
         },
         {
-            "type": "EnemyShootComponent"
+            "type": "EnemyShootComponent",
+            "bulletId": "BeeBullet"
         },
         {
             "type": "EnemyModelAnimatorComponent"
