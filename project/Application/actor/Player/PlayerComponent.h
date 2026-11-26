@@ -73,6 +73,8 @@ public:
   // 操作のロック。true の間は、キー・パッド・マウスのどれも受け付けない(何も操作していない状態にする)。
   // ステージ開始演出の間、自機が演出どおりに飛ぶよう、シーンが使う
   void SetInputLocked(bool locked) { inputLocked_ = locked; }
+  // マウスで照準を動かすか(シーンが、カーソルを閉じ込めている間だけ true にする)
+  void SetMouseAimEnabled(bool enabled) { mouseAimEnabled_ = enabled; }
   bool IsInputLocked() const { return inputLocked_; }
 
   // カーソル（照準）のスクリーン座標を取得
@@ -110,6 +112,7 @@ private:
 
   bool dying_ = false; // true の間は、操作・追従・発射を止める(SetDying)
   bool inputLocked_ = false; // true の間は操作を受け付けない(SetInputLocked)
+  bool mouseAimEnabled_ = false; // マウスで照準を動かすか(SetMouseAimEnabled。シーンがカーソルを閉じ込めている間 true)
   bool invulnerable_ = false; // true の間はダメージを受けない(SetInvulnerable)
   Vector2 cursorPos_{ 640.0f, 360.0f }; // カーソルのスクリーン座標
   float cursorSpeed_ = 1000.0f;          // カーソルの移動速度（ピクセル/秒）：キビキビした操作感のため引き上げ

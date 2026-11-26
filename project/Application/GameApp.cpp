@@ -152,10 +152,9 @@ void GameApp::Update() {
   // --- デバッグメニュー ---
   ImGui::Begin("DebugMenu");
   // オフにすると、遷移の表を使わず即座に切り替わる(開発の速度を落とさないため)
-  static bool useTransition = true;
-  ImGui::Checkbox("Use Transition", &useTransition);
+  ImGui::Checkbox("Use Transition", &useTransition_);
   auto goTo = [this](const std::string &sceneId) {
-    if (useTransition) {
+    if (useTransition_) {
       sceneManager_->RequestChange(sceneId);
     } else {
       sceneManager_->RequestChangeImmediate(sceneId);
@@ -207,11 +206,9 @@ void GameApp::Update() {
     testTransition(TransitionKind::CloudDive);
   }
   ImGui::SameLine();
-  static bool mistDebugDistance = false;
-  static bool mistDropletsOnly = false;
-  ImGui::Checkbox("Mist: show distance", &mistDebugDistance);
+  ImGui::Checkbox("Mist: show distance", &mistDebugDistance_);
   ImGui::SameLine();
-  ImGui::Checkbox("Mist: droplets only", &mistDropletsOnly);
+  ImGui::Checkbox("Mist: droplets only", &mistDropletsOnly_);
   if (ImGui::Button("Mist Lens")) {
     // 霧の色(リニア値)。明るい灰紫(AC8 の霧)
     const Vector3 kMistTestFogColor{0.52f, 0.52f, 0.60f};
@@ -225,9 +222,9 @@ void GameApp::Update() {
     spec.inSeconds = kMistTestInSeconds;
     spec.style.kind = TransitionKind::MistLens;
     spec.style.color = kMistTestFogColor;
-    spec.style.mist.debugDistance = mistDebugDistance;
+    spec.style.mist.debugDistance = mistDebugDistance_;
     spec.style.mist.lensDrops = true;
-    if (mistDropletsOnly) {
+    if (mistDropletsOnly_) {
       // 水滴だけ: 霧を消し、水滴は覆う区間の最初から付き始める(覆い具合は 0 から始まるので、そのままだと付くまで何も見えない)
       constexpr float kDropletsOnlyRiseEnd = 0.4f;
       spec.style.mist.fogScale = 0.0f;

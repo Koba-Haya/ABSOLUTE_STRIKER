@@ -541,7 +541,7 @@ void GameScene::Initialize(const SceneServices &services) {
 
 void GameScene::Finalize() {
   OcclusionWorld::GetInstance().Unregister(&islandOccluders_); // このシーンが消えたあと、遮蔽物を指すポインタを残さない
-  MouseCapture::Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
+  mouseCapture_.Apply(false); // 隠していたOSマウスカーソルを必ず元に戻す
   // 破片のために潰した翅の三角形を元へ戻す(蝶のモデルは、次のゲームでも共有される)
   wingShatter_.Reset();
   bossModelHolds_.clear(); // 先読みしたボスの資産の参照を手放す
@@ -942,7 +942,8 @@ void GameScene::UpdatePostEffects_(float deltaTime) {
 void GameScene::UpdateMouseCapture_() {
   // 展示中は、カーソルを隠さず、閉じ込めもしない(マウス操作を受け付けない)
   if (exhibition_.IsEnabled()) {
-      MouseCapture::Apply(false);
+      mouseCapture_.Apply(false);
+      SyncMouseAimToPlayer_();
       return;
   }
 
@@ -953,7 +954,16 @@ void GameScene::UpdateMouseCapture_() {
 
   const bool isInGame = GetPlayMode() == PlayMode::Play && !isDebugCamera_
                      && (phase_ == GamePhase::InProgress || phase_ == GamePhase::Boss);
-  MouseCapture::Apply(isInGame && !mouseCaptureSuspended_);
+  mouseCapture_.Apply(isInGame && !mouseCaptureSuspended_);
+  SyncMouseAimToPlayer_();
+}
+
+void GameScene::SyncMouseAimToPlayer_() {
+  // カーソルを閉じ込めている間だけ、自機がマウスで照準を動かす
+  if (!playerObj_) return;
+  if (auto *player = playerObj_->GetComponent<PlayerComponent>()) {
+      player->SetMouseAimEnabled(mouseCapture_.IsActive());
+  }
 }
 
 void GameScene::RemoveExpiredObjects_() {
@@ -2009,7 +2019,7 @@ void GameScene::DrawEditorUI() {
     if (ImGui::CollapsingHeader("Cloud Impact")) {
         // 雲海への着地の反応の確認用。ボタンで、死亡演出なしに反応だけを起こせる
         const Vector3 defaultLanding = playerObj_ ? playerObj_->GetTransform().translate : Vector3{0.0f, 0.0f, 0.0f};
-        CloudImpactDebugUi::Draw(cloudImpact_, defaultLanding);
+        cloudImpactDebugUi_.Draw(cloudImpact_, defaultLanding);
         ImGui::Separator();
     }
 
@@ -2045,7 +2055,10 @@ void GameScene::DrawEditorUI() {
         }
         VolumeCloudSettings &editing = (canEditSea && volumeCloudEditSea_) ? volumeCloudSea_ : volumeCloud_;
         VolumeCloudDebugUi::Draw(editing);
-        VolumeCloudDebugUi::DrawQuality(Renderer::GetInstance()->GetVolumeCloudQuality(), editing);
+        // 品質の自動調整の設定は、コピーを編集して、Renderer へ戻す
+        VolumeCloudQualityConfig qualityConfig = Renderer::GetInstance()->GetVolumeCloudQuality().GetConfig();
+        VolumeCloudDebugUi::DrawQuality(Renderer::GetInstance()->GetVolumeCloudQuality(), editing, qualityConfig);
+        Renderer::GetInstance()->SetVolumeCloudQualityConfig(qualityConfig);
         ImGui::Separator();
     }
     
@@ -2066,7 +2079,7 @@ void GameScene::DrawEditorUI() {
     ImGui::Text("Score: %d  (Kills: %d)", scoreTracker_.GetScore(), scoreTracker_.GetKillCount());
     // 強化(開発用): 積み数を表示し、ボタンで取ったことにする(効き目を、すぐ確かめるため)
     for (const ItemDefinition& def : gameData_.GetItemCatalog().GetItems()) {
-        const PlayerUpgradeState& upgradeState = PlayerUpgradeState::Persistent();
+        const PlayerUpgradeState& upgradeState = gameData_.GetPlayerUpgradeState();
         const int maxStacks = gameData_.GetItemCatalog().GetUpgradeSettings().Get(def.effect).maxStacks;
         ImGui::Text("Upgrade %s: earned %d + inherited %.1f  (max %d)", def.id.c_str(), upgradeState.GetEarned(def.effect),
                     upgradeState.GetInherited(def.effect), maxStacks);

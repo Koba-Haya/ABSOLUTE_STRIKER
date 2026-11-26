@@ -184,8 +184,7 @@ void GPUParticleManager::Initialize(DirectXCommon* dx) {
 
 void GPUParticleManager::Update() {
     const float kDeltaTime = 1.0f / 60.0f; // エンジン全体が固定タイムステップのため合わせる
-    static float totalTime = 0.0f;
-    totalTime += kDeltaTime;
+    totalTime_ += kDeltaTime;
 
     // 1. 前フレームでEmit CSに消費させ終えたバーストスロットのemitフラグをここでクリアする。
     //    （このUpdate()が呼ばれる時点で前フレームのGPUコマンドは実行済みという前提。
@@ -224,7 +223,7 @@ void GPUParticleManager::Update() {
     }
 
     // PerFrame Update
-    perFrameMapped_->time = totalTime;
+    perFrameMapped_->time = totalTime_;
     perFrameMapped_->deltaTime = kDeltaTime * timeScale_;
     perFrameMapped_->clearAll = clearAllPending_ ? 1u : 0u;
     perFrameMapped_->pad = 0.0f;

@@ -4,8 +4,6 @@
 #include <imgui.h>
 #endif
 
-namespace CloudImpactDebugUi {
-
 #ifdef USE_IMGUI
 namespace {
 // スライダーの範囲
@@ -23,32 +21,29 @@ constexpr float kSecondsMax = 6.0f;
 constexpr float kPuffSizeMax = 20.0f;
 constexpr float kPuffRiseRange = 15.0f;
 constexpr float kPuffDensityMax = 0.6f;
-constexpr float kDefaultStrength = 1.0f;
 } // namespace
 
-void Draw(CloudImpact &impact, const Vector3 &defaultPosition) {
-  // 着地点と強さは、ボタンで反応を起こすときに使う(呼び出しをまたいで保持)
-  static Vector3 position{0.0f, 0.0f, 0.0f};
-  static float strength = kDefaultStrength;
-  static bool initialized = false;
-  if (!initialized) {
-    position = defaultPosition;
-    initialized = true;
+void CloudImpactDebugUi::Draw(CloudImpact &impact, const Vector3 &defaultPosition) {
+  // 着地点と強さは、ボタンで反応を起こすときに使う(メンバとして、呼び出しをまたいで保持)
+  if (!initialized_) {
+    position_ = defaultPosition;
+    initialized_ = true;
   }
 
   ImGui::Text("Active: %s  Age: %.2f s", impact.IsActive() ? "yes" : "no", impact.GetAge());
-  ImGui::SliderFloat("Landing x", &position.x, -kPositionXRange, kPositionXRange);
-  ImGui::SliderFloat("Landing z", &position.z, kPositionZMin, kPositionZMax);
-  ImGui::SliderFloat("Strength", &strength, 0.0f, kStrengthMax);
+  ImGui::SliderFloat("Landing x", &position_.x, -kPositionXRange, kPositionXRange);
+  ImGui::SliderFloat("Landing z", &position_.z, kPositionZMin, kPositionZMax);
+  ImGui::SliderFloat("Strength", &strength_, 0.0f, kStrengthMax);
   if (ImGui::Button("Use player position")) {
-    position = defaultPosition;
+    position_ = defaultPosition;
   }
   ImGui::SameLine();
   if (ImGui::Button("Cloud Impact")) {
-    impact.Trigger(position, strength);
+    impact.Trigger(position_, strength_);
   }
 
-  VolumeCloudImpact &shape = impact.GetShape();
+  // 形と塊の調整値は、コピーを編集して、最後に Set で戻す
+  VolumeCloudImpact shape = impact.GetShape();
   ImGui::SeparatorText("Sea fill (always on: fewer gaps in the sea)");
   ImGui::SliderFloat("Sea fill", &shape.seaFill, 0.0f, 1.0f);
   ImGui::SliderFloat("Sea fill threshold", &shape.seaFillThreshold, 0.0f, 1.0f);
@@ -66,7 +61,7 @@ void Draw(CloudImpact &impact, const Vector3 &defaultPosition) {
   ImGui::SliderFloat("Ring wobble", &shape.ringWobble, 0.0f, kRingWobbleMax);
   ImGui::SliderFloat("Ring break", &shape.ringBreak, 0.0f, 1.0f);
   ImGui::SeparatorText("Puff (box cloud)");
-  CloudImpactPuff &puff = impact.GetPuff();
+  CloudImpactPuff puff = impact.GetPuff();
   ImGui::SliderFloat3("Size start", &puff.halfSizeStart.x, 0.5f, kPuffSizeMax);
   ImGui::SliderFloat3("Size end", &puff.halfSizeEnd.x, 0.5f, kPuffSizeMax);
   ImGui::SliderFloat("Rise start", &puff.riseStart, -kPuffRiseRange, kPuffRiseRange);
@@ -82,9 +77,9 @@ void Draw(CloudImpact &impact, const Vector3 &defaultPosition) {
     shape = VolumeCloudImpact{};
     puff = CloudImpactPuff{};
   }
+  impact.SetShape(shape);
+  impact.SetPuff(puff);
 }
 #else
-void Draw(CloudImpact &, const Vector3 &) {}
+void CloudImpactDebugUi::Draw(CloudImpact &, const Vector3 &) {}
 #endif
-
-} // namespace CloudImpactDebugUi

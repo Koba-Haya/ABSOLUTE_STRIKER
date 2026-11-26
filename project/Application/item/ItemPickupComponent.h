@@ -16,6 +16,8 @@ class ISceneQuery;
 //             効果そのものは知らない(取得した瞬間に、設定された関数 onCollected を 1 回呼ぶだけ。効果は ItemEffectApplier の担当)。
 // 取得は 2 段: pullRadius 以内で吸い寄せ、pickupRadius 以内で取得。取得の瞬間に効果を出し、
 // 残りの短い間(collectSeconds)は、膨らんでから縮みつつ自機へ吸い込まれる演出だけを行い、その後に消える。
+class PlayerUpgradeState;
+
 class ItemPickupComponent : public AbsoluteEngine::IComponent {
 public:
   // query: 自機を探す窓口(所有しない。このコンポーネントより長く生きること)
@@ -24,7 +26,9 @@ public:
 
   // 出現直後に ItemSpawner が呼ぶ。baseScale は定義の拡大率、onCollected は取得の瞬間に 1 回呼ぶ関数
   // upgrade: 強化の設定(吸い寄せ範囲の強化の効き目を求めるため、値をコピーして持つ)
-  void Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, float baseScale, std::function<void()> onCollected);
+  // upgradeState: 自機の強化の状態(吸い寄せ範囲の強化を、毎フレーム読む。所有しない。このコンポーネントより長く生きること)
+  void Configure(const ItemPickupSettings &settings, const ItemUpgradeSettings &upgrade, const PlayerUpgradeState &upgradeState, float baseScale,
+                 std::function<void()> onCollected);
 
   void Update(float deltaTime) override;
 
@@ -42,6 +46,7 @@ private:
 
   ItemPickupSettings settings_;
   ItemUpgradeSettings upgrade_; // 強化の設定(吸い寄せ範囲の強化の効き目)
+  const PlayerUpgradeState *upgradeState_ = nullptr; // 自機の強化の状態(所有しない。Configure で受け取る)
   float baseScale_ = 1.0f;
   std::function<void()> onCollected_;
 

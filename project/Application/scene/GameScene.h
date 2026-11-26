@@ -16,6 +16,7 @@
 #include "Animation.h"
 #include "HitEffectSpawner.h"
 #include "../GameData.h"
+#include "../actor/Player/PlayerInput.h"
 #include "../item/ItemSystem.h"
 #include "PostEffectDirector.h"
 #include "PlayerDeathDirector.h"
@@ -24,6 +25,7 @@
 #include "NextIslandView.h"
 #include "ClearDirector.h"
 #include "CloudImpact.h"
+#include "CloudImpactDebugUi.h"
 #include "DeathCameraDirector.h"
 #include "../actor/Player/WingShatter.h"
 #include "PlayerDeathDust.h"
@@ -66,7 +68,7 @@ public:
   // gameData: ゲームのデータ(定義の表と、進行・継承の保存データ。所有しない。シーンより長く生きること)
   GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
       : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData),
-        itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState()) {}
+        itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState(), gameData.GetPlayerUpgradeState()) {}
   ~GameScene() override = default;
 
   void Initialize(const SceneServices &services) override;
@@ -205,6 +207,8 @@ private:
   StageStartPose GetStageStartViewPose_() const;
   // 自機の操作をロック / 解除する(自機が見つからないときは何もしない)
   void SetPlayerInputLocked_(bool locked);
+  // カーソルを閉じ込めているかを、自機のマウス照準の有効 / 無効へ伝える
+  void SyncMouseAimToPlayer_();
   // 自機のモデルだけ更新する(アニメーションを進める)。入力・射撃を含む PlayerComponent は更新しない
   void UpdatePlayerModelOnly_(float deltaTime);
 
@@ -222,6 +226,7 @@ private:
   float stageStartDemoTimer_ = 0.0f; // スタート演出のデモ: 演出が終わってからの経過(秒)
   bool stageStartDemoReturnRequested_ = false; // スタート演出のデモ: タイトルへの遷移を要求済みなら true
   bool showDebugSkeleton_ = false; // Bキーでトグル：プレイヤーの骨をデバッグ表示
+  MouseCapture mouseCapture_; // OS のマウスカーソルの非表示と、ウィンドウ内への閉じ込め
   bool mouseCaptureSuspended_ = false; // Escで一時的にマウスの閉じ込めを解除している間 true
 
   Skybox skybox_;
@@ -292,6 +297,7 @@ private:
   GamePhase phase_ = GamePhase::InProgress;
   PlayerDeathDirector deathDirector_;       // 死亡演出の進行(サブフェーズ、世界の時間の速さ、自機の落下)
   CloudImpact cloudImpact_;                 // 雲海への着地の反応(くぼみと波の縁。着地の瞬間に始まる)
+  CloudImpactDebugUi cloudImpactDebugUi_;   // 雲の着地の反応の、確認用の調整窓(着地点と強さを保持する)
   WingShatter wingShatter_;                 // 蝶の翅が裂けて飛び散る破片(崩壊)
   PlayerDeathDust playerDeathDust_;         // 崩壊の鱗粉(破片の解放と朽ちる縁から出る、熾火から灰へ冷める粒)
   DeathCameraDirector deathCamera_;         // 死亡カメラの進行(蝶を中心にした回り込み・急降下)

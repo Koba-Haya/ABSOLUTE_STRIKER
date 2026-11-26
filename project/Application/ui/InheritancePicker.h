@@ -15,6 +15,7 @@ class Input;
 
 class ItemCatalog;
 class RatingCatalog;
+class PlayerUpgradeState;
 
 /// <summary>
 /// クリア画面の「継承の選択」。今回取った強化のうち、どれを何個、次の世代へ引き継ぐかを選ぶ。
@@ -38,14 +39,16 @@ class RatingCatalog;
 class InheritancePicker {
 public:
   /// <summary>候補になる強化(今回取った強化)が、1 つでもあるか</summary>
-  static bool HasCandidates();
+  /// <param name="upgrades">自機の強化の状態(今回取った分を調べる)</param>
+  static bool HasCandidates(const PlayerUpgradeState &upgrades);
 
   /// <summary>文字の資源とパネルを用意する。ファイルが無いときは、探した場所を表示して終了する</summary>
   /// <param name="items">アイテムの定義と設定(候補の名前、色、上限を引く)</param>
   /// <param name="rating">評価の基準(ランクごとの、継承の枠と倍率)</param>
   /// <param name="inheritance">継承の状態(いまの継承した積み数と世代を、読むだけ)</param>
   /// <remarks>3 つとも所有しない。このクラスより長く生きていること(GameData が持つ)</remarks>
-  void Initialize(const ItemCatalog &items, const RatingCatalog &rating, const InheritanceState &inheritance);
+  /// <param name="upgrades">自機の強化の状態(今回取った分から、候補を作る)</param>
+  void Initialize(const ItemCatalog &items, const RatingCatalog &rating, const InheritanceState &inheritance, const PlayerUpgradeState &upgrades);
 
   /// <summary>選択を置く縦の範囲(画面ピクセル)を決める。Begin の前に呼ぶ。集計(ResultTally)と同じ範囲にそろえる</summary>
   void SetVerticalRange(float top, float bottom);
@@ -88,6 +91,7 @@ private:
   const ItemCatalog *items_ = nullptr;           // アイテムの定義と設定(所有しない。Initialize で受け取る)
   const RatingCatalog *rating_ = nullptr;        // 評価の基準(所有しない)
   const InheritanceState *inheritance_ = nullptr; // 継承の状態(所有しない)
+  const PlayerUpgradeState *upgrades_ = nullptr;  // 自機の強化の状態(所有しない)
 
   // 強化の種類 kind の、アイテムの定義(名前と色を引く)。無ければ nullptr
   const ItemDefinition *FindDefinition_(ItemEffectKind kind) const;

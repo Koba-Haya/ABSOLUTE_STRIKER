@@ -145,9 +145,8 @@ bool Draw(VolumeCloudSettings &settings) {
 #endif
 }
 
-void DrawQuality(VolumeCloudQuality &quality, const VolumeCloudSettings &base) {
+void DrawQuality(const VolumeCloudQuality &quality, const VolumeCloudSettings &base, VolumeCloudQualityConfig &config) {
 #ifdef USE_IMGUI
-  VolumeCloudQualityConfig &config = quality.GetConfig();
   ImGui::SeparatorText("Auto Quality");
   ImGui::Checkbox("Auto Quality", &config.enabled);
   const VolumeCloudSettings applied = quality.Apply(base);
@@ -159,6 +158,7 @@ void DrawQuality(VolumeCloudQuality &quality, const VolumeCloudSettings &base) {
 #else
   (void)quality;
   (void)base;
+  (void)config;
 #endif
 }
 

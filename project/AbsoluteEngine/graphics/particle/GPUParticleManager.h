@@ -195,6 +195,7 @@ private:
     };
     ComPtr<ID3D12Resource> perFrameCB_;
     PerFrame* perFrameMapped_ = nullptr;
+    float totalTime_ = 0.0f; // 起動からの経過時間(秒)。シェーダーの時間の入力に使う(以前は Update の中の関数内 static だった)
 
     ComPtr<ID3D12Resource> emittersCB_;
     GPUEmitterArray* emittersMapped_ = nullptr;

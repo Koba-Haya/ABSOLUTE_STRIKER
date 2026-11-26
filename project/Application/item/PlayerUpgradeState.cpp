@@ -8,11 +8,6 @@ namespace {
 constexpr float kFloorEpsilon = 1e-4f;
 } // namespace
 
-PlayerUpgradeState &PlayerUpgradeState::Persistent() {
-  static PlayerUpgradeState instance;
-  return instance;
-}
-
 void PlayerUpgradeState::BeginStage(bool carryOver) {
   if (!carryOver) {
     earned_.fill(0);

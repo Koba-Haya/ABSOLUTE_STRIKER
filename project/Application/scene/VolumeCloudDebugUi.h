@@ -13,7 +13,8 @@ namespace VolumeCloudDebugUi {
 bool Draw(VolumeCloudSettings &settings);
 
 // 品質の自動調整の設定と、今の状態(段、GPU 時間の移動平均、実際に描いている値)を出す。
-// base: 基準の設定(実際に描く値を求めて表示するために使う。書き換えない)
-void DrawQuality(VolumeCloudQuality &quality, const VolumeCloudSettings &base);
+// quality: 今の状態(読むだけ)。base: 基準の設定(実際に描く値を求めて表示するために使う。書き換えない)。
+// config: 編集する自動調整の設定(呼び出し側のコピー。呼び出し側が、あとで Renderer へ戻す)
+void DrawQuality(const VolumeCloudQuality &quality, const VolumeCloudSettings &base, VolumeCloudQualityConfig &config);
 
 } // namespace VolumeCloudDebugUi

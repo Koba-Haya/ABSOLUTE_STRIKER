@@ -195,7 +195,10 @@ public:
   // ボリューム雲の品質の自動調整(実測の GPU 時間に合わせて、解像度とステップ数を上げ下げする。全ての雲に同じ段を適用する)。
   // AddVolumeCloud に渡した設定は「基準」で、描くときだけ、今の段に合わせて軽くした値で上書きされる。
   // 設定や現在の段の確認用(調整 UI が使う)
-  VolumeCloudQuality &GetVolumeCloudQuality() { return volumeCloudQuality_; }
+  // ボリューム雲の品質の自動調整(段と、GPU 時間)を読み取り専用で返す
+  const VolumeCloudQuality &GetVolumeCloudQuality() const { return volumeCloudQuality_; }
+  // 品質の自動調整の設定を差し替える(調整窓は、GetConfig のコピーを編集して、ここで戻す)
+  void SetVolumeCloudQualityConfig(const VolumeCloudQualityConfig &config) { volumeCloudQuality_.SetConfig(config); }
   // depthTest: 深度テストあり(書き込みなし)で描く。Alpha ブレンドのみ対応(他では無視)
   // filter: 描くグループの選び方(既定はすべて)
   void DrawParticles(ParticleManager *pm,
