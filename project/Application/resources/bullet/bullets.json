@@ -8,6 +8,12 @@
       "prewarm": 20
     },
     {
+      "id": "BossBullet",
+      "scale": 0.5,
+      "radius": 0.25,
+      "prewarm": 8
+    },
+    {
       "id": "BeeBullet",
       "model": "resources/app/bullet/bullet.obj",
       "scale": 0.5,

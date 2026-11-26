@@ -1,6 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/GameObjectPool.h"
 #include "BossActions.h"
 #include "BossAttackEffects.h"
 #include "BossModelSpec.h"
@@ -18,6 +19,8 @@ class IScreenView;
 class ISceneQuery;
 class ModelComponent;
 }
+class BulletCatalog;
+struct BulletDefinition;
 
 // ボスの位置の決まり。出現の最初の 1 フレーム(GameScene)と、毎フレームの移動(BossComponent)が、同じ値を使う
 namespace BossPlacement {
@@ -33,9 +36,10 @@ constexpr float kHoverDistanceFromCamera = 46.0f;
 class BossComponent : public AbsoluteEngine::IComponent, private IBossActions {
 public:
     // spawner: 弾を出す窓口。screen: カメラの位置と向き(ボスの位置の基準)を知る窓口。query: 自機を探す窓口。
-    // いずれも所有しない。このコンポーネントより長く生きること
-    BossComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
-        : spawner_(spawner), screen_(screen), query_(query) {}
+    // bullets: 弾の定義の表(ボスの弾の大きさを引く)。いずれも所有しない。このコンポーネントより長く生きること。
+    // 生成のときに、ボスの弾の定義の prewarm の数だけ、弾を前もって作って置き場所へ入れる
+    BossComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                  const BulletCatalog& bullets);
     ~BossComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -85,6 +89,11 @@ private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
+    // ボスの弾の定義(bullets.json の BossBullet)。表に無ければ nullptr(弾を撃たない)
+    const BulletDefinition* bulletDef_ = nullptr;
+    // 撃ち終わった弾を預かって使い回す置き場所(Object Pool)。ボスの弾(三日月の見た目つき)を撃つのはボスだけなので、ボスが持つ。
+    // ボスが消えると置き場所も消え、そのあと手放された弾は、戻らずに普通に削除される
+    AbsoluteEngine::GameObjectPool bulletPool_;
 
     // HP から、入るべきフェーズを求める。いまのフェーズより進むときは、すぐには進めず、今の状態へ「境目を切った」と伝える
     // (シールドを張るかは、状態が決める。シールドが終わると、FinishShield がフェーズを進める)
@@ -102,6 +111,8 @@ private:
     void UpdateColliderForShield_();
     // 弾を出す位置(口の前。muzzle ボーンが無いモデルは、ボスの位置)
     Vector3 GetBulletOrigin_() const;
+    // 位置 spawnPos から、速度 vel のボスの弾を 1 発出す(置き場所から借りる。空きが無ければ組み立てる)
+    void SpawnBullet_(const Vector3& spawnPos, const Vector3& vel);
     // シーンから自機のGameObjectを探す（Fire*で使用）
     std::shared_ptr<AbsoluteEngine::GameObject> FindPlayer() const;
 

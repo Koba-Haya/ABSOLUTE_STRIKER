@@ -20,7 +20,7 @@
 // 描画は、雲の合成のあと(DrawAfterClouds)。弾が雲の裏に回って見えなくならないようにするため。
 // このため、深度は見ない(ボスの体や島の手前に、常に見える)。島に当たった弾は、BulletComponent が消す
 // 当たり判定は弾のコライダー(小さな球)のままで、見た目のほうが大きい(判定の位置は、芯の中心)。
-// 使い方: 弾の GameObject に追加する。velocity: 弾の速度(ワールド。直進弾なので、生成時に 1 回渡す)
+// 使い方: 弾の GameObject に追加し、撃つたびに Restart(速度) を呼ぶ(弾は使い回されるので、前回の尾や輪の進みを捨てる)
 namespace BossBulletVisualDefaults {
 // --- 芯(光の玉) ---
 constexpr float kCoreQuadWorldRadius = 3.0f;   // 板の半分の長さ(ワールド。にじむ光が届く範囲)
@@ -79,7 +79,12 @@ inline const Vector4 kRingColorDark{ 0.10f, 0.00f, 0.02f, 0.90f };
 
 class BossBulletVisualComponent : public AbsoluteEngine::IComponent {
 public:
-    explicit BossBulletVisualComponent(const Vector3& velocity);
+    BossBulletVisualComponent();
+
+    // 撃つたびに呼ぶ。velocity: 弾の速度(ワールド。直進弾なので、撃つときに 1 回渡す)。
+    // 前回の飛行の状態(尾の点、経過時間、火花の端数、輪の間隔と色の順番)を捨てて、最初からにする。
+    // 芯の板(GPU の資源)は、作り直さずに使い回す
+    void Restart(const Vector3& velocity);
     ~BossBulletVisualComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -93,7 +98,7 @@ private:
     void EmitParticles_(float deltaTime, const Vector3& position, const Vector3& cameraRight, const Vector3& cameraUp, const Vector3& cameraAxis);
     float Random_(float lo, float hi);
 
-    Vector3 velocity_;
+    Vector3 velocity_{ 0.0f, 0.0f, 0.0f };
     Vector3 direction_{ 0.0f, 0.0f, 1.0f }; // 速度の向き(長さ 1)
     float speed_ = 0.0f;
     RibbonTrail trail_;

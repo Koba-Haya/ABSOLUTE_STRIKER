@@ -40,13 +40,8 @@ float ScreenAngle(const Vector3& v, const Vector3& right, const Vector3& up) {
 float Mix(float a, float b, float t) { return a + (b - a) * t; }
 }
 
-BossBulletVisualComponent::BossBulletVisualComponent(const Vector3& velocity)
-    : velocity_(velocity), rng_(std::random_device{}()) { // 弾ごとに別の並びにする(同時に出た弾が、同じ火花を出さないように)
-    speed_ = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
-    if (speed_ > 0.0001f) {
-        direction_ = { velocity.x / speed_, velocity.y / speed_, velocity.z / speed_ };
-    }
-
+BossBulletVisualComponent::BossBulletVisualComponent()
+    : rng_(std::random_device{}()) { // 弾ごとに別の並びにする(同時に出た弾が、同じ火花を出さないように)
     RibbonTrail::Params trailParams;
     trailParams.minPointDistance = kTrailMinPointDistance;
     trailParams.lifetime = kTrailLifetime;
@@ -55,6 +50,20 @@ BossBulletVisualComponent::BossBulletVisualComponent(const Vector3& velocity)
     trailParams.tailWidthRatio = 0.0f; // 尾の先は、細く尖る
     trailParams.color = kTrailColor;
     trail_.Initialize(trailParams);
+}
+
+void BossBulletVisualComponent::Restart(const Vector3& velocity) {
+    velocity_ = velocity;
+    speed_ = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y + velocity.z * velocity.z);
+    // 速さが 0 に近いときは、向きを求められないので、既定の向き(+Z)にする
+    direction_ = (speed_ > 0.0001f) ? Vector3{ velocity.x / speed_, velocity.y / speed_, velocity.z / speed_ } : Vector3{ 0.0f, 0.0f, 1.0f };
+
+    // 前回の飛行の状態を捨てる(残すと、前に飛んだ場所から尾が伸びる、輪の間隔や色の順がずれる)
+    trail_.Clear();
+    age_ = 0.0f;
+    streakCarry_ = 0.0f;
+    ringTimer_ = 0.0f;
+    ringCount_ = 0;
 }
 
 float BossBulletVisualComponent::Random_(float lo, float hi) {

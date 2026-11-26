@@ -356,8 +356,10 @@ void GameScene::Initialize(const SceneServices &services) {
       if (!bullets) return nullptr;
       return std::make_unique<AimedShootComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.serialNumbers, *bullets);
   });
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery);
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("BossComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
+      const BulletCatalog* bullets = FindBulletCatalog(deps, "BossComponent");
+      if (!bullets) return nullptr;
+      return std::make_unique<BossComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *bullets);
   });
   AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("TurretShootComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
       const BulletCatalog* bullets = FindBulletCatalog(deps, "TurretShootComponent");
@@ -1096,7 +1098,7 @@ void GameScene::SpawnBoss() {
   bossObj->AddComponent(std::move(bossModelComp));
   bossObj->AddComponent(std::make_unique<AbsoluteEngine::DissolveComponent>());
   // 攻撃パターンはBossComponent自身が専用ロジックで管理する（汎用EnemyShootComponentには依存しない）
-  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView(), GetSceneQuery());
+  auto bossComp = std::make_unique<BossComponent>(GetSpawner(), GetScreenView(), GetSceneQuery(), gameData_.GetBulletCatalog());
   bossComp->SetCollisionRadius(bossSpec.colliderRadius);
   bossComp->SetAttackClips(bossSpec.attackClips); // 攻撃の段(予告、溜め、発射)ごとのアニメーション。モデルごとに違う
 

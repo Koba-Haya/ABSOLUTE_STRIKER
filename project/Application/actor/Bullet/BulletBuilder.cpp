@@ -45,16 +45,26 @@ void Launch(AbsoluteEngine::GameObject &bullet, const Vector3 &position, const V
   }
 }
 
-std::shared_ptr<AbsoluteEngine::GameObject> AcquireOrBuild(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag) {
+namespace {
+// 定義の部品で組み立て、使う人の部品を足す(AcquireOrBuild と Prewarm の共通部分)
+std::unique_ptr<AbsoluteEngine::GameObject> BuildWithExtras(const BulletDefinition &def, const char *tag, const ExtraPartsAdder &addParts) {
+  auto bullet = Build(def, tag);
+  if (addParts) addParts(*bullet);
+  return bullet;
+}
+} // namespace
+
+std::shared_ptr<AbsoluteEngine::GameObject> AcquireOrBuild(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag,
+                                                           const ExtraPartsAdder &addParts) {
   if (auto reused = pool.TryAcquire()) {
     return reused;
   }
-  return pool.Adopt(Build(def, tag));
+  return pool.Adopt(BuildWithExtras(def, tag, addParts));
 }
 
-void Prewarm(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag) {
+void Prewarm(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag, const ExtraPartsAdder &addParts) {
   for (int i = 0; i < def.prewarmCount; ++i) {
-    pool.AddIdle(Build(def, tag));
+    pool.AddIdle(BuildWithExtras(def, tag, addParts));
   }
 }
 

@@ -1,27 +1,11 @@
 #pragma once
 #include <memory>
-#include <optional>
-#include <string>
 #include "Type/Vector.h"
 
 namespace AbsoluteEngine {
 class GameObject;
 class ISpawner;
 }
-
-// 直進弾の生成パラメータ
-struct BulletSpec {
-  Vector3 position{ 0.0f, 0.0f, 0.0f }; // 発射位置
-  Vector3 velocity{ 0.0f, 0.0f, 0.0f }; // 速度（ワールド空間, m/秒）
-  float radius = 0.5f;                  // コライダー半径
-  std::optional<Vector4> color;         // 弾モデルの色（未指定ならモデル既定）
-  // false なら、弾のモデル(球)を付けない(当たり判定と動きだけを持つ)。見た目を、別のコンポーネントが描く弾に使う
-  bool visible = true;
-  std::string name;                     // GameObject名（空ならファクトリ既定）
-  // 自機の通常弾で撃ち落とせるか(敵弾にだけ意味がある。自機の弾では使われない)。
-  // false の弾は、通常弾が当たっても消えず、通常弾のほうだけが消える。今の敵はすべて既定(撃ち落とせる)のまま
-  bool canBeShotDown = true;
-};
 
 // ホーミング弾（ベジェ曲線で追尾）の生成パラメータ
 struct HomingBulletSpec {
@@ -32,12 +16,13 @@ struct HomingBulletSpec {
   std::weak_ptr<AbsoluteEngine::GameObject> target; // 追尾対象
 };
 
-// 弾の GameObject（モデル・コライダー・弾コンポーネント）の組み立てを1箇所に集約する。
+// ホーミング弾の GameObject(コライダー・追尾の動き・尾)を組み立てる。
+// まっすぐ飛ぶ弾(自機の通常弾、敵弾、ボス弾)は、弾の定義の表(BulletCatalog)と BulletBuilder で組み立てる(使い回すため)。
+// ホーミング弾は、撃つ数が少なく使い回す効果が小さいので、ここで毎回作る。
 // 戻り値のオブジェクトは呼び出し側が ISpawner::Spawn() で登録すること。
 namespace BulletFactory {
 
 // spawner: 尾(RibbonTrailComponent)が、弾が消えるときに、尾をシーンへ残すために使う窓口。弾より長く生きること(シーンが持つ)
 std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec, AbsoluteEngine::ISpawner& spawner);
-std::shared_ptr<AbsoluteEngine::GameObject> CreateEnemy(const BulletSpec& spec);
 
 } // namespace BulletFactory

@@ -8,7 +8,10 @@
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
-#include "../Bullet/BulletFactory.h"
+#include "../Bullet/BulletBuilder.h"
+#include "../Bullet/BulletCatalog.h"
+#include "../Bullet/BulletTag.h"
+#include "Logger.h"
 #include "../Player/PlayerFinder.h"
 #include "../Bullet/HomingBulletComponent.h"
 #include "../Player/PlayerComponent.h"
@@ -264,18 +267,38 @@ void BossComponent::ApplyBlastDamage(int damage) {
 }
 
 namespace {
-// 発射位置(spawnPos)から速度(vel)の直進弾を1発生成して、窓口(spawner)からシーンへ出す
-void SpawnBossBullet(AbsoluteEngine::ISpawner& spawner, const Vector3& spawnPos, const Vector3& vel) {
-    BulletSpec spec;
-    spec.name     = "BossBullet";
-    spec.position = spawnPos;
-    spec.velocity = vel;
-    spec.visible  = false; // 球のモデルは付けない。見た目は、下の三日月の衝撃波(BossBulletVisualComponent)が描く
-    auto bullet = BulletFactory::CreateEnemy(spec);
-    bullet->AddComponent(std::make_unique<BossBulletVisualComponent>(vel));
-    spawner.Spawn(bullet);
+// ボスの弾の定義の id(bullets.json)。当たり判定の大きさは定義で決まる。モデルは付けない(見た目は BossBulletVisualComponent が描く)
+constexpr const char* kBulletId = "BossBullet";
+
+// ボスの弾に、定義の部品に加えて付ける部品(三日月の見た目)。新しく組み立てるときだけ呼ばれる
+void AddBossBulletParts(AbsoluteEngine::GameObject& bullet) {
+    bullet.AddComponent(std::make_unique<BossBulletVisualComponent>());
 }
 } // namespace
+
+BossComponent::BossComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                             const BulletCatalog& bullets)
+    : spawner_(spawner), screen_(screen), query_(query), bulletDef_(bullets.Find(kBulletId)) {
+    if (!bulletDef_) {
+        // bullets.json から BossBullet が消された。撃てないことが分かるよう、理由を出す
+        Logger::GetInstance().Log("[BossComponent] bullet \"%s\" is not defined in bullets.json. boss shots are disabled", kBulletId);
+        return;
+    }
+    // 弾を撃つ攻撃で、作る処理が重なって止まらないよう、前もって作っておく
+    BulletBuilder::Prewarm(bulletPool_, *bulletDef_, BulletTag::kEnemy, AddBossBulletParts);
+}
+
+void BossComponent::SpawnBullet_(const Vector3& spawnPos, const Vector3& vel) {
+    if (!bulletDef_) return;
+
+    // 置き場所から借りる(空きが無ければ、定義と見た目の部品で組み立てる)。今回の位置と速度、見た目の飛行の状態を入れ直してから出す
+    auto bullet = BulletBuilder::AcquireOrBuild(bulletPool_, *bulletDef_, BulletTag::kEnemy, AddBossBulletParts);
+    BulletBuilder::Launch(*bullet, spawnPos, vel);
+    if (auto* visual = bullet->GetComponent<BossBulletVisualComponent>()) {
+        visual->Restart(vel);
+    }
+    spawner_.Spawn(bullet);
+}
 
 Vector3 BossComponent::GetBulletOrigin_() const {
     // 弾は、攻撃の演出(輪、粒)と同じ、口の前(muzzle ボーン)から出す。モデルにそのボーンが無いとき(鷲)は、ボスの位置から出す
@@ -318,7 +341,7 @@ void BossComponent::FireAimedShot(float speed) {
     if (len < 0.001f) return;
     toPlayer.x /= len; toPlayer.y /= len; toPlayer.z /= len;
 
-    SpawnBossBullet(spawner_, spawnPos, { toPlayer.x * speed, toPlayer.y * speed, toPlayer.z * speed });
+    SpawnBullet_(spawnPos, { toPlayer.x * speed, toPlayer.y * speed, toPlayer.z * speed });
 }
 
 void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed) {
@@ -349,7 +372,7 @@ void BossComponent::FireSpreadShot(int count, float spreadAngleDeg, float speed)
             toPlayer.x * s + toPlayer.y * c,
             toPlayer.z
         };
-        SpawnBossBullet(spawner_, spawnPos, { dir.x * speed, dir.y * speed, dir.z * speed });
+        SpawnBullet_(spawnPos, { dir.x * speed, dir.y * speed, dir.z * speed });
     }
 }
 
