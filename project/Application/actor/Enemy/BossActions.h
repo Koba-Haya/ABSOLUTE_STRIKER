@@ -46,7 +46,10 @@ public:
     virtual void ApplyBlastDamage(int damage) = 0;
     // シールドの今の状態を、外へ見せる(演出が読む)。シールドが終わるときは、既定の値(stage = None)を渡す
     virtual void SetShieldView(const BossShieldView& view) = 0;
-    // シールドが終わったことを伝える。フェーズを nextPhase へ進めて、次の境目まで、シールドを張らない状態へ戻す
+    // シールドを張り始めたことを伝える(展開の段階に入ったとき)。ボスの HP を、nextPhase の境目の値へ戻す
+    // (一度に境目を大きく越えて減っていた分を、無かったことにする。シールドを壊すと、次のフェーズを境目の HP から始める)
+    virtual void BeginShield(BossPhase nextPhase) = 0;
+    // シールドが終わったことを伝える。フェーズを nextPhase へ進める(次の境目を切るまで、境目の通知は来ない)
     virtual void FinishShield(BossPhase nextPhase) = 0;
     // 次の状態を予約する。切り替えは、いま実行中の状態の Update が終わったあとに行われる
     // (Update の途中で、実行中の状態自身が消えてしまわないようにするため)

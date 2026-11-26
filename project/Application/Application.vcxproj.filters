@@ -69,7 +69,12 @@
     <ClCompile Include="actor\Enemy\BossOrbEffects.cpp" />
     <ClCompile Include="actor\Player\LockOnTarget.cpp" />
     <ClCompile Include="actor\Enemy\EnergyRibbonFadeComponent.cpp" />
-    <ClCompile Include="actor\Enemy\BossShieldState.cpp" />
+    <ClCompile Include="actor\Enemy\BossState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldStageState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldDeployState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldHoldState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldBreakState.cpp" />
+    <ClCompile Include="actor\Enemy\BossShieldBurstState.cpp" />
     <ClCompile Include="actor\Enemy\BossComponent.cpp" />
     <ClCompile Include="actor\Enemy\BossModelSpec.cpp" />
     <ClCompile Include="actor\Enemy\EnemyComponent.cpp" />
@@ -261,7 +266,11 @@
     <ClInclude Include="actor\Player\LockOnTarget.h" />
     <ClInclude Include="actor\Enemy\EnergyRibbonFadeComponent.h" />
     <ClInclude Include="actor\Enemy\BossShieldPlan.h" />
-    <ClInclude Include="actor\Enemy\BossShieldState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldStageState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldDeployState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldHoldState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldBreakState.h" />
+    <ClInclude Include="actor\Enemy\BossShieldBurstState.h" />
     <ClInclude Include="actor\Enemy\BossPhase.h" />
     <ClInclude Include="actor\Enemy\BossState.h" />
     <ClInclude Include="actor\Enemy\BossComponent.h" />
