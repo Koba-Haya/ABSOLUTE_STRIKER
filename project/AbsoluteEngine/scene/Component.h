@@ -24,7 +24,10 @@ public:
     // frame は、出現位置のレールの座標系(frame.forward がレールの進行方向 = 自機側から見て奥へ向かう向き)。
     // レールの向きに依存する動き(進行方向と逆へ近づく、など)は、ここで自分の向きを決める。
     // 世界座標で指定された出現では呼ばれず、各コンポーネントの既定の向きのまま動く
-    virtual void OnSpawnedOnRail(const RailFrame& frame) {}
+    // 基底に置いてよい理由: これは「出現した」という通知で、OnCollision と同じ種類のもの。受け取りたい部品だけが使い、
+    // ほかの部品は無視するのが正しい振る舞い(何もしないことに意味がある)。「できない機能を持たされる」もの
+    // (例: 飛べないペンギンの Fly)ではないので、中間クラスへ分けない
+    virtual void OnSpawnedOnRail(const RailFrame& frame) { (void)frame; }
     
     // コンポーネントの種類名（ファクトリやシリアライズ用）
     virtual std::string GetTypeName() const = 0;

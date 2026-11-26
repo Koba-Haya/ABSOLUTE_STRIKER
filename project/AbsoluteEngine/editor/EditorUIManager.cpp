@@ -7,9 +7,9 @@
 #include "../base/EnginePath.h"
 #include <filesystem>
 #include "../scene/ColliderComponent.h"
+#include "../scene/collision/SphereShape.h"
 #include "../scene/LightNodeComponent.h"
 #include "../scene/ModelComponent.h"
-#include "../scene/DissolveComponent.h"
 #include "../graphics/Renderer.h"
 // タイムラインイベントインスペクタ用（タスク15）
 #include "../scene/timeline/ITimelineEvent.h"
@@ -24,6 +24,9 @@
 namespace AbsoluteEngine {
 
 namespace {
+// コライダーが無いモデルを、クリックで選ぶときの球の半径(オブジェクトの scale を掛ける)
+constexpr float kFallbackPickRadius = 1.0f;
+
 // インスペクタで部品が「編集した」と伝えたとき、その編集を、取り消し履歴(CommandManager)へ記録する。
 // どのオブジェクトの、どの部品の変更かは、エディタが知っているので、ここで ComponentStateCommand を作る(部品は履歴の作り方を知らない)
 class ComponentEditRecorder final : public IEditRecorder {
@@ -411,75 +414,26 @@ void EditorUIManager::HandleMousePicking(const SceneWorld::ObjectList& rootObjec
 void EditorUIManager::CheckIntersection(std::shared_ptr<GameObject> obj, const Vector3& rayOrigin, const Vector3& rayDir, std::shared_ptr<GameObject>& hitObject, float& minT) {
   if (!obj) return;
 
+  // レイが当たったら、今までで一番近いものとして覚える
+  const auto tryHit = [&](const ICollisionShape& shape, const ShapePlacement& placement) {
+    float t = 0.0f;
+    if (shape.Raycast(placement, rayOrigin, rayDir, t) && t < minT) {
+      minT = t;
+      hitObject = obj;
+    }
+  };
+
   auto colliderComp = obj->GetComponent<ColliderComponent>();
-  if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
-    const auto& collider = colliderComp->GetSettings();
-    Vector3 objPos = obj->GetTransform().translate;
-    Vector3 scale = obj->GetTransform().scale;
-    Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
-                       objPos.y + collider.centerOffset.y * scale.y, 
-                       objPos.z + collider.centerOffset.z * scale.z };
-
-    if (collider.type == ColliderComponent::Type::Sphere) {
-      float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-      float scaledRadius = collider.radius * maxScale;
-
-      Vector3 m = { rayOrigin.x - center.x, rayOrigin.y - center.y, rayOrigin.z - center.z };
-      float b = Dot(m, rayDir);
-      float c = Dot(m, m) - scaledRadius * scaledRadius;
-
-      float discriminant = b * b - c;
-      if (discriminant > 0.0f) {
-        float t = -b - std::sqrt(discriminant);
-        if (t > 0.0f && t < minT) {
-          minT = t;
-          hitObject = obj;
-        }
-      }
-    } else if (collider.type == ColliderComponent::Type::AABB) {
-      Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
-      Vector3 minBounds = { center.x - scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z };
-      Vector3 maxBounds = { center.x + scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z };
-      
-      float t1 = (minBounds.x - rayOrigin.x) / (rayDir.x != 0.0f ? rayDir.x : 0.00001f);
-      float t2 = (maxBounds.x - rayOrigin.x) / (rayDir.x != 0.0f ? rayDir.x : 0.00001f);
-      float t3 = (minBounds.y - rayOrigin.y) / (rayDir.y != 0.0f ? rayDir.y : 0.00001f);
-      float t4 = (maxBounds.y - rayOrigin.y) / (rayDir.y != 0.0f ? rayDir.y : 0.00001f);
-      float t5 = (minBounds.z - rayOrigin.z) / (rayDir.z != 0.0f ? rayDir.z : 0.00001f);
-      float t6 = (maxBounds.z - rayOrigin.z) / (rayDir.z != 0.0f ? rayDir.z : 0.00001f);
-      
-      float tmin = (std::max)((std::max)((std::min)(t1, t2), (std::min)(t3, t4)), (std::min)(t5, t6));
-      float tmax = (std::min)((std::min)((std::max)(t1, t2), (std::max)(t3, t4)), (std::max)(t5, t6));
-      
-      if (tmax >= 0 && tmin <= tmax) {
-        if (tmin < minT) {
-          minT = tmin;
-          hitObject = obj;
-        }
-      }
-    }
-  } else {
-    // フォールバック: コライダーが無い場合でもモデルがあれば簡易的な球体判定を行う
-    auto modelComp = obj->GetComponent<ModelComponent>();
-    if (modelComp) {
-      Vector3 objPos = obj->GetTransform().translate;
-      Vector3 scale = obj->GetTransform().scale;
-      float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-      float scaledRadius = 1.0f * maxScale; // デフォルト半径 1.0
-
-      Vector3 m = { rayOrigin.x - objPos.x, rayOrigin.y - objPos.y, rayOrigin.z - objPos.z };
-      float b = Dot(m, rayDir);
-      float c = Dot(m, m) - scaledRadius * scaledRadius;
-
-      float discriminant = b * b - c;
-      if (discriminant > 0.0f) {
-        float t = -b - std::sqrt(discriminant);
-        if (t > 0.0f && t < minT) {
-          minT = t;
-          hitObject = obj;
-        }
-      }
-    }
+  if (colliderComp && colliderComp->GetShape()) {
+    // 形ごとのレイ判定は、形状のクラスに任せる(エディタは形の種類を知らない)
+    tryHit(*colliderComp->GetShape(), colliderComp->GetEditorPlacement());
+  } else if (obj->GetComponent<ModelComponent>()) {
+    // フォールバック: コライダーが無い場合でもモデルがあれば、オブジェクトの位置に置いた既定の大きさの球で判定する
+    const SphereShape fallbackSphere(kFallbackPickRadius);
+    ShapePlacement placement;
+    placement.center = obj->GetTransform().translate;
+    placement.scale = obj->GetTransform().scale;
+    tryHit(fallbackSphere, placement);
   }
 
   // 子ノードも再帰的にチェック
@@ -509,61 +463,15 @@ void EditorUIManager::DrawColliderDebug(const SceneWorld::ObjectList& rootObject
     if (!obj) return;
 
     auto colliderComp = obj->GetComponent<ColliderComponent>();
-    if (colliderComp && colliderComp->GetSettings().type != ColliderComponent::Type::None) {
-      const auto& collider = colliderComp->GetSettings();
-      Vector3 objPos = obj->GetTransform().translate;
-      Vector3 scale = obj->GetTransform().scale;
-      Vector3 center = { objPos.x + collider.centerOffset.x * scale.x, 
-                         objPos.y + collider.centerOffset.y * scale.y, 
-                         objPos.z + collider.centerOffset.z * scale.z };
-
-      if (collider.type == ColliderComponent::Type::AABB) {
-        Vector3 scaledSize = { collider.size.x * scale.x, collider.size.y * scale.y, collider.size.z * scale.z };
-        
-        Vector3 corners[8] = {
-          {center.x - scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z},
-          {center.x + scaledSize.x, center.y - scaledSize.y, center.z - scaledSize.z},
-          {center.x + scaledSize.x, center.y + scaledSize.y, center.z - scaledSize.z},
-          {center.x - scaledSize.x, center.y + scaledSize.y, center.z - scaledSize.z},
-          {center.x - scaledSize.x, center.y - scaledSize.y, center.z + scaledSize.z},
-          {center.x + scaledSize.x, center.y - scaledSize.y, center.z + scaledSize.z},
-          {center.x + scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z},
-          {center.x - scaledSize.x, center.y + scaledSize.y, center.z + scaledSize.z}
-        };
-
-        ImVec2 screenCorners[8];
-        bool visible[8];
-        for (int i = 0; i < 8; ++i) {
-          visible[i] = WorldToScreen(corners[i], viewProj, vMin, vMax, screenCorners[i]);
+    if (colliderComp && colliderComp->GetShape()) {
+      // 形の輪郭の線分は、形状のクラスが作る。エディタは、両端が画面に映る線分だけを描く
+      colliderComp->GetShape()->DrawWire(colliderComp->GetEditorPlacement(), [&](const Vector3& from, const Vector3& to) {
+        ImVec2 screenFrom;
+        ImVec2 screenTo;
+        if (WorldToScreen(from, viewProj, vMin, vMax, screenFrom) && WorldToScreen(to, viewProj, vMin, vMax, screenTo)) {
+          drawList->AddLine(screenFrom, screenTo, color);
         }
-
-        auto drawLine = [&](int i, int j) {
-          if (visible[i] && visible[j]) {
-            drawList->AddLine(screenCorners[i], screenCorners[j], color);
-          }
-        };
-
-        drawLine(0, 1); drawLine(1, 2); drawLine(2, 3); drawLine(3, 0);
-        drawLine(4, 5); drawLine(5, 6); drawLine(6, 7); drawLine(7, 4);
-        drawLine(0, 4); drawLine(1, 5); drawLine(2, 6); drawLine(3, 7);
-
-      } else if (collider.type == ColliderComponent::Type::Sphere) {
-        float maxScale = (std::max)({ scale.x, scale.y, scale.z });
-        float r = collider.radius * maxScale;
-        
-        Vector3 points[6] = {
-          {center.x - r, center.y, center.z}, {center.x + r, center.y, center.z},
-          {center.x, center.y - r, center.z}, {center.x, center.y + r, center.z},
-          {center.x, center.y, center.z - r}, {center.x, center.y, center.z + r}
-        };
-        ImVec2 sp[6];
-        bool v[6];
-        for (int i = 0; i < 6; ++i) v[i] = WorldToScreen(points[i], viewProj, vMin, vMax, sp[i]);
-
-        if(v[0]&&v[1]) drawList->AddLine(sp[0], sp[1], color);
-        if(v[2]&&v[3]) drawList->AddLine(sp[2], sp[3], color);
-        if(v[4]&&v[5]) drawList->AddLine(sp[4], sp[5], color);
-      }
+      });
     }
 
     for (const auto& child : obj->GetChildren()) {
@@ -747,45 +655,6 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
 
     ImGui::Separator();
     
-    // モデルとテクスチャの設定表示
-    if (ImGui::CollapsingHeader("Model & Texture", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto modelComp = obj->GetComponent<ModelComponent>();
-      if (modelComp) {
-        ImGui::Text("Model: %s", modelComp->GetModelPath().empty() ? "None" : modelComp->GetModelPath().c_str());
-        ImGui::Text("Texture: %s", modelComp->GetTexturePath().empty() ? "None" : modelComp->GetTexturePath().c_str());
-        
-        // テクスチャ適用用のドロップエリア
-        ImGui::Button("Drop Texture Here (.png/.dds)", ImVec2(-FLT_MIN, 30));
-        if (ImGui::BeginDragDropTarget()) {
-          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-            const char* payloadPath = (const char*)payload->Data;
-            modelComp->LoadTexture(payloadPath);
-            SetSceneModified();
-          }
-          ImGui::EndDragDropTarget();
-        }
-
-        // モデル適用用のドロップエリア
-        ImGui::Button("Drop Model Here (.obj)", ImVec2(-FLT_MIN, 30));
-        if (ImGui::BeginDragDropTarget()) {
-          if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-            const char* payloadPath = (const char*)payload->Data;
-            modelComp->LoadModel(payloadPath);
-            SetSceneModified();
-          }
-          ImGui::EndDragDropTarget();
-        }
-      } else {
-        ImGui::Text("No ModelComponent attached.");
-        if (ImGui::Button("Add ModelComponent")) {
-          obj->AddComponent(std::make_unique<ModelComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    ImGui::Separator();
-
     // Transformの編集
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
       // コピーを編集し、スライダーの処理のあとで SetTransform で戻す
@@ -836,142 +705,6 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
       }
     }
 
-    // --- LightComponent ---
-    if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto lightComp = obj->GetComponent<LightNodeComponent>();
-      if (lightComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        LightNodeComponent::Settings l = lightComp->GetSettings();
-        int currentType = static_cast<int>(l.type);
-        const char* lightTypes[] = { "None", "Directional", "Point", "Spot" };
-
-        bool activated = false;
-        bool deactivatedAfterEdit = false;
-
-        if (ImGui::Combo("Type", &currentType, lightTypes, IM_ARRAYSIZE(lightTypes))) {
-          l.type = static_cast<LightNodeComponent::Type>(currentType);
-        }
-        activated |= ImGui::IsItemActivated();
-        deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-        if (l.type != LightNodeComponent::Type::None) {
-          float color[3] = { l.color.x, l.color.y, l.color.z };
-          if (ImGui::ColorEdit3("Color", color)) {
-            l.color = { color[0], color[1], color[2] };
-          }
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-          ImGui::DragFloat("Intensity", &l.intensity, 0.05f, 0.0f, 100.0f);
-          activated |= ImGui::IsItemActivated();
-          deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          
-          if (l.type == LightNodeComponent::Type::Point || l.type == LightNodeComponent::Type::Spot) {
-            ImGui::DragFloat("Radius", &l.radius, 0.1f, 0.0f, 1000.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-            ImGui::DragFloat("Decay", &l.decay, 0.05f, 0.0f, 10.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          }
-          if (l.type == LightNodeComponent::Type::Spot) {
-            ImGui::DragFloat("Distance", &l.distance, 0.1f, 0.0f, 1000.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-
-            ImGui::DragFloat("ConeAngle (deg)", &l.coneAngleDeg, 0.5f, 0.0f, 180.0f);
-            activated |= ImGui::IsItemActivated();
-            deactivatedAfterEdit |= ImGui::IsItemDeactivatedAfterEdit();
-          }
-        }
-
-        // 編集したコピーを、コンポーネントへ反映する
-        lightComp->SetSettings(l);
-
-        if (activated) {
-            lightComp->Serialize(componentStateBefore_);
-        }
-        if (deactivatedAfterEdit) {
-            if (commandManager_) {
-                nlohmann::json componentStateAfter;
-                lightComp->Serialize(componentStateAfter);
-                commandManager_->AddCommand(std::make_shared<ComponentStateCommand>(obj, "LightNodeComponent", componentStateBefore_, componentStateAfter));
-            }
-        }
-      } else {
-        ImGui::Text("No LightNodeComponent attached.");
-        if (ImGui::Button("Add LightNodeComponent")) {
-          obj->AddComponent(std::make_unique<LightNodeComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    // --- Dissolve ---
-    if (ImGui::CollapsingHeader("Dissolve", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto dissolveComp = obj->GetComponent<DissolveComponent>();
-      if (dissolveComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        DissolveComponent::Settings dissolve = dissolveComp->GetSettings();
-        if (ImGui::Checkbox("Enable Dissolve", &dissolve.enable)) SetSceneModified();
-        if (dissolve.enable) {
-          if (ImGui::SliderFloat("Threshold", &dissolve.threshold, 0.0f, 1.0f)) SetSceneModified();
-          if (ImGui::SliderFloat("Edge Range", &dissolve.edgeRange, 0.0f, 0.1f)) SetSceneModified();
-          float edgeCol[3] = { dissolve.edgeColor.x, dissolve.edgeColor.y, dissolve.edgeColor.z };
-          if (ImGui::ColorEdit3("Edge Color", edgeCol)) {
-            dissolve.edgeColor = { edgeCol[0], edgeCol[1], edgeCol[2] };
-            SetSceneModified();
-          }
-          float maskCol[3] = { dissolve.maskColor.x, dissolve.maskColor.y, dissolve.maskColor.z };
-          if (ImGui::ColorEdit3("Mask Color", maskCol)) {
-            dissolve.maskColor = { maskCol[0], maskCol[1], maskCol[2] };
-            SetSceneModified();
-          }
-        }
-        dissolveComp->SetSettings(dissolve);
-      } else {
-        ImGui::Text("No DissolveComponent attached.");
-        if (ImGui::Button("Add DissolveComponent")) {
-          obj->AddComponent(std::make_unique<DissolveComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
-    // Colliderの編集
-    if (ImGui::CollapsingHeader("Collider", ImGuiTreeNodeFlags_DefaultOpen)) {
-      auto colliderComp = obj->GetComponent<ColliderComponent>();
-      if (colliderComp) {
-        // 設定のコピーを編集し、スライダーの処理のあとで SetSettings で戻す
-        ColliderComponent::Settings collider = colliderComp->GetSettings();
-
-        const char* types[] = { "None", "Sphere", "AABB" };
-        int currentType = static_cast<int>(collider.type);
-        if (ImGui::Combo("Type", &currentType, types, IM_ARRAYSIZE(types))) {
-          collider.type = static_cast<ColliderComponent::Type>(currentType);
-          SetSceneModified();
-        }
-
-        if (collider.type != ColliderComponent::Type::None) {
-          if (ImGui::DragFloat3("Center Offset", &collider.centerOffset.x, 0.1f)) SetSceneModified();
-
-          if (collider.type == ColliderComponent::Type::Sphere) {
-            if (ImGui::DragFloat("Radius", &collider.radius, 0.1f, 0.0f)) SetSceneModified();
-          } else if (collider.type == ColliderComponent::Type::AABB) {
-            if (ImGui::DragFloat3("Size (Half Extents)", &collider.size.x, 0.1f, 0.0f)) SetSceneModified();
-          }
-        }
-        colliderComp->SetSettings(collider);
-      } else {
-        ImGui::Text("No ColliderComponent attached.");
-        if (ImGui::Button("Add ColliderComponent")) {
-          obj->AddComponent(std::make_unique<ColliderComponent>());
-          SetSceneModified();
-        }
-      }
-    }
-
     ImGui::Separator();
     
     // プレハブ関連操作
@@ -1002,22 +735,22 @@ void EditorUIManager::DrawInspector(SceneWorld& world) {
       IComponent* componentToRemove = nullptr;
       
       for (const auto& comp : obj->GetComponents()) {
-        ImGui::Text("- %s", comp->GetTypeName().c_str());
-        
-        // 追加：各コンポーネントのインスペクタ用UIを描画
-        // 取り消し履歴への記録は、エディタが受け持つ。部品には、記録先(recorder)だけを渡す
-        ComponentEditRecorder recorder(commandManager_.get(), obj, comp->GetTypeName());
-        comp->DrawInspectorUI(recorder);
+        // 部品ごとに ID を分ける(Light と Collider の "Type" のように、同じ名前の項目が並んでも衝突しないため)
+        ImGui::PushID(comp.get());
 
-        ImGui::SameLine();
-        
-        // ボタンIDを一意にするためにポインタアドレスを使用
-        std::string btnLabel = "Remove##" + std::to_string(reinterpret_cast<uintptr_t>(comp.get()));
-        if (ImGui::Button(btnLabel.c_str())) {
+        // 部品ごとに折りたためる見出しを出し、中身は部品自身に描かせる(DrawInspectorUI の override。
+        // エディタは部品の具体的な型を知らない)。取り消し履歴への記録は、トラッカーが全部品に共通で行う
+        if (ImGui::CollapsingHeader(comp->GetTypeName().c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+          ComponentEditRecorder recorder(commandManager_.get(), obj, comp->GetTypeName());
+          inspectorEditTracker_.DrawAndRecord(*comp, recorder);
+
+          if (ImGui::Button("Remove Component")) {
             componentToRemove = comp.get();
             SetSceneModified();
+          }
         }
-        // 今後はここで comp->DrawInspector() などを呼んでパラメータ編集できるようにする
+
+        ImGui::PopID();
       }
 
       if (componentToRemove) {

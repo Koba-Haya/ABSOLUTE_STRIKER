@@ -87,7 +87,7 @@
                     "basePosition": {
                         "rotate": {
                             "x": 0.0,
-                            "y": 0.0,
+                            "y": -0.0,
                             "z": 0.0
                         },
                         "scale": {
@@ -123,7 +123,7 @@
                     "spawnTransform": {
                         "rotate": {
                             "x": 0.0,
-                            "y": 0.0,
+                            "y": -0.0,
                             "z": 0.0
                         },
                         "scale": {

@@ -4,9 +4,7 @@
 //       生成したオブジェクトは weak_ptr で保持し、Rewind時に安全に破棄する
 // ============================================================
 #pragma once
-#include "ITimelineEvent.h"
-#include "RailSpawnPoint.h"
-#include "../../Type/Transform.h"
+#include "SpawnTimelineEvent.h"
 #include <memory>
 #include <string>
 
@@ -14,38 +12,13 @@ namespace AbsoluteEngine {
 
 class GameObject;
 
-class SpawnEvent : public ITimelineEvent {
+// プレハブを 1 体出すイベント。置き場所などのスポーン系に共通の設定と処理は、中間クラス SpawnTimelineEvent が持つ
+class SpawnEvent final : public SpawnTimelineEvent {
 public:
     SpawnEvent() = default;
     // デストラクタ: unique_ptr による消滅時（トラック削除など）に
     // プレビューオブジェクトが確実に破棄されるよう Rewind() を呼ぶ
     ~SpawnEvent() override { Rewind(); }
-
-    // -----------------------------------------------------------
-    // 設定値の読み取りと、編集結果の取り込み
-    // (設定値そのものは private。書き換えは、デシリアライズ、インスペクタ、ApplyEditedTransform だけが行う)
-    // -----------------------------------------------------------
-
-    // スポーンするプレハブのID（PrefabRegistryで解決される）
-    const std::string& GetPrefabId() const { return prefabId_; }
-
-    // スポーン位置・回転・スケール(設定された値そのもの。レール座標の指定のときの出現位置は、ResolveSpawnTransform で求める)
-    const Transform& GetSpawnTransform() const { return spawnTransform_; }
-
-    // レール座標で位置を指定しているか
-    bool UsesRail() const { return useRail_; }
-
-    // ギズモなどで編集された Transform を、設定値へ取り込む。
-    // レール座標の指定のときは、位置はレール座標だけで決まるので、位置を除いて(回転とスケールだけ)取り込む。
-    // そうでなければ、位置も含めて丸ごと取り込む
-    void ApplyEditedTransform(const Transform& edited) {
-        if (useRail_) {
-            spawnTransform_.rotate = edited.rotate;
-            spawnTransform_.scale = edited.scale;
-        } else {
-            spawnTransform_ = edited;
-        }
-    }
 
     // -----------------------------------------------------------
     // ITimelineEvent 実装
@@ -56,11 +29,6 @@ public:
     // PrefabRegistryからパスを解決し、プレハブをスポーンして rootObjects に追加する
     // スポーンしたオブジェクトは weak_ptr で保持する
     void Fire(const TimelineFireContext& context) override;
-
-    // 出現時の Transform(世界座標)を求める。useRail_ ならレール座標から変換し、そうでなければ spawnTransform_ のまま。
-    // outFrame は、レールで置いたときの、出現位置のレールの座標系(置かなかったときは変更しない)。
-    // 戻り値: レール座標で置いたか。Fire() とエディタのプレビューが、同じ手順で位置を求めるための関数
-    bool ResolveSpawnTransform(const TimelineFireContext& context, Transform& outTransform, RailFrame& outFrame) const;
 
     // weak_ptr 経由でオブジェクトの生存を確認してから安全に破棄する
     // （ダングリングポインタによるクラッシュを100%防ぐ）
@@ -76,30 +44,7 @@ public:
     // （DrawInspectorUI()では配置後の誤操作防止のため表示のみ・変更不可にしている）
     void DrawCreationUI(bool& activated, bool& deactivatedAfterEdit) override;
 
-    // 追加時の既定位置。レール座標の指定にして、その値を入れる
-    void SetSpawnAnchorRail(const RailSpawnPoint& rail) override {
-        useRail_ = true;
-        rail_ = rail;
-    }
-
 private:
-    // -----------------------------------------------------------
-    // 設定値（エディタUIまたはデシリアライズ時に設定される）
-    // -----------------------------------------------------------
-
-    // スポーンするプレハブのID（PrefabRegistryで解決される）
-    std::string prefabId_ = "";
-
-    // スポーン位置・回転・スケール
-    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
-    Transform spawnTransform_{};
-
-    // レール座標で位置を指定するか(false なら、spawnTransform_.translate の世界座標。従来の JSON はこちら)
-    bool useRail_ = false;
-
-    // レール座標での出現位置(useRail_ が true のときだけ使う)
-    RailSpawnPoint rail_{};
-
     // Fire()でスポーンしたオブジェクトへの弱参照
     // shared_ptr を直接持つと所有権の衝突が起きるため weak_ptr を使用する
     std::weak_ptr<GameObject> spawnedObject_;

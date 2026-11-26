@@ -4,7 +4,7 @@
 #include <optional>
 #include <string>
 
-#include "TimelineSpawnPreview.h"
+#include "TimelineEventPreview.h"
 
 namespace AbsoluteEngine {
 
@@ -65,8 +65,8 @@ public:
   bool DrawEditorWindow(const std::string &timelineFilePath, std::optional<bool> debugCameraState,
                         std::function<void()> onModified);
   // エディットモード中に毎フレーム呼ぶ。選択したイベントの、仮の敵(プレビュー)の出し入れと書き戻しを行う
-  void UpdatePreview(const TimelineSpawnPreview::AddObjectFunc &addObject,
-                     const TimelineSpawnPreview::SelectObjectFunc &selectObject);
+  void UpdatePreview(const TimelineEventPreview::AddObjectFunc &addObject,
+                     const TimelineEventPreview::SelectObjectFunc &selectObject);
 
   // エディタのインスペクタが、タイムラインのイベントを編集するために必要な、タイムライン本体への窓口。
   // 所有権は渡さない。保持せず、使うたびに取得すること(このクラスの破棄後は無効になる)
@@ -76,7 +76,7 @@ private:
   // 宣言順は初期化・破棄の順序を決める。editorWindow_ は manager_ を参照するため、manager_ より後に宣言する
   std::unique_ptr<TimelineManager> manager_;
   std::unique_ptr<TimelineEditorWindow> editorWindow_;
-  TimelineSpawnPreview preview_;
+  TimelineEventPreview preview_;
 };
 
 } // namespace AbsoluteEngine

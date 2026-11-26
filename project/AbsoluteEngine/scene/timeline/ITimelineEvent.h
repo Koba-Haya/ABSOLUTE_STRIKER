@@ -8,8 +8,15 @@
 #include "../../Type/Transform.h"
 #include "TimelineFireContext.h"
 #include "RailSpawnPoint.h"
+#include <string>
 
 namespace AbsoluteEngine {
+
+// エディタでイベントを選んだときに、シーンに出す目印の中身
+struct TimelineEditorHandle {
+    std::string prefabId; // 目印として置くプレハブの ID(PrefabRegistry で解決する)
+    Transform placement;  // 目印を置く、世界座標の Transform
+};
 
 class ITimelineEvent {
 public:
@@ -70,14 +77,29 @@ public:
     }
 
     // -----------------------------------------------------------
-    // スポーン位置の自動配置（エディタの「追加」操作から呼ばれる）
+    // エディタでの配置(シーンの中の置き場所を持つイベント用の、通知と問い合わせ)
     // -----------------------------------------------------------
-    // 新規追加時に、既定の出現位置(レール座標。カメラ前方 ahead、横・縦は 0)を渡す
-    // （TimelineManager::ComputeSpawnAnchorRail()の結果）。
-    // スポーン系イベント（SpawnEvent/FormationSpawnEvent等）はこれをオーバーライドして
-    // レール座標の指定を有効にし、自身の位置フィールドに反映する。エディタ側は具象クラスの位置フィールド名を
-    // 知らなくてよい（DrawInspectorUIと同じ考え方のポリモーフィックなフック）。
-    virtual void SetSpawnAnchorRail(const RailSpawnPoint& rail) {}
+    // 全てのイベントが意味のある答えを返せる形にしてある(置き場所を使わないイベントは、無視する / 「目印なし」と答える)。
+    // 種類ごとの機能(「スポーン系なら」など)を基底に足さないので、効果音・カメラ切り替え・演出などのイベントを足しても、
+    // エディタと、この基底は変わらない(新しいクラスで override するだけ)。
+    // 例: 敵の出現 = 出現位置と敵のプレハブ、位置のある効果音 = 鳴らす位置、カメラ切り替え = カメラの位置。画面全体の演出 = 使わない
+
+    // エディタで新しく作られたとき(追加のポップアップで種別が選ばれたとき)に、既定の置き場所を伝える。
+    // defaultPlacement: カメラの前方の、レール座標の位置(TimelineManager::ComputeSpawnAnchorRail の結果)
+    virtual void OnCreatedInEditor(const RailSpawnPoint& defaultPlacement) { (void)defaultPlacement; }
+
+    // エディタでこのイベントを選んだときに、シーンに出す目印(ギズモで動かせる仮のオブジェクト)を問い合わせる。
+    // context: 発火時刻のレール位置などを求めるための情報(実際の発火と同じ手順で、置き場所を求めるため)
+    // 戻り値: 目印があれば true(outHandle に中身を入れる)。既定は目印なし
+    virtual bool GetEditorHandle(const TimelineFireContext& context, TimelineEditorHandle& outHandle) const {
+        (void)context;
+        (void)outHandle;
+        return false;
+    }
+
+    // 目印がギズモなどで動かされたときに、その Transform を伝える(イベントが、自分の置き場所の設定へ取り込む)。
+    // どの成分を取り込むか(例: レール座標の指定なら、位置は取り込まない)は、イベント自身が決める
+    virtual void OnEditorHandleEdited(const Transform& edited) { (void)edited; }
 };
 
 } // namespace AbsoluteEngine

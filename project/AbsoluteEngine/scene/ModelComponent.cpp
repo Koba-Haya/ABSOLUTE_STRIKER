@@ -11,10 +11,17 @@
 #include <optional>
 #include <vector>
 
+#ifdef USE_IMGUI
+#include "../../externals/imgui/imgui.h"
+#endif
+
 namespace AbsoluteEngine {
 
 namespace {
 constexpr float kMinFitWidth = 1e-4f; // これより幅が小さいモデルは、拡大率を求めない(0 割りを避ける)
+#ifdef USE_IMGUI
+constexpr float kDropAreaHeight = 30.0f; // インスペクタのドロップ欄の高さ(以前 EditorUIManager に書かれていた値と同じ)
+#endif
 } // namespace
 
 void ModelComponent::LoadModel(const std::string& path) {
@@ -148,6 +155,28 @@ void ModelComponent::Draw() {
         
         modelInstance_->Draw();
     }
+}
+
+void ModelComponent::DrawInspectorUI() {
+#ifdef USE_IMGUI
+    // 今のパスを表示する(空なら None)
+    ImGui::Text("Model: %s", modelPath_.empty() ? "None" : modelPath_.c_str());
+    ImGui::Text("Texture: %s", texturePath_.empty() ? "None" : texturePath_.c_str());
+
+    // アセットブラウザからドラッグされたファイルを受け取る欄。
+    // label: ボタンの表示, payloadType: アセットブラウザが付けた種類名, load: 受け取ったパスで読み込む処理
+    const auto dropArea = [](const char* label, const char* payloadType, const auto& load) {
+        ImGui::Button(label, ImVec2(-FLT_MIN, kDropAreaHeight));
+        if (ImGui::BeginDragDropTarget()) {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(payloadType)) {
+                load(static_cast<const char*>(payload->Data));
+            }
+            ImGui::EndDragDropTarget();
+        }
+    };
+    dropArea("Drop Texture Here (.png/.dds)", "ASSET_TEXTURE_PATH", [this](const char* path) { LoadTexture(path); });
+    dropArea("Drop Model Here (.obj)", "ASSET_MODEL_PATH", [this](const char* path) { LoadModel(path); });
+#endif
 }
 
 } // namespace AbsoluteEngine

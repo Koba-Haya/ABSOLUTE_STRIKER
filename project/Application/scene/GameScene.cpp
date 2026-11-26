@@ -2064,14 +2064,11 @@ void GameScene::DrawEditorUI() {
     
     int hp = 0;
     int maxHp = 0;
+    // 自機の部品は、型で直接取り出す(型名の文字列での比較とキャストを、呼ぶ側で書かない)
     if (playerObj_) {
-        for (const auto& comp : playerObj_->GetComponents()) {
-            if (comp->GetTypeName() == "PlayerComponent") {
-                if (auto* pComp = dynamic_cast<PlayerComponent*>(comp.get())) {
-                    hp = pComp->GetHp();
-                    maxHp = pComp->GetMaxHp();
-                }
-            }
+        if (const auto* pComp = playerObj_->GetComponent<PlayerComponent>()) {
+            hp = pComp->GetHp();
+            maxHp = pComp->GetMaxHp();
         }
     }
     ImGui::Text("Player HP: %d / %d", hp, maxHp);

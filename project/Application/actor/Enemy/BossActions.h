@@ -1,5 +1,5 @@
 #pragma once
-#include "BossAttackPlan.h"
+#include "BossAttackCue.h"
 #include "BossPhase.h"
 #include "BossShieldPlan.h"
 #include "BossState.h"
@@ -37,7 +37,7 @@ public:
     virtual void LaunchOrbs(float flightSec, float intervalSec) = 0;
     // 攻撃の段が変わったことを伝える(体は、その段のアニメーションと演出に切り替える)。攻撃が終わるときは None を渡す。
     // spec: いまの攻撃の定義(演出が、段の長さと種類を読む)
-    virtual void SetAttackStage(BossAttackStage stage, const BossAttackSpec& spec) = 0;
+    virtual void SetAttackStage(BossAttackStage stage, const BossAttackCue& cue) = 0;
     // いまのフェーズ(HP の残りで決まる)
     virtual BossPhase GetPhase() const = 0;
     // ボスをよろめかせる(被弾のよろめきのアニメーションを再生する)。シールドが砕けたときなどに使う

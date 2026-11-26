@@ -10,10 +10,9 @@ using namespace BossShieldDefaults;
 }
 
 BossShieldState::BossShieldState(BossPhase nextPhase) : nextPhase_(nextPhase) {
-    // 攻撃の演出(輪、粒)に渡す定義: 展開を予告、維持を溜めとして見せるので、その長さを入れる。弾は撃たない
-    effectSpec_.kind = BossAttackKind::Aimed;
-    effectSpec_.telegraphSec = kDeploySeconds;
-    effectSpec_.chargeSec = kTimeLimitSeconds;
+    // 攻撃の演出(輪、粒)に渡す情報: 展開を予告、維持を溜めとして見せるので、その長さを入れる。輪は標準の見せ方。弾は撃たない
+    effectCue_.telegraphSec = kDeploySeconds;
+    effectCue_.chargeSec = kTimeLimitSeconds;
 }
 
 void BossShieldState::Enter(IBossActions& actions) {
@@ -38,19 +37,19 @@ void BossShieldState::EnterStage_(IBossActions& actions, Stage stage) {
     Logger::GetInstance().Log("[BossShield] stage=%d shieldHp=%d nextPhase=%d", static_cast<int>(stage), shieldHp_, static_cast<int>(nextPhase_));
     switch (stage) {
     case Stage::Deploy:
-        actions.SetAttackStage(BossAttackStage::Telegraph, effectSpec_);
+        actions.SetAttackStage(BossAttackStage::Telegraph, effectCue_);
         break;
     case Stage::Hold:
-        actions.SetAttackStage(BossAttackStage::Charge, effectSpec_);
+        actions.SetAttackStage(BossAttackStage::Charge, effectCue_);
         break;
     case Stage::Break:
         // 成功: 溜めの演出を止めて、ボスがひるむ
-        actions.SetAttackStage(BossAttackStage::None, effectSpec_);
+        actions.SetAttackStage(BossAttackStage::None, effectCue_);
         actions.Stagger();
         break;
     case Stage::Burst:
         // 失敗: 発射の演出(閃光、火花)を出して、全画面の爆発のダメージを与える(回避の無敵の間は受けない)
-        actions.SetAttackStage(BossAttackStage::Fire, effectSpec_);
+        actions.SetAttackStage(BossAttackStage::Fire, effectCue_);
         actions.ApplyBlastDamage(kBlastDamage);
         break;
     }
@@ -113,7 +112,7 @@ void BossShieldState::PublishView_(IBossActions& actions) const {
 
 void BossShieldState::Finish_(IBossActions& actions) {
     // 攻撃の演出と、外へ見せる状態を片づけて、フェーズを進め、待機の状態へ戻る
-    actions.SetAttackStage(BossAttackStage::None, effectSpec_);
+    actions.SetAttackStage(BossAttackStage::None, effectCue_);
     actions.SetShieldView(BossShieldView{});
     actions.FinishShield(nextPhase_);
     actions.ChangeState(std::make_unique<BossIdleState>(0));

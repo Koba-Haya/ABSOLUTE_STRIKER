@@ -11,16 +11,15 @@
 //       TimelineEventFactory経由で名前だけで生成・利用され、具象型には依存しない。
 // ============================================================
 #pragma once
-#include "AbsoluteEngine/scene/timeline/ITimelineEvent.h"
-#include "AbsoluteEngine/scene/timeline/RailSpawnPoint.h"
-#include "Type/Transform.h"
+#include "AbsoluteEngine/scene/timeline/SpawnTimelineEvent.h"
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace AbsoluteEngine { class GameObject; }
 
-class FormationSpawnEvent : public AbsoluteEngine::ITimelineEvent {
+// 置き場所などのスポーン系に共通の設定と処理は、中間クラス SpawnTimelineEvent が持つ(編隊の中心 = 置き場所)
+class FormationSpawnEvent final : public AbsoluteEngine::SpawnTimelineEvent {
 public:
     FormationSpawnEvent() = default;
     ~FormationSpawnEvent() override { Rewind(); }
@@ -31,7 +30,7 @@ public:
 
     std::string GetLabel() const override;
 
-    // memberCount_ 体をbasePosition_周辺にランダム配置し、rootObjects に追加する
+    // memberCount_ 体を編隊の中心(置き場所)の周辺にランダム配置し、rootObjects に追加する
     void Fire(const AbsoluteEngine::TimelineFireContext& context) override;
 
     // Fire()でスポーンした全メンバーを安全に破棄する
@@ -42,30 +41,11 @@ public:
     void Deserialize(const nlohmann::json& j) override;
 
     void DrawInspectorUI(bool& activated, bool& deactivatedAfterEdit) override;
-    // 追加時の既定位置。レール座標の指定にして、その値を入れる
-    void SetSpawnAnchorRail(const AbsoluteEngine::RailSpawnPoint& rail) override {
-        useRail_ = true;
-        rail_ = rail;
-    }
 
 private:
     // -----------------------------------------------------------
     // 設定値（エディタUIまたはデシリアライズ時に設定される）
     // -----------------------------------------------------------
-
-    // スポーンするプレハブのID（PrefabRegistryで解決される。編隊メンバー全員が同一プレハブ）
-    std::string prefabId_ = "";
-
-    // 編隊の中心位置・回転・スケール（各メンバーはこの位置を基準にXY平面でオフセットされる）
-    // useRail_ が true のときは、translate は使わない(rail_ から出現時に求める)。rotate / scale は常に使う
-    Transform basePosition_{};
-
-    // レール座標で位置を指定するか(false なら、basePosition_.translate の世界座標。従来の JSON はこちら)
-    bool useRail_ = false;
-
-    // レール座標での編隊の中心位置(useRail_ が true のときだけ使う)。
-    // 各メンバーの散らしは、レール座標のときは道の右・上方向(世界座標のときは世界の X・Y 軸)
-    AbsoluteEngine::RailSpawnPoint rail_{};
 
     // 編隊のメンバー数（3〜5にクランプ）
     int memberCount_ = 4;

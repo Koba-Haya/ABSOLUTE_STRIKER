@@ -57,6 +57,10 @@
     <ClCompile Include="actor\Enemy\BossAttackEffects.cpp" />
     <ClCompile Include="actor\Enemy\BossEffectParticles.cpp" />
     <ClCompile Include="actor\Enemy\BossAttackState.cpp" />
+    <ClCompile Include="actor\Enemy\BossAttackPatternFactory.cpp" />
+    <ClCompile Include="actor\Enemy\AimedShotAttack.cpp" />
+    <ClCompile Include="actor\Enemy\SpreadShotAttack.cpp" />
+    <ClCompile Include="actor\Enemy\HomingOrbsAttack.cpp" />
     <ClCompile Include="actor\Enemy\BossIdleState.cpp" />
     <ClCompile Include="actor\Enemy\BossShieldEffects.cpp" />
     <ClCompile Include="actor\Enemy\BossOrbComponent.cpp" />
@@ -86,6 +90,8 @@
     <ClCompile Include="item\ItemSystem.cpp" />
     <ClCompile Include="item\PlayerUpgradeState.cpp" />
     <ClCompile Include="actor\Enemy\TelegraphComponent.cpp" />
+    <ClCompile Include="actor\Enemy\MuzzleOrbGlow.cpp" />
+    <ClCompile Include="actor\Enemy\BodyTintGlow.cpp" />
     <ClCompile Include="actor\Enemy\RamAttackComponent.cpp" />
     <ClCompile Include="hud\GameHUD.cpp" />
     <ClCompile Include="hud\HudProgressBar.cpp" />
@@ -203,6 +209,12 @@
     <ClInclude Include="actor\Enemy\BossEffectParticles.h" />
     <ClInclude Include="actor\Enemy\BossAttackPlan.h" />
     <ClInclude Include="actor\Enemy\BossAttackState.h" />
+    <ClInclude Include="actor\Enemy\BossAttackCue.h" />
+    <ClInclude Include="actor\Enemy\IBossAttackPattern.h" />
+    <ClInclude Include="actor\Enemy\BossAttackPatternFactory.h" />
+    <ClInclude Include="actor\Enemy\AimedShotAttack.h" />
+    <ClInclude Include="actor\Enemy\SpreadShotAttack.h" />
+    <ClInclude Include="actor\Enemy\HomingOrbsAttack.h" />
     <ClInclude Include="actor\Enemy\BossIdleState.h" />
     <ClInclude Include="actor\Enemy\BossShieldEffects.h" />
     <ClInclude Include="actor\Enemy\BossOrbComponent.h" />
@@ -238,6 +250,9 @@
     <ClInclude Include="item\ItemSystem.h" />
     <ClInclude Include="item\PlayerUpgradeState.h" />
     <ClInclude Include="actor\Enemy\TelegraphComponent.h" />
+    <ClInclude Include="actor\Enemy\ITelegraphGlow.h" />
+    <ClInclude Include="actor\Enemy\MuzzleOrbGlow.h" />
+    <ClInclude Include="actor\Enemy\BodyTintGlow.h" />
     <ClInclude Include="actor\Enemy\RamAttackComponent.h" />
     <ClInclude Include="hud\GameHUD.h" />
     <ClInclude Include="hud\HudProgressBar.h" />

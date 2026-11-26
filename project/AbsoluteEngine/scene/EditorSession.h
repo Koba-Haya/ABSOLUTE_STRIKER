@@ -2,7 +2,7 @@
 #include <memory>
 
 #include "PlayMode.h"
-#include "TimelineSpawnPreview.h"
+#include "TimelineEventPreview.h"
 
 class Camera;
 
@@ -58,7 +58,7 @@ public:
 
   // タイムラインで選んだ SpawnEvent の、仮の敵(プレビュー)を更新する。エディットモード中に毎フレーム呼ぶ。
   // addObject: 仮のオブジェクトをシーンへ追加する関数(派生シーンの追加処理を通すため、呼び出し側から受け取る)
-  void UpdateTimelinePreview(TimelineHost &timeline, const TimelineSpawnPreview::AddObjectFunc &addObject);
+  void UpdateTimelinePreview(TimelineHost &timeline, const TimelineEventPreview::AddObjectFunc &addObject);
 
   // ImGui でドラッグ&ドロップの最中か(カメラの操作を止めるために使う。USE_IMGUI が無ければ false)
   static bool IsDragDropInProgress();

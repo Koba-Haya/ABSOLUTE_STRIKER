@@ -1,24 +1,31 @@
 #include "BossAttackState.h"
 #include "BossActions.h"
+#include "BossAttackPatternFactory.h"
 #include "BossIdleState.h"
 #include <memory>
+
+BossAttackState::BossAttackState(const BossAttackSpec& spec, std::size_t attackIndex)
+    : spec_(spec), pattern_(BossAttackPatternFactory::Create(spec)), attackIndex_(attackIndex) {
+    // 演出へ渡す情報: 段の長さは表から、輪の見せ方はパターンから決める
+    cue_.telegraphSec = spec_.telegraphSec;
+    cue_.chargeSec = spec_.chargeSec;
+    cue_.ring = pattern_->GetMuzzleRingStyle();
+}
 
 void BossAttackState::Enter(IBossActions& actions) {
     stage_ = Stage::Telegraph;
     timer_ = 0.0f;
     // 予告の始まりを伝える(体は、予告のアニメーション = 構えへ移る動き、に切り替える)
-    actions.SetAttackStage(BossAttackStage::Telegraph, spec_);
-    // 誘導弾は、予告の始まりに、玉をボスの周りへ出す(予告の間に現れ、溜めの間は、固定で待つ)
-    if (spec_.kind == BossAttackKind::HomingOrbs) {
-        actions.SummonOrbs(spec_.count, spec_.telegraphSec, spec_.chargeSec);
-    }
+    actions.SetAttackStage(BossAttackStage::Telegraph, cue_);
+    // 攻撃ごとの準備(誘導弾なら、玉をボスの周りへ出す)
+    pattern_->OnTelegraphStart(actions);
 }
 
 void BossAttackState::Exit(IBossActions& actions) {
     // 攻撃が終わる(次の状態へ移る、または、ほかの理由で抜ける)ことを伝える
-    actions.SetAttackStage(BossAttackStage::None, spec_);
-    // 発射の前に攻撃が中断されたとき(シールドの発動など)に、待っている玉が残らないようにする。発射を命じた玉は、そのまま飛び続ける
-    actions.DismissOrbs();
+    actions.SetAttackStage(BossAttackStage::None, cue_);
+    // 攻撃ごとの後片付け(誘導弾なら、発射の前に中断されたときに、待っている玉を消す)
+    pattern_->OnEnd(actions);
 }
 
 float BossAttackState::GetStageSec() const {
@@ -28,21 +35,6 @@ float BossAttackState::GetStageSec() const {
     case Stage::Recover:   return spec_.recoverSec;
     }
     return 0.0f;
-}
-
-void BossAttackState::Fire(IBossActions& actions) const {
-    switch (spec_.kind) {
-    case BossAttackKind::Aimed:
-        actions.FireAimedShot(spec_.speed);
-        break;
-    case BossAttackKind::Spread:
-        actions.FireSpreadShot(spec_.count, spec_.spreadAngleDeg, spec_.speed);
-        break;
-    case BossAttackKind::HomingOrbs:
-        // 溜めが終わった瞬間に、玉を 1 つずつ自機へ向けて発射する(玉は、ボスの周りに、固定で待っていた)
-        actions.LaunchOrbs(spec_.flightSec, spec_.launchIntervalSec);
-        break;
-    }
 }
 
 void BossAttackState::Update(IBossActions& actions, float deltaTime) {
@@ -55,12 +47,12 @@ void BossAttackState::Update(IBossActions& actions, float deltaTime) {
         switch (stage_) {
         case Stage::Telegraph:
             stage_ = Stage::Charge;
-            actions.SetAttackStage(BossAttackStage::Charge, spec_);
+            actions.SetAttackStage(BossAttackStage::Charge, cue_);
             break;
         case Stage::Charge:
             // 溜めが終わった瞬間に、発射のアニメーションと演出へ切り替えて、弾を撃つ
-            actions.SetAttackStage(BossAttackStage::Fire, spec_);
-            Fire(actions);
+            actions.SetAttackStage(BossAttackStage::Fire, cue_);
+            pattern_->Fire(actions);
             stage_ = Stage::Recover;
             break;
         case Stage::Recover:

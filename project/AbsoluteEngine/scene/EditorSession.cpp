@@ -53,7 +53,7 @@ void EditorSession::NotifySceneModified() { ui_->SetSceneModified(); }
 
 void EditorSession::ClearSelection() { ui_->SetSelectedObject(nullptr); }
 
-void EditorSession::UpdateTimelinePreview(TimelineHost &timeline, const TimelineSpawnPreview::AddObjectFunc &addObject) {
+void EditorSession::UpdateTimelinePreview(TimelineHost &timeline, const TimelineEventPreview::AddObjectFunc &addObject) {
   // 仮のオブジェクトの追加は呼び出し側から受け取った関数を通す。選択はエディタ UI へ伝える
   timeline.UpdatePreview(addObject,
                          [this](const std::shared_ptr<GameObject> &obj) { ui_->SetSelectedObject(obj); });

@@ -70,8 +70,8 @@ bool TimelineHost::DrawEditorWindow(const std::string &timelineFilePath, std::op
   return editorWindow_->Draw(timelineFilePath);
 }
 
-void TimelineHost::UpdatePreview(const TimelineSpawnPreview::AddObjectFunc &addObject,
-                                 const TimelineSpawnPreview::SelectObjectFunc &selectObject) {
+void TimelineHost::UpdatePreview(const TimelineEventPreview::AddObjectFunc &addObject,
+                                 const TimelineEventPreview::SelectObjectFunc &selectObject) {
   preview_.Update(*manager_, addObject, selectObject);
 }
 

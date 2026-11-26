@@ -12,6 +12,7 @@
 #include "ColliderComponent.h"
 #include "LightNodeComponent.h"
 #include "RigidbodyComponent.h"
+#include "DissolveComponent.h"
 
 namespace AbsoluteEngine {
 
@@ -77,6 +78,8 @@ private:
         Register("ColliderComponent", []() { return std::make_unique<ColliderComponent>(); });
         Register("LightNodeComponent", []() { return std::make_unique<LightNodeComponent>(); });
         Register("RigidbodyComponent", []() { return std::make_unique<RigidbodyComponent>(); });
+        // エディタの「Add Component」から追加できるようにする(以前はインスペクタに専用の追加ボタンがあった)
+        Register("DissolveComponent", []() { return std::make_unique<DissolveComponent>(); });
     }
     std::map<std::string, DepsCreatorFunc> creators_;
 };

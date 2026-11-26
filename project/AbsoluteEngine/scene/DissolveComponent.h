@@ -29,6 +29,10 @@ public:
     // ディゾルブの設定値を丸ごと差し替える(書き込みの窓口は、SetCrack と、ここだけ)
     void SetSettings(const Settings& settings) { settings_ = settings; }
 
+    // エディタのインスペクタに、ディゾルブの設定を表示し、編集を受け付ける。
+    // 注意: この部品は Serialize を持たないので、ここでの編集は、取り消し履歴にもシーンのファイルにも残らない(調整の確認用)
+    void DrawInspectorUI() override;
+
     // ボロノイのひび割れ(ディゾルブと同じく、「モデルの表面が消えていく」演出のシェーダー効果なので、ここにまとめて持つ)。
     // crack.enable が false なら、何も描かない。ModelComponent が、毎フレーム、モデルへ反映する
     const ModelInstance::CrackParam& GetCrack() const { return crack_; }

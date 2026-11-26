@@ -1,5 +1,5 @@
 #pragma once
-#include "BossAttackPlan.h"
+#include "BossAttackCue.h"
 #include "BossPhase.h"
 #include "BossShieldPlan.h"
 #include "BossState.h"
@@ -36,5 +36,5 @@ private:
     Stage stage_ = Stage::Deploy;
     float timer_ = 0.0f;  // いまの段に入ってからの時間
     int shieldHp_ = BossShieldDefaults::kShieldHp;
-    BossAttackSpec effectSpec_{}; // 攻撃の演出に渡す定義(段の長さだけを使う)
+    BossAttackCue effectCue_{}; // 攻撃の演出に渡す情報(段の長さ。輪は標準の見せ方)
 };

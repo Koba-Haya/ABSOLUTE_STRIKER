@@ -270,7 +270,7 @@
     <ClCompile Include="scene\EditorSession.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
-    <ClCompile Include="scene\TimelineSpawnPreview.cpp">
+    <ClCompile Include="scene\TimelineEventPreview.cpp">
       <Filter>engine\scene</Filter>
     </ClCompile>
     <ClCompile Include="scene\SceneLights.cpp">
@@ -288,11 +288,15 @@
     <ClCompile Include="..\externals\ImGuizmo\ImGuizmo.cpp" />
     <ClCompile Include="scene\SceneSerializer.cpp" />
     <ClCompile Include="editor\CommandManager.cpp" />
+    <ClCompile Include="editor\InspectorEditTracker.cpp" />
     <ClCompile Include="scene\ColliderComponent.cpp" />
     <ClCompile Include="scene\LightNodeComponent.cpp" />
     <ClCompile Include="scene\ModelComponent.cpp" />
     <ClCompile Include="scene\DissolveComponent.cpp" />
     <ClCompile Include="scene\CollisionManager.cpp" />
+    <ClCompile Include="scene\collision\SphereShape.cpp" />
+    <ClCompile Include="scene\collision\AabbShape.cpp" />
+    <ClCompile Include="scene\collision\ShapePairTests.cpp" />
     <ClCompile Include="scene\RigidbodyComponent.cpp" />
     <ClCompile Include="resources\AssetManager.cpp">
       <Filter>resources</Filter>
@@ -302,6 +306,9 @@
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
     <ClCompile Include="scene\timeline\SpawnEvent.cpp">
+      <Filter>engine\scene\timeline</Filter>
+    </ClCompile>
+    <ClCompile Include="scene\timeline\SpawnTimelineEvent.cpp">
       <Filter>engine\scene\timeline</Filter>
     </ClCompile>
     <ClCompile Include="scene\timeline\RailSpawnPoint.cpp">
@@ -573,7 +580,7 @@
     <ClInclude Include="scene\PlayMode.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
-    <ClInclude Include="scene\TimelineSpawnPreview.h">
+    <ClInclude Include="scene\TimelineEventPreview.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
     <ClInclude Include="scene\SceneLights.h">
@@ -612,11 +619,16 @@
     <ClInclude Include="scene\SceneSerializer.h" />
     <ClInclude Include="editor\Command.h" />
     <ClInclude Include="editor\CommandManager.h" />
+    <ClInclude Include="editor\InspectorEditTracker.h" />
     <ClInclude Include="scene\ColliderComponent.h" />
     <ClInclude Include="scene\LightNodeComponent.h" />
     <ClInclude Include="scene\ModelComponent.h" />
     <ClInclude Include="scene\DissolveComponent.h" />
     <ClInclude Include="scene\CollisionManager.h" />
+    <ClInclude Include="scene\collision\CollisionShape.h" />
+    <ClInclude Include="scene\collision\SphereShape.h" />
+    <ClInclude Include="scene\collision\AabbShape.h" />
+    <ClInclude Include="scene\collision\ShapePairTests.h" />
     <ClInclude Include="scene\RigidbodyComponent.h" />
     <ClInclude Include="resources\AssetManager.h">
       <Filter>resources</Filter>
@@ -629,6 +641,9 @@
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\SpawnEvent.h">
+      <Filter>engine\scene\timeline</Filter>
+    </ClInclude>
+    <ClInclude Include="scene\timeline\SpawnTimelineEvent.h">
       <Filter>engine\scene\timeline</Filter>
     </ClInclude>
     <ClInclude Include="scene\timeline\RailSpawnPoint.h">

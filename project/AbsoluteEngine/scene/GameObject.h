@@ -8,13 +8,17 @@
 
 namespace AbsoluteEngine {
 
-// Removed hardcoded structs (ColliderInfo, LightComponent, DissolveInfo)
-// These are now handled by respective component classes.
-
-class GameObject : public std::enable_shared_from_this<GameObject> {
+// シーンに置く 1 つの物(自機、敵、弾、ライトなど)。位置(Transform)、親子関係、部品(IComponent)の一覧を持つ入れ物。
+//
+// 設計の意図(final にした理由): 物ごとの違い(動き方、撃ち方、見た目など)は、このクラスを継承して作らず、
+// 部品(IComponent の派生)を組み合わせて作る(継承より合成)。例: 敵の種類は、プレハブで、動き方と撃ち方の部品を差し替えて作る。
+// そのため、このクラスは継承させない(final)。ポリモーフィズムは、部品の側(IComponent の Update / Draw などの override)で使う。
+// Update / Draw は、持っている部品と子を順に呼ぶだけで、上書きする派生クラスが無いので、仮想関数にしない。
+class GameObject final : public std::enable_shared_from_this<GameObject> {
 public:
   GameObject(const std::string& name = "GameObject");
-  virtual ~GameObject() = default;
+  // 継承させないので、仮想デストラクタは不要(基底クラスのポインタ経由で、派生クラスを delete することが無い)
+  ~GameObject() = default;
 
   // 基本プロパティ
   void SetName(const std::string& name) { name_ = name; }
@@ -47,7 +51,7 @@ public:
   const std::vector<std::shared_ptr<GameObject>>& GetChildren() const { return children_; }
 
   // 毎フレームの更新（コンポーネントと子ノードの更新）
-  virtual void Update(float deltaTime);
+  void Update(float deltaTime);
 
   // コンポーネント管理
   void AddComponent(std::unique_ptr<IComponent> component);
@@ -70,9 +74,9 @@ public:
   }
 
   // オブジェクトと子ノードの描画
-  virtual void Draw();
+  void Draw();
   // 雲の合成のあとに描く演出を、描く(コンポーネントの DrawAfterClouds を、子も含めて呼ぶ)
-  virtual void DrawAfterClouds();
+  void DrawAfterClouds();
 
   // メタデータプロパティ
   const std::string& GetTag() const { return tag_; }

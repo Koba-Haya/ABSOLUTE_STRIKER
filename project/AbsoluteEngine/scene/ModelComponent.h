@@ -98,6 +98,10 @@ public:
     void Update(float deltaTime) override;
     void Draw() override;
 
+    // エディタのインスペクタに、モデルとテクスチャのパスを表示し、ドラッグ&ドロップでの差し替えを受け付ける。
+    // 取り消し履歴への記録はエディタ側が行う(ここでは値を変えるだけ)
+    void DrawInspectorUI() override;
+
 private:
     // FitToWingspan の補正と Transform を合わせた、今のワールド行列(Draw と TryGetBoneWorldPosition で共通)
     Matrix4x4 ComputeWorldMatrix_() const;
