@@ -216,6 +216,11 @@
     <ClCompile Include="actor\Enemy\EnemyShootUtil.cpp" />
     <ClCompile Include="actor\Enemy\FormationSpawnEvent.cpp" />
     <ClCompile Include="actor\Enemy\TurretShootComponent.cpp" />
+    <ClCompile Include="actor\Enemy\charge\ChargeAiming.cpp" />
+    <ClCompile Include="actor\Enemy\charge\ChargeWaitState.cpp" />
+    <ClCompile Include="actor\Enemy\charge\ChargeWindupState.cpp" />
+    <ClCompile Include="actor\Enemy\charge\ChargeAimState.cpp" />
+    <ClCompile Include="actor\Enemy\charge\ChargeRunState.cpp" />
     <ClCompile Include="actor\Enemy\ChargeOnApproachComponent.cpp" />
     <ClCompile Include="actor\Enemy\EnemyModelAnimatorComponent.cpp" />
     <ClCompile Include="item\ItemCatalog.cpp" />
@@ -400,6 +405,11 @@
     <ClInclude Include="actor\Enemy\FormationSpawnEvent.h" />
     <ClInclude Include="actor\Enemy\TurretShootComponent.h" />
     <ClInclude Include="actor\Enemy\ChargeOnApproachComponent.h" />
+    <ClInclude Include="actor\Enemy\charge\IChargeState.h" />
+    <ClInclude Include="actor\Enemy\charge\ChargeWaitState.h" />
+    <ClInclude Include="actor\Enemy\charge\ChargeWindupState.h" />
+    <ClInclude Include="actor\Enemy\charge\ChargeAimState.h" />
+    <ClInclude Include="actor\Enemy\charge\ChargeRunState.h" />
     <ClInclude Include="actor\Enemy\EnemyModelAnimatorComponent.h" />
     <ClInclude Include="item\ItemDefinition.h" />
     <ClInclude Include="item\ItemCatalog.h" />

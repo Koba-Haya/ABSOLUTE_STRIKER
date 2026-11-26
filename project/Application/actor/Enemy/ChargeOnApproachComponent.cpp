@@ -2,13 +2,9 @@
 #include "AbsoluteEngine/scene/ISceneQuery.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../../actor/Player/PlayerComponent.h"
-#include "../../actor/Player/PlayerFinder.h"
-#include "GameCamera.h"
 #include "TelegraphComponent.h"
 #include "externals/nlohmann/json.hpp"
-#include <algorithm>
-#include <cmath>
+#include <utility>
 
 namespace {
 // JSON のキー名
@@ -17,21 +13,7 @@ constexpr const char* kKeyChargeSpeed = "chargeSpeed";
 constexpr const char* kKeyWindupPullSpeed = "windupPullSpeed";
 }
 
-void ChargeOnApproachComponent::Update(float deltaTime) {
-    if (!GetOwner()) return;
-
-    if (triggered_) {
-        // 突進中: 発火瞬間に確定した方向へ直進し続ける（毎フレーム再計算しない）
-        GetOwner()->Translate({chargeDir_.x * chargeSpeed_ * deltaTime, chargeDir_.y * chargeSpeed_ * deltaTime,
-                               chargeDir_.z * chargeSpeed_ * deltaTime});
-        return;
-    }
-
-    if (!screen_.HasCamera()) return;
-
-    // カメラの移動速度を推定する（前フレームとのeye差分）。
-    // プレイヤーはeye基準で毎フレーム位置決めされるため、操作していなくても
-    // カメラのレール前進と同じ速度でワールド座標が流れ続ける。
+Vector3 ChargeOnApproachComponent::EstimateCameraVelocity_(float deltaTime) {
     const Vector3 eye = screen_.GetEye();
     Vector3 cameraVelocity = { 0, 0, 0 };
     if (hasPrevEye_ && deltaTime > 0.0f) {
@@ -43,81 +25,36 @@ void ChargeOnApproachComponent::Update(float deltaTime) {
     }
     prevEye_ = eye;
     hasPrevEye_ = true;
+    return cameraVelocity;
+}
 
-    // --- 予備動作の最中: 自機と反対へ引く(だんだん遅くなる)。済んだら、次のフレームで突進を始める ---
-    auto* telegraph = GetOwner()->GetComponent<TelegraphComponent>();
-    if (windingUp_) {
-        windupTimer_ += deltaTime;
-        const float duration = telegraph ? telegraph->GetDuration() : 0.0f;
-        const float progress = (duration > 0.0f) ? std::min(windupTimer_ / duration, 1.0f) : 1.0f;
-        const float pull = windupPullSpeed_ * (1.0f - progress) * deltaTime;
-        GetOwner()->Translate({windupAwayDir_.x * pull, windupAwayDir_.y * pull, windupAwayDir_.z * pull});
-        if (progress >= 1.0f) {
-            windingUp_ = false;
-            windupDone_ = true;
-            if (telegraph) telegraph->End();
-        }
-        return;
+void ChargeOnApproachComponent::Update(float deltaTime) {
+    if (!GetOwner()) return;
+
+    // カメラを使う状態(接近待ち、予備動作、狙う)は、カメラが無いフレームは止まる。突進中は使わない
+    Vector3 cameraVelocity = { 0, 0, 0 };
+    if (state_->UsesCamera()) {
+        if (!screen_.HasCamera()) return;
+        cameraVelocity = EstimateCameraVelocity_(deltaTime);
     }
 
-    // --- プレイヤーを探し、距離判定 ---
-    const auto playerObj = PlayerFinder::FindPlayer(query_);
-    if (!playerObj) return;
-
-    const Vector3 currentPos = GetOwner()->GetTransform().translate;
-    const Vector3 playerPos = playerObj->GetTransform().translate;
-    Vector3 toPlayer = {
-        playerPos.x - currentPos.x,
-        playerPos.y - currentPos.y,
-        playerPos.z - currentPos.z
-    };
-    const float dist = std::sqrt(toPlayer.x * toPlayer.x + toPlayer.y * toPlayer.y + toPlayer.z * toPlayer.z);
-    // 予備動作が済んでいれば、引いて距離が開いていても、そのまま突進を始める
-    if (!windupDone_ && (dist > triggerRange_ || dist < 0.001f)) return;
-    if (dist < 0.001f) return;
-
-    // --- 予備動作を始める(TelegraphComponent があるときだけ) ---
-    if (!windupDone_ && telegraph) {
-        windingUp_ = true;
-        windupTimer_ = 0.0f;
-        windupAwayDir_ = { -toPlayer.x / dist, -toPlayer.y / dist, -toPlayer.z / dist };
-        telegraph->Begin();
-        return;
-    }
-
-    // --- トリガー発火 ---
-    // 到達までのおおよその時間を見積もり、カメラの推定移動速度ぶんだけ
-    // 「到達する頃にいるはずの位置」を先読みして、方向を一度だけ確定する。
-    // （以後は毎フレーム再計算しない＝プレイヤーの回避操作には追従しない）
-    triggered_ = true;
-
-    const float timeToImpact = (chargeSpeed_ > 0.001f) ? (dist / chargeSpeed_) : 0.0f;
-    const Vector3 predictedPos = {
-        playerPos.x + cameraVelocity.x * timeToImpact,
-        playerPos.y + cameraVelocity.y * timeToImpact,
-        playerPos.z + cameraVelocity.z * timeToImpact
-    };
-    Vector3 toPredicted = {
-        predictedPos.x - currentPos.x,
-        predictedPos.y - currentPos.y,
-        predictedPos.z - currentPos.z
-    };
-    const float predDist = std::sqrt(toPredicted.x * toPredicted.x + toPredicted.y * toPredicted.y + toPredicted.z * toPredicted.z);
-    if (predDist > 0.001f) {
-        chargeDir_ = { toPredicted.x / predDist, toPredicted.y / predDist, toPredicted.z / predDist };
-    } else {
-        chargeDir_ = { toPlayer.x / dist, toPlayer.y / dist, toPlayer.z / dist };
+    const ChargeStateContext context{ *GetOwner(), query_, GetOwner()->GetComponent<TelegraphComponent>(), settings_, cameraVelocity, deltaTime };
+    // 次の状態は、今の状態が決める。切り替えは Update のあと(実行中の状態を消さないため)。1 フレームに 1 回
+    std::unique_ptr<IChargeState> next = state_->Update(context);
+    if (next) {
+        state_ = std::move(next);
+        state_->Enter(context);
     }
 }
 
 void ChargeOnApproachComponent::Serialize(nlohmann::json& j) const {
-    j[kKeyTriggerRange] = triggerRange_;
-    j[kKeyChargeSpeed] = chargeSpeed_;
-    j[kKeyWindupPullSpeed] = windupPullSpeed_;
+    j[kKeyTriggerRange] = settings_.triggerRange;
+    j[kKeyChargeSpeed] = settings_.chargeSpeed;
+    j[kKeyWindupPullSpeed] = settings_.windupPullSpeed;
 }
 
 void ChargeOnApproachComponent::Deserialize(const nlohmann::json& j) {
-    triggerRange_ = j.value(kKeyTriggerRange, triggerRange_);
-    chargeSpeed_ = j.value(kKeyChargeSpeed, chargeSpeed_);
-    windupPullSpeed_ = j.value(kKeyWindupPullSpeed, windupPullSpeed_);
+    settings_.triggerRange = j.value(kKeyTriggerRange, settings_.triggerRange);
+    settings_.chargeSpeed = j.value(kKeyChargeSpeed, settings_.chargeSpeed);
+    settings_.windupPullSpeed = j.value(kKeyWindupPullSpeed, settings_.windupPullSpeed);
 }
