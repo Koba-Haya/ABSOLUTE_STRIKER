@@ -90,6 +90,8 @@
     <ClCompile Include="item\ItemSystem.cpp" />
     <ClCompile Include="item\PlayerUpgradeState.cpp" />
     <ClCompile Include="actor\Enemy\TelegraphComponent.cpp" />
+    <ClCompile Include="actor\Enemy\MuzzleOrbGlow.cpp" />
+    <ClCompile Include="actor\Enemy\BodyTintGlow.cpp" />
     <ClCompile Include="actor\Enemy\RamAttackComponent.cpp" />
     <ClCompile Include="hud\GameHUD.cpp" />
     <ClCompile Include="hud\HudProgressBar.cpp" />
@@ -248,6 +250,9 @@
     <ClInclude Include="item\ItemSystem.h" />
     <ClInclude Include="item\PlayerUpgradeState.h" />
     <ClInclude Include="actor\Enemy\TelegraphComponent.h" />
+    <ClInclude Include="actor\Enemy\ITelegraphGlow.h" />
+    <ClInclude Include="actor\Enemy\MuzzleOrbGlow.h" />
+    <ClInclude Include="actor\Enemy\BodyTintGlow.h" />
     <ClInclude Include="actor\Enemy\RamAttackComponent.h" />
     <ClInclude Include="hud\GameHUD.h" />
     <ClInclude Include="hud\HudProgressBar.h" />

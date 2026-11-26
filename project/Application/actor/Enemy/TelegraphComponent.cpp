@@ -3,13 +3,14 @@
 #include <algorithm>
 #include <cmath>
 
-#include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/GameObject.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
+#include "BodyTintGlow.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
+#include "MuzzleOrbGlow.h"
 #include "externals/nlohmann/json.hpp"
 
 namespace {
@@ -27,12 +28,6 @@ constexpr const char* kKeyScreenMargin = "screenMargin";
 // glowMode の値
 constexpr const char* kModeMuzzle = "muzzle";
 constexpr const char* kModeBody = "body";
-
-// 光る玉のモデルとテクスチャ(exe 基準)。球は半径 1
-constexpr const char* kOrbModelPath = "resources/app/sphere/sphere.obj";
-constexpr const char* kOrbTexturePath = "resources/app/cube/white100x100.png";
-constexpr const char* kOrbObjectName = "TelegraphGlow";
-constexpr const char* kOrbTag = "TelegraphGlow";
 
 // 予備動作の長さを過ぎても、撃つ側が End を呼ばないとき(撃てなかったなど)に、光ったままにしない猶予(秒)
 constexpr float kHoldAfterFullSeconds = 0.25f;
@@ -54,8 +49,28 @@ Vector4 ReadVector4(const nlohmann::json& j, const char* key, const Vector4& fal
 }
 } // namespace
 
-TelegraphComponent::~TelegraphComponent() {
-    DestroyOrb_();
+TelegraphComponent::TelegraphComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen)
+    : spawner_(spawner), screen_(screen) {
+    RebuildGlow_();
+}
+
+// 光り方(glow_)の破棄で、光る玉も消える(MuzzleOrbGlow のデストラクタ)
+TelegraphComponent::~TelegraphComponent() = default;
+
+void TelegraphComponent::RebuildGlow_() {
+    switch (glowMode_) {
+    case GlowMode::Body:
+        glow_ = std::make_unique<BodyTintGlow>(bodyGlowTint_);
+        break;
+    case GlowMode::Muzzle:
+    default:
+        glow_ = std::make_unique<MuzzleOrbGlow>(spawner_, MuzzleOrbGlow::Settings{ muzzleOffset_, glowColor_, orbScaleStart_, orbScaleEnd_ });
+        break;
+    }
+}
+
+float TelegraphComponent::GetProgress_() const {
+    return std::clamp(elapsed_ / duration_, 0.0f, 1.0f);
 }
 
 bool TelegraphComponent::IsAllowedToShow_() const {
@@ -65,44 +80,6 @@ bool TelegraphComponent::IsAllowedToShow_() const {
     // 島に隠れている間は出さない: 島の遮蔽の判定(EnemyShootUtil::IsHiddenByIsland)が、このブランチに入ったら、
     //   ここへ「if (EnemyShootUtil::IsHiddenByIsland(...)) return false;」を 1 行足す
     return true;
-}
-
-void TelegraphComponent::CreateOrb_() {
-    if (orb_.lock()) return;
-
-    auto orb = std::make_shared<AbsoluteEngine::GameObject>(kOrbObjectName);
-    orb->SetTag(kOrbTag);
-    auto model = std::make_unique<AbsoluteEngine::ModelComponent>();
-    model->SetLightingMode(ModelLightingMode::kUnlit); // 照明なし(光って見える)
-    model->LoadModel(kOrbModelPath);
-    model->LoadTexture(kOrbTexturePath);
-    model->SetColor(glowColor_);
-    orb->AddComponent(std::move(model));
-    spawner_.Spawn(orb);
-    orb_ = orb;
-}
-
-void TelegraphComponent::DestroyOrb_() {
-    if (auto orb = orb_.lock()) {
-        orb->Destroy();
-    }
-    orb_.reset();
-}
-
-void TelegraphComponent::UpdateOrb_(float progress) {
-    auto orb = orb_.lock();
-    if (!orb || !GetOwner()) return;
-
-    const auto& ownerTransform = GetOwner()->GetTransform();
-    const Vector3& s = ownerTransform.scale;
-    // 出口の位置: 敵の位置 + 出口のずれ x 敵の拡大率(敵の回転は見ない。今の敵は、回転せずに出る)
-    orb->SetPosition({ ownerTransform.translate.x + muzzleOffset_.x * s.x,
-                       ownerTransform.translate.y + muzzleOffset_.y * s.y,
-                       ownerTransform.translate.z + muzzleOffset_.z * s.z });
-    // 大きさ: 始めから終わりへ、なめらかに(終わりに近づくほど速く膨らむ)。敵の拡大率の平均を掛ける
-    const float eased = progress * progress;
-    const float orbScale = (orbScaleStart_ + (orbScaleEnd_ - orbScaleStart_) * eased) * ((s.x + s.y + s.z) / 3.0f);
-    orb->SetScale({ orbScale, orbScale, orbScale });
 }
 
 void TelegraphComponent::UpdateShake_() {
@@ -125,25 +102,17 @@ void TelegraphComponent::Begin(float startElapsed) {
     elapsed_ = std::max(0.0f, startElapsed);
     baseRotateZ_ = GetOwner()->GetTransform().rotate.z;
 
-    if (glowMode_ == GlowMode::Muzzle) {
-        CreateOrb_();
-        UpdateOrb_(std::clamp(elapsed_ / duration_, 0.0f, 1.0f));
-    } else if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
-        model->SetColor(bodyGlowTint_);
-    }
+    // 光り始める(光る玉を出す、体の色を替える、は光り方のクラスが決める)
+    glow_->OnBegin(*GetOwner(), GetProgress_());
 }
 
 void TelegraphComponent::End() {
     if (!playing_) return;
     playing_ = false;
 
-    DestroyOrb_();
+    // 見た目を元に戻す(光る玉を消す、体の色を戻す、は光り方のクラスが決める)
+    glow_->OnEnd(GetOwner(), baseColor_);
     if (GetOwner()) {
-        if (glowMode_ == GlowMode::Body) {
-            if (auto* model = GetOwner()->GetComponent<AbsoluteEngine::ModelComponent>()) {
-                model->SetColor(baseColor_);
-            }
-        }
         if (shakeAmplitudeDeg_ > 0.0f) {
             SetOwnerRotateZ_(baseRotateZ_);
         }
@@ -194,10 +163,7 @@ void TelegraphComponent::Update(float deltaTime) {
         return;
     }
 
-    const float progress = std::clamp(elapsed_ / duration_, 0.0f, 1.0f);
-    if (glowMode_ == GlowMode::Muzzle) {
-        UpdateOrb_(progress);
-    }
+    glow_->OnUpdate(*GetOwner(), GetProgress_());
     UpdateShake_();
 }
 
@@ -215,6 +181,8 @@ void TelegraphComponent::Serialize(nlohmann::json& j) const {
 }
 
 void TelegraphComponent::Deserialize(const nlohmann::json& j) {
+    // 予備動作の最中に設定が読み直されたとき(エディタの取り消しなど)は、いまの光り方で見た目を元に戻してから作り直す
+    End();
     const std::string mode = j.value(kKeyGlowMode, std::string(kModeMuzzle));
     glowMode_ = (mode == kModeBody) ? GlowMode::Body : GlowMode::Muzzle;
     duration_ = std::max(0.01f, j.value(kKeyDuration, duration_));
@@ -226,4 +194,6 @@ void TelegraphComponent::Deserialize(const nlohmann::json& j) {
     shakeAmplitudeDeg_ = j.value(kKeyShakeAmplitude, shakeAmplitudeDeg_);
     shakeFrequency_ = j.value(kKeyShakeFrequency, shakeFrequency_);
     screenMargin_ = j.value(kKeyScreenMargin, screenMargin_);
+    // 読んだ設定で、光り方を作り直す
+    RebuildGlow_();
 }

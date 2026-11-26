@@ -7,9 +7,10 @@
 //       攻撃する側は、「いま撃ってよいか」(HoldFire)と「撃った」(End)だけをこの部品に伝える。
 //       光る、震えるの見た目は、すべてこの部品の中にある。
 //
-// 光り方は 2 種類(設定 glowMode で選ぶ):
-//   muzzle : 弾の出口(muzzleOffset の位置)に、光る玉を出し、予備動作の間、大きくする(蜂の針、蜘蛛の口)
-//   body   : 体全体の色を、光る色(bodyGlowTint)に替える(鳥の突進、横切りの敵。モデルが立方体の敵)
+// 光り方は 2 種類(設定 glowMode で選ぶ)。種類ごとの処理は、光り方のクラス(ITelegraphGlow の派生)が持つ:
+//   muzzle : 弾の出口(muzzleOffset の位置)に、光る玉を出し、予備動作の間、大きくする(蜂の針、蜘蛛の口)。MuzzleOrbGlow
+//   body   : 体全体の色を、光る色(bodyGlowTint)に替える(鳥の突進、横切りの敵。モデルが立方体の敵)。BodyTintGlow
+// この部品は、予備動作の流れ(いつ始めて、いつ終えるか)と震えを持ち、光り方は、区切りで光り方のクラスを呼ぶだけにする。
 // 震え(shakeAmplitudeDeg が 0 より大きいとき): 体を前後軸まわりに細かく揺らす(突進の直前)。
 //
 // 被弾の白いフラッシュ(EnemyComponent)との区別: 光る色は橙か赤。被弾は白。
@@ -22,6 +23,7 @@
 // ============================================================
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
+#include "ITelegraphGlow.h"
 #include "Type/Vector.h"
 #include <memory>
 #include <string>
@@ -36,7 +38,7 @@ class TelegraphComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 光る玉を出すときに使う、オブジェクトを出す窓口。screen: 画面内かの判定に使う、画面の窓口。
     // どちらも所有しない。このコンポーネントより長く生きること
-    TelegraphComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen) : spawner_(spawner), screen_(screen) {}
+    TelegraphComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen);
     ~TelegraphComponent() override;
 
     void Update(float deltaTime) override;
@@ -67,6 +69,7 @@ private:
     AbsoluteEngine::ISpawner& spawner_; // 光る玉を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
 
+    // 光り方の種類(プレハブの JSON の glowMode。保存するデータとして、数値のまま持つ)
     enum class GlowMode {
         Muzzle, // 弾の出口に光る玉
         Body,   // 体全体の色を替える
@@ -74,12 +77,11 @@ private:
 
     // 予備動作を見せてよいか(画面内か。島に隠れていないか)
     bool IsAllowedToShow_() const;
-    // 光る玉を作る(muzzle のとき)
-    void CreateOrb_();
-    // 光る玉を消す
-    void DestroyOrb_();
-    // 玉の位置と大きさを、いまの進み具合に合わせる
-    void UpdateOrb_(float progress);
+    // 設定(glowMode と、その光り方の設定値)から、光り方のクラスを作り直す
+    // (Factory: 種類の数値を、光り方のクラスへ変換する場所は、ここだけ)
+    void RebuildGlow_();
+    // いまの予備動作の進み具合(0 〜 1)
+    float GetProgress_() const;
     // 体の震えを、いまの経過時間に合わせる
     void UpdateShake_();
     // 持ち主の回転のうち、Z 成分だけを書き換える(X と Y は、そのまま残す)
@@ -103,5 +105,5 @@ private:
     Vector4 baseColor_ = { 1.0f, 1.0f, 1.0f, 1.0f };
     bool baseColorCaptured_ = false;                // 元の体の色を覚えたか(最初の Update で覚える)
     float baseRotateZ_ = 0.0f;                      // 震える前の傾き
-    std::weak_ptr<AbsoluteEngine::GameObject> orb_; // 光る玉(muzzle のとき)
+    std::unique_ptr<ITelegraphGlow> glow_;          // 光り方(設定から作る)
 };
