@@ -15,6 +15,8 @@
 #include "../inheritance/InheritanceState.h"
 #include "../item/ItemCatalog.h"
 #include "../result/RatingCatalog.h"
+#include "resultflow/ResultMenuState.h"
+#include "resultflow/ResultTallyState.h"
 
 #ifdef USE_IMGUI
 #include "externals/imgui/imgui.h"
@@ -70,7 +72,6 @@ void ClearScene::Initialize(const SceneServices &services) {
   }
   banner_.Initialize(kBannerTexturePath, bannerLayout);
   menu_.Initialize(hasResult ? kMenuScaleWithResult : 1.0f);
-  hasResult_ = hasResult;
   if (hasResult) {
     resultRank_ = params->result->rank;
     // 集計の縦の範囲: 見出しの下から、メニューの上まで(継承の選択も、同じ範囲)
@@ -91,12 +92,14 @@ void ClearScene::Initialize(const SceneServices &services) {
                               bestUpdate.scoreImproved, bestUpdate.pointsImproved, bestUpdate.rankImproved);
     tally_.Begin(*params->result, bestUpdate, kTallyDelaySec);
   }
-  // メニューは、結果の集計があるときは、集計が終わってから開く(Update で)。無いときは、従来どおり、最初から待ちつきで開く。
-  // 展示中は、継承が決まってから(結果があるとき)開く。結果が無いときの、最初からの待ちつきの表示は、通常のときだけ
-  if (!exhibition_.IsEnabled() && !hasResult) {
-    menu_.Open(kMenuOpenDelaySec);
-    menuOpened_ = true;
+  // 最初の段階: 結果があれば集計から(メニューは、継承が決まってから開く)。無いときは、メニューから(最初から待ちつきで開く)。
+  // 結果が無いまま展示で来たときは、メニューを開かない(時間でステージ選択へ進む)
+  if (hasResult) {
+    flow_ = std::make_unique<ResultTallyState>();
+  } else {
+    flow_ = std::make_unique<ResultMenuState>(exhibition_.IsEnabled() ? std::nullopt : std::optional<float>(kMenuOpenDelaySec));
   }
+  flow_->Enter(*this);
 }
 
 void ClearScene::Finalize() {}
@@ -108,88 +111,25 @@ void ClearScene::Update() {
 
   continuePrompt_.Update(kFrameDeltaSeconds);
 
-  // 決定ボタンは、1 フレームに 1 回だけ読む(遷移の最中は受け付けない)。押した瞬間だけ反応するので、
-  // 集計を飛ばした同じ押下で、継承へ進んでしまうことはない(下で、飛ばした押下は使い切ったものとして扱う)
-  // マウスの左クリックも、決定と同じに扱う(メニューを、マウスでも操作できるようにするため)
-  // 展示中は、操作を受け付けない(来た人が押したキーやクリックで、自動の進行が乱れないように)
+  // 決定ボタンは、1 フレームに 1 回だけ読む(段階の状態クラスが読む)。押した瞬間だけ反応するので、
+  // 集計を飛ばした押下で、同じフレームに継承へ進んでしまうことはない
   const bool exhibition = exhibition_.IsEnabled();
-  const UiPointer::State pointer = UiPointer::Poll(GetInput());
-  const bool decidePressed = !exhibition && !IsSceneTransitioning() &&
-                             (UiMenuInput::Poll(GetInput()) == UiMenuInput::Command::Decide || (pointer.valid && pointer.leftClicked));
-  bool decideConsumed = false;
-  // 結果の集計の最中に決定ボタンが押されたら、集計を飛ばす
-  if (tally_.IsActive() && !tally_.IsFinished() && decidePressed) {
-    tally_.Skip();
-    decideConsumed = true;
-  }
-  // 集計が終わったら、継承の段階へ進む。
-  // 今回取った強化が無ければ、選ぶものが無いので、すぐ確定へ進む。
-  // 強化があれば、案内を出して、決定ボタンを待つ(結果と評価を、ゆっくり見せるため)。押されたら、継承の選択を始め、集計を薄く消す。
-  // 展示中は、一定時間待ってから、自動操作で継承の選択を始める(仮の状態なので、保存されない)
-  if (hasResult_ && tally_.IsFinished() && !inheritanceStarted_) {
-    if (!InheritancePicker::HasCandidates(gameData_.GetPlayerUpgradeState())) {
-      inheritanceStarted_ = true;
-    } else if (exhibition) {
-      exhibitionTallyTimer_ += kFrameDeltaSeconds;
-      if (exhibitionTallyTimer_ >= ExhibitionMode::kTallyHoldSec) {
-        inheritanceStarted_ = true;
-        picker_.Begin(resultRank_, kTallyFadeSeconds);
-        picker_.BeginAutoPlay(ExhibitionMode::kPickStepSec, ExhibitionMode::kPickMaxPerRow);
-      }
-    } else {
-      continuePrompt_.Show(kContinuePromptText);
-      if (decidePressed && !decideConsumed) {
-        inheritanceStarted_ = true;
-        continuePrompt_.Hide();
-        picker_.Begin(resultRank_, kTallyFadeSeconds);
-      }
-    }
-  }
-  // 継承の選択が始まったら、集計を薄く消す
+  decidePressed_ = PollDecide_();
+
+  // 継承の選択が始まったら、集計を薄く消す(選択のパネルが開くのと重ねる。段階に関係なく、消え切るまで進める)
   if (picker_.IsActive() && tallyFadeSeconds_ < kTallyFadeSeconds) {
     tallyFadeSeconds_ += kFrameDeltaSeconds;
     tally_.SetOpacityScale((std::max)(0.0f, 1.0f - tallyFadeSeconds_ / kTallyFadeSeconds));
   }
-  // 継承の選択の入力(展示中は、入力を読まず、自動操作を進める)
+  // 継承の選択の入力(選択をしていない間は、何もしない。展示中は、入力を読まず、自動操作を進める)
   picker_.UpdateAutoPlay(kFrameDeltaSeconds);
   picker_.Update(exhibition ? nullptr : GetInput(), !IsSceneTransitioning());
-  // 継承を確定して(1 回だけ)、メニューを開く。選ぶものが無いとき(picker_ が動いていないとき)は、選ばずに確定する(世代だけ進む)
-  if (inheritanceStarted_ && !inheritanceCommitted_ && (!picker_.IsActive() || picker_.IsDone())) {
-    inheritanceCommitted_ = true;
-    const std::vector<InheritanceState::Pick> picks = picker_.IsActive() ? picker_.GetPicks() : std::vector<InheritanceState::Pick>{};
-    const float rarity = gameData_.GetRatingCatalog().GetSettings().GetInheritanceRule(resultRank_).rarity;
-    gameData_.GetInheritanceState().Commit(picks, rarity, gameData_.GetItemCatalog().GetUpgradeSettings());
-    menu_.Open();
-    menuOpened_ = true;
-  }
 
-  if (exhibition) {
-    // 展示: 操作を受け付けず、継承が決まって(結果が無いときは、集計が終わって)から一定時間たったら、ステージ選択へ進む
-    // (ステージ選択で、解放された次のステージの鍵が外れる演出を見せる)
-    const bool settled = hasResult_ ? inheritanceCommitted_ : (!tally_.IsActive() || tally_.IsFinished());
-    if (!IsSceneTransitioning() && settled) {
-      exhibitionHoldTimer_ += kFrameDeltaSeconds;
-      if (exhibitionHoldTimer_ >= ExhibitionMode::kResultHoldSec) {
-        RequestSceneChangeKeepingPayload(SceneId::StageSelect);
-      }
-    }
-  } else {
-    // 決定は、メニューの 1 つのボタンだけ(Space / Enter / パッド A)。遷移の最中は受け付けない
-    // (前のシーンで押していたボタンで、すぐに決定してしまうのを防ぐ)
-    switch (menu_.Update(GetInput(), !IsSceneTransitioning())) {
-    case ResultMenu::Choice::Retry:
-      RequestSceneChangeKeepingPayload(SceneId::Game);
-      break;
-    case ResultMenu::Choice::StageSelect:
-      // 選んでいたステージにカーソルを合わせる
-      RequestSceneChangeKeepingPayload(SceneId::StageSelect);
-      break;
-    case ResultMenu::Choice::Title:
-      RequestSceneChange(SceneId::Title);
-      break;
-    case ResultMenu::Choice::None:
-      break;
-    }
+  // 段階を 1 フレーム進める。次の段階は、段階のクラスが決める。切り替えは Update のあと(実行中の段階を消さないため)。
+  // 継承の選択の入力のあとに進める(選び終わったフレームに、継承の確定とメニューを開くところまで進むため。以前と同じ順)
+  if (std::unique_ptr<IResultFlowState> next = flow_->Update(*this, kFrameDeltaSeconds)) {
+    flow_ = std::move(next);
+    flow_->Enter(*this);
   }
 
 #ifdef USE_IMGUI
@@ -218,6 +158,63 @@ void ClearScene::Update() {
 
   ImGui::End();
 #endif
+}
+
+bool ClearScene::PollDecide_() const {
+  // マウスの左クリックも、決定と同じに扱う(メニューを、マウスでも操作できるようにするため)。
+  // 展示中は、操作を受け付けない(来た人が押したキーやクリックで、自動の進行が乱れないように)
+  if (exhibition_.IsEnabled() || IsSceneTransitioning()) return false;
+  const UiPointer::State pointer = UiPointer::Poll(GetInput());
+  return UiMenuInput::Poll(GetInput()) == UiMenuInput::Command::Decide || (pointer.valid && pointer.leftClicked);
+}
+
+bool ClearScene::IsExhibition() const {
+  return exhibition_.IsEnabled();
+}
+
+bool ClearScene::HasPickCandidates() const {
+  return InheritancePicker::HasCandidates(gameData_.GetPlayerUpgradeState());
+}
+
+void ClearScene::ShowContinuePrompt() {
+  continuePrompt_.Show(kContinuePromptText);
+}
+
+void ClearScene::BeginPick(bool autoPlay) {
+  picker_.Begin(resultRank_, kTallyFadeSeconds);
+  if (autoPlay) {
+    picker_.BeginAutoPlay(ExhibitionMode::kPickStepSec, ExhibitionMode::kPickMaxPerRow);
+  }
+}
+
+void ClearScene::CommitInheritance() {
+  // 選択を始めていなければ(選ぶものが無いとき)、選ばずに確定する(世代だけ進む)
+  const std::vector<InheritanceState::Pick> picks = picker_.IsActive() ? picker_.GetPicks() : std::vector<InheritanceState::Pick>{};
+  const float rarity = gameData_.GetRatingCatalog().GetSettings().GetInheritanceRule(resultRank_).rarity;
+  gameData_.GetInheritanceState().Commit(picks, rarity, gameData_.GetItemCatalog().GetUpgradeSettings());
+}
+
+ResultMenu::Choice ClearScene::UpdateMenu() {
+  // 画面の切り替えの最中は受け付けない(前のシーンで押していたボタンで、すぐに決定してしまうのを防ぐ)
+  return menu_.Update(GetInput(), !IsSceneTransitioning());
+}
+
+void ClearScene::RequestSceneFor(ResultMenu::Choice choice) {
+  switch (choice) {
+  case ResultMenu::Choice::Retry:
+    RequestSceneChangeKeepingPayload(SceneId::Game);
+    break;
+  case ResultMenu::Choice::StageSelect:
+    // 選んでいたステージにカーソルを合わせる
+    RequestSceneChangeKeepingPayload(SceneId::StageSelect);
+    break;
+  case ResultMenu::Choice::Title:
+    RequestSceneChange(SceneId::Title);
+    break;
+  case ResultMenu::Choice::None:
+  default:
+    break;
+  }
 }
 
 void ClearScene::Draw() {

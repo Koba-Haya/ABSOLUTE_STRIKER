@@ -347,6 +347,11 @@
     <ClCompile Include="camera\RailCameraComponent.cpp" />
     <ClCompile Include="GameApp.cpp" />
     <ClCompile Include="GameData.cpp" />
+    <ClCompile Include="scene\resultflow\ResultTallyState.cpp" />
+    <ClCompile Include="scene\resultflow\ResultContinueState.cpp" />
+    <ClCompile Include="scene\resultflow\ResultAutoPickWaitState.cpp" />
+    <ClCompile Include="scene\resultflow\ResultPickState.cpp" />
+    <ClCompile Include="scene\resultflow\ResultMenuState.cpp" />
     <ClCompile Include="scene\ClearScene.cpp" />
     <ClCompile Include="scene\DevScene.cpp" />
     <ClCompile Include="scene\GameOverScene.cpp" />
@@ -556,6 +561,13 @@
     <ClInclude Include="AppServices.h" />
     <ClInclude Include="GameData.h" />
     <ClInclude Include="scene\ClearScene.h" />
+    <ClInclude Include="scene\resultflow\IResultFlowActions.h" />
+    <ClInclude Include="scene\resultflow\IResultFlowState.h" />
+    <ClInclude Include="scene\resultflow\ResultTallyState.h" />
+    <ClInclude Include="scene\resultflow\ResultContinueState.h" />
+    <ClInclude Include="scene\resultflow\ResultAutoPickWaitState.h" />
+    <ClInclude Include="scene\resultflow\ResultPickState.h" />
+    <ClInclude Include="scene\resultflow\ResultMenuState.h" />
     <ClInclude Include="scene\DevScene.h" />
     <ClInclude Include="scene\GameOverScene.h" />
     <ClInclude Include="scene\GameScene.h" />
