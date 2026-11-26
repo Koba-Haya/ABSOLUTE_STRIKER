@@ -18,6 +18,7 @@ constexpr const char *kKeyScale = "scale";
 constexpr const char *kKeyRadius = "radius";
 constexpr const char *kKeyColor = "color";
 constexpr const char *kKeyCanBeShotDown = "canBeShotDown";
+constexpr const char *kKeyPrewarm = "prewarm";
 
 // 色の要素数(r, g, b, a)
 constexpr size_t kColorComponentCount = 4;
@@ -93,6 +94,14 @@ BulletDefinition ReadBullet(const nlohmann::json &entry, size_t index, const std
       FailInvalid(resolvedPath, EntryLabel(index, kKeyCanBeShotDown) + " must be true or false");
     }
     def.canBeShotDown = it->get<bool>();
+  }
+
+  // 前もって作る数(省略可。0 以上の整数)
+  if (const auto it = entry.find(kKeyPrewarm); it != entry.end()) {
+    if (!it->is_number_integer() || it->get<int>() < 0) {
+      FailInvalid(resolvedPath, EntryLabel(index, kKeyPrewarm) + " must be an integer of 0 or more");
+    }
+    def.prewarmCount = it->get<int>();
   }
 
   return def;

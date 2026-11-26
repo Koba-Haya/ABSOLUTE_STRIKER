@@ -18,4 +18,5 @@ struct BulletDefinition {
   float radius = 0.5f;           // 当たり判定の球の半径(拡大率は掛からない。この値がそのまま当たりの大きさ)
   std::optional<Vector4> color;  // モデルの色。省略したら、モデルの既定の色
   bool canBeShotDown = true;     // 自機の通常弾で撃ち落とせるか(敵弾にだけ意味がある)
+  int prewarmCount = 0;          // 使い回しの置き場所へ、前もって作って入れておく数(最初の連射で、作る処理が重なって止まるのを防ぐ)
 };

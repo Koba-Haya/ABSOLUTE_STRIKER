@@ -1,6 +1,7 @@
 #pragma once
 #include "AbsoluteEngine/scene/Component.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/GameObjectPool.h"
 #include "AbsoluteEngine/graphics/3d/model/ModelInstance.h"
 #include "Type/Vector.h"
 #include "LockOnSystem.h"
@@ -9,6 +10,8 @@
 #include <memory>
 
 class Input;
+class BulletCatalog;
+struct BulletDefinition;
 namespace AbsoluteEngine {
 class ISpawner;
 class IScreenView;
@@ -22,10 +25,11 @@ public:
   static constexpr int kBaseMaxHp = 5;
 
   // spawner: 弾を出す窓口。screen: 照準や追従に使う、カメラの位置・向き・行列を知る窓口。query: 敵を探す窓口(ロックオン用)。
-  // playState: 再生状態を知る窓口。input: 入力。いずれも所有しない。このコンポーネントより長く生きること
+  // playState: 再生状態を知る窓口。input: 入力。bullets: 弾の定義の表(通常弾の見た目と大きさを引く)。
+  // いずれも所有しない。このコンポーネントより長く生きること。
+  // 生成のときに、通常弾の定義の prewarm の数だけ、弾を前もって作って置き場所へ入れる
   PlayerComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                  AbsoluteEngine::IPlayState& playState, Input& input)
-      : spawner_(spawner), screen_(screen), query_(query), playState_(playState), input_(input) {}
+                  AbsoluteEngine::IPlayState& playState, Input& input, const BulletCatalog& bullets);
   ~PlayerComponent() override = default;
 
 
@@ -89,6 +93,11 @@ private:
   AbsoluteEngine::ISceneQuery& query_;  // 敵を探すために、シーンのオブジェクト一覧を調べる窓口(ロックオン用)
   AbsoluteEngine::IPlayState& playState_; // 再生状態(エディットか、プレイか)を知る窓口
   Input& input_;                        // 入力(キーボード、マウス、パッド)
+  // 通常弾の定義(bullets.json の PlayerBullet)。表に無ければ nullptr(通常弾を撃たない)
+  const BulletDefinition* normalBulletDef_ = nullptr;
+  // 撃ち終わった通常弾を預かって使い回す置き場所(Object Pool)。撃つのは自機だけなので、自機が持つ。
+  // 自機が消えると置き場所も消え、そのあと手放された弾は、戻らずに普通に削除される
+  AbsoluteEngine::GameObjectPool normalBulletPool_;
   LockOnSystem lockon_;
   PlayerAnimator animator_; // 蝶のアニメーション(羽ばたき / 被弾)の切り替え
 

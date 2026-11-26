@@ -83,7 +83,7 @@
 
 namespace {
 // 部品を作る関数の中で、型で引く表(ServiceTable)から、弾の定義の表を取り出す。
-// 登録されていない(GameScene 以外のシーンで、敵の射撃部品を作ろうとした)ときは、理由をログに出して nullptr
+// 登録されていない(GameScene 以外のシーンで、弾を撃つ部品(自機、敵の射撃部品)を作ろうとした)ときは、理由をログに出して nullptr
 const BulletCatalog *FindBulletCatalog(const AbsoluteEngine::ComponentDeps &deps, const char *componentName) {
   const BulletCatalog *catalog = deps.services->Find<const BulletCatalog>();
   if (!catalog) {
@@ -234,7 +234,7 @@ std::string GameScene::GetDataName() const {
 GameScene::GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
     : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData),
       itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState(), gameData.GetPlayerUpgradeState()) {
-  // 敵の射撃部品は、弾の定義の表を、生成の関数の中で、この表から受け取る。
+  // 弾を撃つ部品(自機、敵の射撃部品)は、弾の定義の表を、生成の関数の中で、この表から受け取る。
   // 読み取り専用(const)で登録する。GameData はアプリの寿命なので、このシーンより長く生きる
   GetServiceTable().Register<const BulletCatalog>(gameData_.GetBulletCatalog());
 }
@@ -329,8 +329,10 @@ void GameScene::Initialize(const SceneServices &services) {
       return std::make_unique<RailCameraComponent>(*deps.cameraRig, *deps.playState, *deps.sceneQuery);
   });
   // コンポーネントファクトリの登録
-  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) {
-      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.playState, *deps.input);
+  AbsoluteEngine::ComponentFactory::GetInstance().RegisterWithServices("PlayerComponent", [](const AbsoluteEngine::ComponentDeps& deps) -> std::unique_ptr<AbsoluteEngine::IComponent> {
+      const BulletCatalog* bullets = FindBulletCatalog(deps, "PlayerComponent");
+      if (!bullets) return nullptr;
+      auto comp = std::make_unique<PlayerComponent>(*deps.spawner, *deps.screen, *deps.sceneQuery, *deps.playState, *deps.input, *bullets);
       comp->Initialize();
       return comp;
   });
@@ -410,7 +412,8 @@ void GameScene::Initialize(const SceneServices &services) {
   // PlayerComponent がアタッチされているか確認し、無ければ追加・初期化
   auto playerComp = playerObj_->GetComponent<PlayerComponent>();
   if (!playerComp) {
-      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView(), GetSceneQuery(), GetPlayState(), *GetInput());
+      auto pComp = std::make_unique<PlayerComponent>(GetSpawner(), GetScreenView(), GetSceneQuery(), GetPlayState(), *GetInput(),
+                                                     gameData_.GetBulletCatalog());
       pComp->Initialize();
       playerObj_->AddComponent(std::move(pComp));
   } else {

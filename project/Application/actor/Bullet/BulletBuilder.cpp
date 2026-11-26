@@ -4,6 +4,7 @@
 #include "BulletDefinition.h"
 #include "AbsoluteEngine/scene/ColliderComponent.h"
 #include "AbsoluteEngine/scene/GameObject.h"
+#include "AbsoluteEngine/scene/GameObjectPool.h"
 #include "AbsoluteEngine/scene/ModelComponent.h"
 
 namespace BulletBuilder {
@@ -41,6 +42,19 @@ void Launch(AbsoluteEngine::GameObject &bullet, const Vector3 &position, const V
   if (auto *motion = bullet.GetComponent<BulletComponent>()) {
     // 速度を入れ、寿命の経過を 0、有効の印を立て直す(使い回す弾に、前回の値を残さない)
     motion->Initialize(velocity);
+  }
+}
+
+std::shared_ptr<AbsoluteEngine::GameObject> AcquireOrBuild(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag) {
+  if (auto reused = pool.TryAcquire()) {
+    return reused;
+  }
+  return pool.Adopt(Build(def, tag));
+}
+
+void Prewarm(AbsoluteEngine::GameObjectPool &pool, const BulletDefinition &def, const char *tag) {
+  for (int i = 0; i < def.prewarmCount; ++i) {
+    pool.AddIdle(Build(def, tag));
   }
 }
 

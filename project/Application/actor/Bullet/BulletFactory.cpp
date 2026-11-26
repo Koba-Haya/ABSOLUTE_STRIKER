@@ -61,10 +61,6 @@ std::shared_ptr<AbsoluteEngine::GameObject> CreateStraight(
 
 namespace BulletFactory {
 
-std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerNormal(const BulletSpec& spec) {
-  return CreateStraight(spec, "PlayerBullet", "PlayerBullet");
-}
-
 std::shared_ptr<AbsoluteEngine::GameObject> CreatePlayerHoming(const HomingBulletSpec& spec, AbsoluteEngine::ISpawner& spawner) {
   auto bulletObj = CreateBulletBase("PlayerHomingBullet", "PlayerBullet",
                                     spec.radius, spec.startPos, std::nullopt,
