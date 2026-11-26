@@ -4,7 +4,6 @@
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/SerialNumberIssuer.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../Bullet/BulletFactory.h"
 #include "EnemyComponent.h"
 #include "EnemyShootUtil.h"
 #include "../Player/PlayerFinder.h"
@@ -36,8 +35,8 @@ constexpr float kParallelThreshold = 0.99f;
 
 // 乱数の種は、通し番号の発行役から、敵ごとに 1 つもらう(同じ並びの繰り返しを避けつつ、毎回の実行で同じになる)
 AimedShootComponent::AimedShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
-                                         AbsoluteEngine::SerialNumberIssuer& serials)
-    : spawner_(spawner), screen_(screen), query_(query), random_(static_cast<unsigned int>(serials.Issue())) {}
+                                         AbsoluteEngine::SerialNumberIssuer& serials, const BulletCatalog& bullets)
+    : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets), random_(static_cast<unsigned int>(serials.Issue())) {}
 
 bool AimedShootComponent::IsLastBulletAlive_() const {
     const auto bullet = lastBullet_.lock();
@@ -122,12 +121,9 @@ void AimedShootComponent::Update(float deltaTime) {
     const Vector3 aimDir = ApplyAimError_(Normalize(toPlayer));
 
     // ---- 発射 ----
-    BulletSpec spec;
-    spec.position = myPos;
-    spec.velocity = { aimDir.x * bulletSpeed_, aimDir.y * bulletSpeed_, aimDir.z * bulletSpeed_ };
-    auto bullet = BulletFactory::CreateEnemy(spec);
-    lastBullet_ = bullet;
-    spawner_.Spawn(bullet);
+    const Vector3 velocity = { aimDir.x * bulletSpeed_, aimDir.y * bulletSpeed_, aimDir.z * bulletSpeed_ };
+    // 弾の定義が無く、出せなかったときは nullptr(予備動作の終わりと間隔の計算は、撃ったときと同じに進める)
+    lastBullet_ = launcher_.Fire(spawner_, myPos, velocity);
 
     if (telegraph) telegraph->End();
     hasShot_ = true;
@@ -142,6 +138,7 @@ void AimedShootComponent::Serialize(nlohmann::json& j) const {
     j[kKeyAimError] = aimErrorDegrees_;
     j[kKeyRecover] = recoverAfterBulletGone_;
     j[kKeyScreenMargin] = screenMargin_;
+    launcher_.Serialize(j);
 }
 
 void AimedShootComponent::Deserialize(const nlohmann::json& j) {
@@ -151,4 +148,9 @@ void AimedShootComponent::Deserialize(const nlohmann::json& j) {
     aimErrorDegrees_ = j.value(kKeyAimError, aimErrorDegrees_);
     recoverAfterBulletGone_ = j.value(kKeyRecover, recoverAfterBulletGone_);
     screenMargin_ = j.value(kKeyScreenMargin, screenMargin_);
+    launcher_.Deserialize(j);
+}
+
+void AimedShootComponent::DrawInspectorUI() {
+    launcher_.DrawInspectorUI();
 }

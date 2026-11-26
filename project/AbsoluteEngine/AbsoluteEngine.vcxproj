@@ -298,6 +298,7 @@
     <ClInclude Include="scene\BaseScene.h" />
     <ClInclude Include="scene\SceneWorld.h" />
     <ClInclude Include="scene\GameObjectPool.h" />
+    <ClInclude Include="scene\ServiceTable.h" />
     <ClInclude Include="scene\SceneNavigator.h" />
     <ClInclude Include="scene\ISceneChanger.h" />
     <ClInclude Include="scene\ComponentDeps.h" />

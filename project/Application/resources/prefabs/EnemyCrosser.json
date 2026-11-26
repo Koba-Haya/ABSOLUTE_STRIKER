@@ -41,6 +41,7 @@
         },
         {
             "aimErrorDegrees": 4.0,
+            "bulletId": "CrosserBullet",
             "bulletSpeed": 14.0,
             "firstShotDelay": 0.8,
             "recoverAfterBulletGone": 1.0,

@@ -63,9 +63,8 @@ public:
   // exhibition: 展示モードの状態(展示用の結果づくりで、状態が変わるので、const ではない。所有しない。シーンより長く生きること)
   // exhibitionHint: 展示モードの切り替えの案内(描画に使う。所有しない)
   // gameData: ゲームのデータ(定義の表と、進行・継承の保存データ。所有しない。シーンより長く生きること)
-  GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData)
-      : exhibition_(exhibition), exhibitionHint_(exhibitionHint), gameData_(gameData),
-        itemSystem_(gameData.GetItemCatalog(), gameData.GetInheritanceState(), gameData.GetPlayerUpgradeState()) {}
+  // 部品の生成で使う定義の表(弾の定義)は、ここで、型で引く表(ServiceTable)へ登録する(最初の部品が作られる Initialize より前にするため)
+  GameScene(ExhibitionSession &exhibition, ExhibitionHint &exhibitionHint, GameData &gameData);
   ~GameScene() override = default;
 
   void Initialize(const SceneServices &services) override;

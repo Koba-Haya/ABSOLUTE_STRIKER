@@ -3,7 +3,6 @@
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"
@@ -174,10 +173,8 @@ bool TurretShootComponent::CalcLeadDirection(const Vector3& turretPos, const Vec
 void TurretShootComponent::FireOneBullet(const Vector3& dir) {
     if (!GetOwner()) return;
 
-    BulletSpec spec;
-    spec.position = GetOwner()->GetTransform().translate;
-    spec.velocity = { dir.x * bulletSpeed_, dir.y * bulletSpeed_, dir.z * bulletSpeed_ };
-    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
+    const Vector3 velocity = { dir.x * bulletSpeed_, dir.y * bulletSpeed_, dir.z * bulletSpeed_ };
+    launcher_.Fire(spawner_, GetOwner()->GetTransform().translate, velocity);
 }
 
 void TurretShootComponent::Serialize(nlohmann::json& j) const {
@@ -187,6 +184,7 @@ void TurretShootComponent::Serialize(nlohmann::json& j) const {
     j[kKeyBulletSpeed] = bulletSpeed_;
     j[kKeyFireRange] = fireRange_;
     j[kKeyLeadAim] = leadAim_;
+    launcher_.Serialize(j);
 }
 
 void TurretShootComponent::Deserialize(const nlohmann::json& j) {
@@ -196,4 +194,9 @@ void TurretShootComponent::Deserialize(const nlohmann::json& j) {
     bulletSpeed_ = j.value(kKeyBulletSpeed, bulletSpeed_);
     fireRange_ = j.value(kKeyFireRange, fireRange_);
     leadAim_ = j.value(kKeyLeadAim, leadAim_);
+    launcher_.Deserialize(j);
+}
+
+void TurretShootComponent::DrawInspectorUI() {
+    launcher_.DrawInspectorUI();
 }

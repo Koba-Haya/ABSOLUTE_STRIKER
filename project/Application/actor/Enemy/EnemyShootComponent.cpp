@@ -3,7 +3,6 @@
 #include "AbsoluteEngine/scene/IScreenView.h"
 #include "AbsoluteEngine/scene/ISpawner.h"
 #include "AbsoluteEngine/scene/GameObject.h"
-#include "../../actor/Bullet/BulletFactory.h"
 #include "../../actor/Player/PlayerComponent.h"
 #include "../../actor/Player/PlayerFinder.h"
 #include "GameCamera.h"  // VP行列取得・画面内判定のために必要
@@ -78,10 +77,20 @@ void EnemyShootComponent::Update(float deltaTime) {
 
     // --- 弾の発射 ---
     constexpr float kBulletSpeed = 20.0f;
-    BulletSpec spec;
-    spec.position = currentPos;
-    spec.velocity = { toPlayer.x * kBulletSpeed, toPlayer.y * kBulletSpeed, toPlayer.z * kBulletSpeed };
-    spawner_.Spawn(BulletFactory::CreateEnemy(spec));
+    const Vector3 velocity = { toPlayer.x * kBulletSpeed, toPlayer.y * kBulletSpeed, toPlayer.z * kBulletSpeed };
+    launcher_.Fire(spawner_, currentPos, velocity);
+}
+
+void EnemyShootComponent::Serialize(nlohmann::json& j) const {
+    launcher_.Serialize(j);
+}
+
+void EnemyShootComponent::Deserialize(const nlohmann::json& j) {
+    launcher_.Deserialize(j);
+}
+
+void EnemyShootComponent::DrawInspectorUI() {
+    launcher_.DrawInspectorUI();
 }
 
 

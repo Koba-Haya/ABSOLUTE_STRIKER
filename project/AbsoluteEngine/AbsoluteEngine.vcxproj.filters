@@ -544,6 +544,9 @@
     <ClInclude Include="scene\GameObjectPool.h">
       <Filter>engine\scene</Filter>
     </ClInclude>
+    <ClInclude Include="scene\ServiceTable.h">
+      <Filter>engine\scene</Filter>
+    </ClInclude>
     <ClInclude Include="scene\SceneNavigator.h">
       <Filter>engine\scene</Filter>
     </ClInclude>

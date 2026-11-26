@@ -16,6 +16,8 @@
 #include "ReticleAim.h"
 #include "Application/ScreenSize.h"
 #include "../Bullet/BulletFactory.h"
+#include "../Bullet/BulletTag.h"
+#include "../Enemy/BossOrbTags.h"
 #include "PlayerModelDefs.h"
 
 // 照準点（世界で狙う1点）：カメラからカーソルレイ上に kAimDistance 進んだ点
@@ -403,11 +405,22 @@ bool PlayerComponent::IsDead() const {
   return hp_ <= 0;
 }
 
+namespace {
+// 自機に当たるとダメージを受ける相手のタグ(GameObject::GetTag の値)。敵の体とボスの体は、プレハブと GameScene が付ける値
+constexpr const char* kEnemyBodyTag = "Enemy";
+constexpr const char* kBossBodyTag = "Boss";
+
+// 相手が、当たるとダメージを受ける物か(敵の体、ボスの体、敵の弾(ボス弾を含む)、ボスの誘導弾の玉)。
+// 名前ではなくタグで見分ける(名前は、エディタの表示や弾の種類の id に使うもので、変わりうるため)
+bool IsHarmfulTag(const std::string& tag) {
+    return tag == kEnemyBodyTag || tag == kBossBodyTag || tag == BulletTag::kEnemy || tag == BossOrbTags::kOrb;
+}
+} // namespace
+
 void PlayerComponent::OnCollision(AbsoluteEngine::GameObject* other) {
     if (IsDead() || IsInvincible()) return;
 
-    if (other->GetName().find("Enemy") != std::string::npos || other->GetTag() == "Enemy" ||
-        other->GetName().find("Boss")  != std::string::npos || other->GetTag() == "Boss") {
+    if (IsHarmfulTag(other->GetTag())) {
         TakeDamage(1);
     }
 }

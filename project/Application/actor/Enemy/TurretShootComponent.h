@@ -2,6 +2,7 @@
 #include "AbsoluteEngine/scene/Component.h"
 #include "Type/Vector.h"
 #include "EnemyShootUtil.h"
+#include "EnemyBulletLauncher.h"
 #include <string>
 
 namespace AbsoluteEngine {
@@ -25,13 +26,16 @@ class ISceneQuery;
 ///                   弾が届かない遠さから撃って、弾が無駄になる(届く前に通り過ぎる)のを防ぐ
 ///   leadAim       : true なら、自機の動く先を読んで撃つ(自機がレールに沿って前へ進むぶん、先へ撃つ)。
 ///                   false なら、今の自機の位置を狙う(自機が進むので、横にずれた敵の弾は、後ろを通り過ぎる)
+///   bulletId      : 撃つ弾の種類(bullets.json の id。見た目と当たり判定の大きさは、定義で決まる)
 /// </summary>
 class TurretShootComponent : public AbsoluteEngine::IComponent {
 public:
     // spawner: 弾を出す窓口。screen: 画面内か、島に隠れているか、カメラの前方向を知る窓口。query: 自機を探す窓口。
+    // bullets: 弾の定義の表(撃つ弾は、JSON の "bulletId" で選ぶ)。
     // いずれも所有しない。このコンポーネントより長く生きること
-    TurretShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query)
-        : spawner_(spawner), screen_(screen), query_(query) {}
+    TurretShootComponent(AbsoluteEngine::ISpawner& spawner, AbsoluteEngine::IScreenView& screen, AbsoluteEngine::ISceneQuery& query,
+                         const BulletCatalog& bullets)
+        : spawner_(spawner), screen_(screen), query_(query), launcher_(bullets) {}
     ~TurretShootComponent() override = default;
 
     void Update(float deltaTime) override;
@@ -40,11 +44,14 @@ public:
 
     void Serialize(nlohmann::json& j) const override;
     void Deserialize(const nlohmann::json& j) override;
+    // エディタのインスペクタ(撃つ弾の選択)
+    void DrawInspectorUI() override;
 
 private:
     AbsoluteEngine::ISpawner& spawner_; // 弾を出す窓口
     AbsoluteEngine::IScreenView& screen_; // 画面の見え方(カメラの位置、画面内か)を知る窓口
     AbsoluteEngine::ISceneQuery& query_; // 自機などを探すために、シーンのオブジェクト一覧を調べる窓口
+    EnemyBulletLauncher launcher_; // 撃つ弾の選択と、弾を出す役
 
     bool CanFire(Vector3& outToPlayerDir) const;
     void FireOneBullet(const Vector3& dir);

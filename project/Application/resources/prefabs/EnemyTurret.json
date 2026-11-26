@@ -39,7 +39,8 @@
             "burstDelay": 0.25,
             "bulletSpeed": 30.0,
             "fireRange": 90.0,
-            "leadAim": true
+            "leadAim": true,
+            "bulletId": "SpiderBullet"
         },
         {
             "type": "TelegraphComponent",
